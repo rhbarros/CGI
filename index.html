@@ -86,6 +86,7 @@ body{background:var(--bg);color:var(--text);min-height:100vh;}
 ::-webkit-scrollbar-track{background:var(--bg);}
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
 #load-status{margin-top:12px;font-size:11px;font-family:'DM Mono',monospace;color:var(--text2);min-height:16px;}
+#tac-tbody tr:hover td{background:rgba(0,212,255,.06);}
 </style>
 </head>
 <body>
@@ -151,6 +152,7 @@ body{background:var(--bg);color:var(--text);min-height:100vh;}
     <div class="tab" id="t-uf" data-page="uf" onclick="P('uf',this)" style="display:none">Por UF</div>
     <div class="tab" id="t-vend" data-page="vendor" onclick="P('vendor',this)" style="display:none">Vendors</div>
     <div class="tab" id="t-ran" data-page="ran" onclick="P('ran',this)" style="display:none">RAN Sharing</div>
+    <div class="tab" id="t-tac" data-page="tac" onclick="P('tac',this)" style="display:none">🏷️ TAC</div>
     <div class="tab" data-page="mapa" onclick="P('mapa',this)">📍 Mapa</div>
     <div class="tab" data-page="kmz" onclick="P('kmz',this)">🗺️ KMZ</div>
     <div class="tab" data-page="busca" onclick="P('busca',this)">🔍 Busca</div>
@@ -257,6 +259,96 @@ body{background:var(--bg);color:var(--text);min-height:100vh;}
       <div class="card-title"><span>Sites RAN Sharing</span><button class="ebtn" onclick="exportRAN()">⬇ CSV</button></div>
       <div class="tscroll" style="max-height:420px;overflow-y:auto;">
         <table class="dtbl"><thead><tr><th>STATION ID</th><th>OPERADORA</th><th>TECNO</th><th>REGIONAL</th><th>UF</th><th>CIDADE</th><th>VENDOR</th><th>FREQ</th><th>LATITUDE</th><th>LONGITUDE</th></tr></thead><tbody id="ran-tbody"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAC -->
+  <div id="page-tac" class="page">
+    <div class="ran-badge" style="border-color:rgba(0,212,255,.22);background:rgba(0,212,255,.06);">
+      <div style="font-size:28px;">🏷️</div>
+      <div class="ran-desc"><b style="color:var(--c1);">Regra 1 — TAC compartilhado entre Regionais</b><br>
+      Detecta o mesmo <b>TAC</b> (Tracking Area Code) sendo usado em <b style="color:var(--c5);">mais de uma Regional</b> — indício de reuso indevido de área de rastreamento.<br>
+      Esta análise roda automaticamente sempre que um novo CGI é carregado. TAC "0" / não provisionado é ignorado.</div>
+    </div>
+    <div class="kpi-grid" id="tac-kpis"></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+      <span style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;">Tecnologia:</span>
+      <select class="rsub-filter" id="tac-tech-sel" onchange="renderTACTab()">
+        <option value="ALL">4G + 5G</option>
+        <option value="4G">Somente 4G</option>
+        <option value="5G">Somente 5G</option>
+      </select>
+      <span style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;margin-left:6px;">Buscar TAC:</span>
+      <input class="rsub-filter" id="tac-search-inp" placeholder="Ex: 33255" oninput="renderTACTab()" style="width:130px;">
+    </div>
+    <div class="card" id="tac-empty-card" style="display:none;">
+      <div style="text-align:center;padding:22px;color:var(--c3);font-size:12px;font-family:'DM Mono',monospace;">✅ Nenhum TAC compartilhado entre Regionais foi encontrado.</div>
+    </div>
+    <div class="card" id="tac-table-card">
+      <div class="card-title"><span>TACs compartilhados entre Regionais <span id="tac-count-badge" style="color:var(--c5);"></span></span><button class="ebtn" onclick="exportTACDiscrepancies()">⬇ CSV</button></div>
+      <div class="tscroll" style="max-height:420px;overflow-y:auto;">
+        <table class="dtbl"><thead><tr><th>TAC</th><th>TECNO</th><th>Nº REGIONAIS</th><th>REGIONAIS (células)</th><th>Nº SITES</th><th>Nº CÉLULAS</th></tr></thead><tbody id="tac-tbody"></tbody></table>
+      </div>
+    </div>
+    <div class="drill-section" id="tac-drill-section" style="display:none;">
+      <div class="drill-title"><span id="tac-drill-title">—</span><button class="ebtn" onclick="exportTACDrill()">⬇ CSV</button></div>
+      <div style="overflow-x:auto;max-height:380px;overflow-y:auto;">
+        <table class="dtbl"><thead><tr><th>STATION ID</th><th>TECNO</th><th>TAC</th><th>REGIONAL</th><th>UF</th><th>CIDADE</th><th>CGI</th><th>ENODEBID/GNBID</th><th>VENDOR</th></tr></thead><tbody id="tac-drill-tbody"></tbody></table>
+      </div>
+    </div>
+
+    <!-- Regra 2 — TAC 5G = "10" + TAC 4G -->
+    <div class="ran-badge" style="border-color:rgba(16,185,129,.22);background:rgba(16,185,129,.05);margin-top:22px;">
+      <div style="font-size:28px;">🔗</div>
+      <div class="ran-desc"><b style="color:var(--c3);">Regra 2 — TAC 5G = "10" + TAC 4G (mesmo Station ID)</b><br>
+      Em sites com 4G e 5G, o TAC do 5G deve seguir o padrão <b>TAC_5G = "10" + TAC_4G</b> (TAC 4G completado com zeros à esquerda até 6 dígitos). Ex: TAC 4G <b>44180</b> → TAC 5G esperado <b>10044180</b>.<br>
+      Comparação feita por Station ID (mesmo site). Lista abaixo mostra apenas os sites com 4G <u>e</u> 5G cujo TAC 5G não bate com essa regra.</div>
+    </div>
+    <div class="kpi-grid" id="tac2-kpis"></div>
+    <div class="card" id="tac2-empty-card" style="display:none;">
+      <div style="text-align:center;padding:22px;color:var(--c3);font-size:12px;font-family:'DM Mono',monospace;">✅ Todos os sites com 4G+5G seguem a regra TAC 5G = "10"+TAC 4G.</div>
+    </div>
+    <div class="card" id="tac2-table-card">
+      <div class="card-title"><span>Sites 4G+5G com TAC 5G divergente <span id="tac2-count-badge" style="color:var(--c5);"></span></span><button class="ebtn" onclick="exportTAC2()">⬇ CSV</button></div>
+      <div class="tscroll" style="max-height:420px;overflow-y:auto;">
+        <table class="dtbl"><thead><tr><th>STATION ID</th><th>REGIONAL</th><th>UF</th><th>CIDADE</th><th>TAC 4G</th><th>TAC 5G ATUAL</th><th>TAC 5G ESPERADO</th><th>VENDOR</th></tr></thead><tbody id="tac2-tbody"></tbody></table>
+      </div>
+    </div>
+
+    <!-- Regra 3 — Fronteira / Ilha de TAC -->
+    <div class="ran-badge" style="border-color:rgba(236,72,153,.22);background:rgba(236,72,153,.05);margin-top:22px;">
+      <div style="font-size:28px;">🧭</div>
+      <div class="ran-desc"><b style="color:var(--c6);">Regra 3 — Fronteira / Ilha de TAC</b><br>
+      Compara cada site com os sites mais próximos dentro do raio escolhido. Quando o vizinho mais próximo tem TAC <b>diferente</b>, mas já existe outro site com o <b style="color:var(--c6);">mesmo TAC</b> um pouco mais além (ainda dentro do raio), o site provavelmente está numa <b>linha de fronteira/divisão de TAC</b> — vale revisar se a fronteira está bem desenhada, ou se é uma "ilha" isolada por engano.<br>
+      Considera apenas sites com um único TAC válido na tecnologia escolhida (evita ambiguidade).</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+      <span style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;">Raio de proximidade:</span>
+      <select class="rsub-filter" id="tac3-radius-sel" onchange="buildTACBorderTab()">
+        <option value="1">1 km</option>
+        <option value="2" selected>2 km</option>
+        <option value="3">3 km</option>
+        <option value="5">5 km</option>
+        <option value="10">10 km</option>
+      </select>
+      <span style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;margin-left:6px;">Tecnologia:</span>
+      <select class="rsub-filter" id="tac3-tech-sel" onchange="buildTACBorderTab()">
+        <option value="ALL">4G + 5G</option>
+        <option value="4G">Somente 4G</option>
+        <option value="5G">Somente 5G</option>
+      </select>
+      <button class="rbtn" onclick="buildTACBorderTab()" style="background:var(--c6);color:#fff;font-weight:700;border-color:var(--c6);">🧭 Recalcular</button>
+      <span id="tac3-status" style="font-size:10px;font-family:'DM Mono',monospace;color:var(--text3);"></span>
+    </div>
+    <div class="kpi-grid" id="tac3-kpis"></div>
+    <div class="card" id="tac3-empty-card" style="display:none;">
+      <div style="text-align:center;padding:22px;color:var(--c3);font-size:12px;font-family:'DM Mono',monospace;">✅ Nenhum site em fronteira de TAC encontrado no raio selecionado.</div>
+    </div>
+    <div class="card" id="tac3-table-card" style="display:none;">
+      <div class="card-title"><span>Sites em fronteira de TAC <span id="tac3-count-badge" style="color:var(--c6);"></span></span><button class="ebtn" onclick="exportTAC3()">⬇ CSV</button></div>
+      <div class="tscroll" style="max-height:420px;overflow-y:auto;">
+        <table class="dtbl"><thead><tr><th>STATION ID</th><th>TECNO</th><th>TAC</th><th>REGIONAL</th><th>UF</th><th>CIDADE</th><th>VIZINHO TAC DIFF (km)</th><th>VIZINHO MESMO TAC (km)</th><th>Nº VIZINHOS TAC DIFF ≤ raio</th></tr></thead><tbody id="tac3-tbody"></tbody></table>
       </div>
     </div>
   </div>
@@ -501,6 +593,11 @@ function normCoord(rawLat,rawLon){
   if(la<-35||la>5||lo<-75||lo>-28) return null;
   return {lat:la,lon:lo};
 }
+function haversineKm(lat1,lon1,lat2,lon2){
+  var R=6371,dLat=(lat2-lat1)*Math.PI/180,dLon=(lon2-lon1)*Math.PI/180;
+  var a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2);
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
 function buildSectorPolygon(lat,lon,az,beam,rng,n){
   n=n||36;lat=toNum(lat);lon=toNum(lon);az=toNum(az);beam=toNum(beam);rng=toNum(rng);
   if(isNaN(lat)||isNaN(lon)||isNaN(az)||isNaN(beam)||isNaN(rng)) return [];
@@ -734,6 +831,17 @@ function processData(){
 function siteTechs(s){return mapKeys(s.techs);}
 function siteTechsStr(s){return mapKeys(s.techs).sort().join('+');}
 function siteHasTech(s,t){return s.techs.has(t);}
+// Lista de TACs válidos (4G/5G, ignorando ND e placeholder "0") de um site — usada na aba TAC e no Mapa
+function siteTACs(s){
+  var seen={},out=[];
+  s.cells.forEach(function(c){
+    if(c.tech!=='4G'&&c.tech!=='5G')return;
+    var t=String(c.tac||'').trim();
+    if(!t||isND(t)||t==='0')return;
+    if(!seen[t]){seen[t]=1;out.push(t);}
+  });
+  return out;
+}
 function siteNumTechs(s){return s.techs.size;}
 
 // ── Build Dashboard ────────────────────────────────────────────────────────
@@ -805,6 +913,7 @@ function buildDash(removed){
   if(C.uf){document.getElementById('t-uf').style.display='';buildUFTab();}
   if(C.vend){document.getElementById('t-vend').style.display='';buildVendorTab();}
   if(C.oper){document.getElementById('t-ran').style.display='';buildRANTab();}
+  if(C.tac&&C.reg){document.getElementById('t-tac').style.display='';buildTACTab();buildTAC2Tab();buildTACBorderTab();}
 
   document.getElementById('s-head').innerHTML='<tr><th>Station ID</th><th>Tecnologias</th><th>UF</th><th>Cidade</th><th>Regional</th><th>Vendor</th><th>Lat</th><th>Lon</th></tr>';
   document.getElementById('s-body').innerHTML=mapVals(siteMap).slice(0,50).map(function(s){
@@ -1039,6 +1148,191 @@ function exportRAN(){
   if(!_ranPre)return;
   dlCsv(['STATION ID,OPERADORA,TECNOLOGIAS,REGIONAL,UF,CIDADE,VENDOR,FREQ,LAT,LON'].concat(
     _ranPre.ranSites.map(function(s){return csvRow([s.id,s.oper,siteTechsStr(s),s.reg,s.uf,s.city,s.vend,uniqCellVals(s,'freq').join('|'),s.lat,s.lon]);})).join('\n'),'ran_sharing.csv');
+}
+
+// ── TAC — Auditoria de TAC/Regional (4G/5G) ─────────────────────────────────
+// Toda vez que um CGI novo é processado (processData → buildDash), esta aba é
+// recalculada do zero a partir de cellRows, então as discrepâncias sempre
+// refletem o arquivo carregado por último.
+var _tacPre=null,_tacListCurrent=[],_tacDrillData=[];
+var TAC_IGNORE_VALS={'0':1}; // TAC=0 costuma ser placeholder/âncora NSA, não é discrepância real
+function buildTACTab(){
+  var map={}; // chave "TECH|TAC" -> {tech,tac,regs:{reg:qtdCelulas},sites:{sid:1},cells:[]}
+  cellRows.forEach(function(c){
+    if(c.tech!=='4G'&&c.tech!=='5G')return; // pedido: apenas sites 4G e 5G (TAC é conceito LTE/NR)
+    var tac=String(c.tac||'').trim();
+    if(!tac||isND(tac)||TAC_IGNORE_VALS[tac])return;
+    var reg=c.reg;
+    if(!reg||isND(reg))return;
+    var key=c.tech+'|'+tac;
+    if(!map[key])map[key]={tech:c.tech,tac:tac,regs:{},sites:{},cells:[]};
+    var e=map[key];
+    e.regs[reg]=(e.regs[reg]||0)+1;
+    e.sites[c.sid]=1;
+    e.cells.push(c);
+  });
+  var all=Object.keys(map).map(function(k){return map[k];});
+  // Discrepância base: mesmo TAC aparecendo em mais de uma Regional
+  var disc=all.filter(function(e){return Object.keys(e.regs).length>1;});
+  disc.sort(function(a,b){
+    return Object.keys(b.regs).length-Object.keys(a.regs).length||Object.keys(b.sites).length-Object.keys(a.sites).length;
+  });
+  _tacPre={all:all,disc:disc};
+  renderTACTab();
+}
+function renderTACTab(){
+  if(!_tacPre)return;
+  var techF=V('tac-tech-sel'),q=(document.getElementById('tac-search-inp').value||'').trim().toLowerCase();
+  var totalTAC=_tacPre.all.filter(function(e){return techF==='ALL'||e.tech===techF;}).length;
+  var list=_tacPre.disc.filter(function(e){
+    if(techF!=='ALL'&&e.tech!==techF)return false;
+    if(q&&e.tac.toLowerCase().indexOf(q)<0)return false;
+    return true;
+  });
+  var sitesAfetados={};list.forEach(function(e){Object.keys(e.sites).forEach(function(s){sitesAfetados[s]=1;});});
+  var nSitesAfet=Object.keys(sitesAfetados).length;
+  document.getElementById('tac-kpis').innerHTML=
+    '<div class="kpi" style="--kc:var(--c1)"><div class="kpi-label">TACs Analisados</div><div class="kpi-val">'+totalTAC.toLocaleString('pt-BR')+'</div><div class="kpi-sub">4G/5G · válidos</div></div>'+
+    '<div class="kpi" style="--kc:var(--c5)"><div class="kpi-label">TACs c/ Discrepância</div><div class="kpi-val" style="color:var(--c5)">'+list.length.toLocaleString('pt-BR')+'</div><div class="kpi-sub">'+pct(list.length,totalTAC)+' em >1 regional</div></div>'+
+    '<div class="kpi" style="--kc:var(--c4)"><div class="kpi-label">Sites Afetados</div><div class="kpi-val" style="color:var(--c4)">'+nSitesAfet.toLocaleString('pt-BR')+'</div><div class="kpi-sub">estações físicas</div></div>'+
+    '<div class="kpi" style="--kc:'+(list.length?'var(--c5)':'var(--c3)')+'"><div class="kpi-label">Status</div><div class="kpi-val" style="color:'+(list.length?'var(--c5)':'var(--c3)')+';font-size:14px;">'+(list.length?'⚠ Revisar':'✅ OK')+'</div><div class="kpi-sub">TAC repetido entre regionais</div></div>';
+  document.getElementById('tac-count-badge').textContent=list.length?('· '+list.length.toLocaleString('pt-BR')+' encontrados'):'';
+  document.getElementById('tac-empty-card').style.display=list.length?'none':'block';
+  document.getElementById('tac-table-card').style.display=list.length?'block':'none';
+  _tacListCurrent=list;
+  document.getElementById('tac-tbody').innerHTML=list.map(function(e,i){
+    var regs=Object.keys(e.regs).sort();
+    var regsHtml=regs.map(function(r){return '<span class="tchip tcx" style="margin-right:3px;">'+r+' ('+e.regs[r]+')</span>';}).join('');
+    return '<tr style="cursor:pointer;" onclick="showTACDrill('+i+')"><td class="hi">'+e.tac+'</td><td><span class="'+(e.tech==='5G'?'t5g':'t4g')+'">'+e.tech+'</span></td><td class="hi" style="color:var(--c5);">'+regs.length+'</td><td>'+regsHtml+'</td><td>'+Object.keys(e.sites).length+'</td><td>'+e.cells.length+'</td></tr>';
+  }).join('');
+}
+function showTACDrill(i){
+  var e=_tacListCurrent[i];if(!e)return;
+  document.getElementById('tac-drill-title').textContent='TAC '+e.tac+' ('+e.tech+') — '+Object.keys(e.regs).length+' regionais · '+Object.keys(e.sites).length+' sites · '+e.cells.length+' células';
+  _tacDrillData=e.cells;
+  document.getElementById('tac-drill-tbody').innerHTML=e.cells.map(function(c){
+    return '<tr><td class="hi" style="cursor:pointer;color:var(--c1);" onclick="goFinder(\''+esc(c.sid)+'\')">'+c.sid+'</td><td>'+c.tech+'</td><td class="hi" style="color:var(--c1);">'+(c.tac||'—')+'</td><td style="color:var(--c5);font-weight:700;">'+(c.reg||'—')+'</td><td>'+(c.uf||'—')+'</td><td>'+(c.city||'—')+'</td><td style="color:var(--text3);">'+(c.cgi||'—')+'</td><td>'+(c.enodeb||c.gnbid||'—')+'</td><td>'+(c.vend||'—')+'</td></tr>';
+  }).join('');
+  document.getElementById('tac-drill-section').style.display='block';
+  document.getElementById('tac-drill-section').scrollIntoView({behavior:'smooth',block:'start'});
+}
+function exportTACDrill(){
+  dlCsv(['STATION ID,TECNOLOGIA,TAC,REGIONAL,UF,CIDADE,CGI,ENODEBID_GNBID,VENDOR'].concat(
+    _tacDrillData.map(function(c){return csvRow([c.sid,c.tech,c.tac,c.reg,c.uf,c.city,c.cgi,(c.enodeb||c.gnbid||''),c.vend]);})).join('\n'),'tac_drill.csv');
+}
+function exportTACDiscrepancies(){
+  if(!_tacListCurrent||!_tacListCurrent.length)return;
+  var rows=['TAC,TECNOLOGIA,QTD_REGIONAIS,REGIONAIS,QTD_SITES,QTD_CELULAS'];
+  _tacListCurrent.forEach(function(e){
+    var regs=Object.keys(e.regs).sort();
+    rows.push(csvRow([e.tac,e.tech,regs.length,regs.join('|'),Object.keys(e.sites).length,e.cells.length]));
+  });
+  dlCsv(rows.join('\n'),'tac_discrepancias.csv');
+}
+
+// ── TAC — Regra 2: TAC 5G = "10" + TAC 4G (mesmo Station ID) ───────────────
+var _tac2List=[];
+function tac5gExpected(tac4){return '10'+String(tac4).replace(/\D/g,'').padStart(6,'0');}
+function buildTAC2Tab(){
+  var sites=mapVals(siteMap),rows=[],totalPares=0;
+  sites.forEach(function(s){
+    var tac4=setUniq(s.cells.filter(function(c){return c.tech==='4G';}).map(function(c){return String(c.tac||'').trim();}).filter(function(t){return t&&!isND(t)&&t!=='0';}));
+    var tac5=setUniq(s.cells.filter(function(c){return c.tech==='5G';}).map(function(c){return String(c.tac||'').trim();}).filter(function(t){return t&&!isND(t)&&t!=='0';}));
+    if(!tac4.length||!tac5.length)return;
+    totalPares++;
+    var expectedSet={};tac4.forEach(function(t){expectedSet[tac5gExpected(t)]=1;});
+    var ok=tac5.some(function(t){return expectedSet[t];});
+    if(!ok){
+      rows.push({sid:s.id,reg:s.reg,uf:s.uf,city:s.city,vend:s.vend,
+        tac4:tac4.join('|'),tac5:tac5.join('|'),esperado:tac4.map(tac5gExpected).join('|')});
+    }
+  });
+  _tac2List=rows;
+  var nOK=totalPares-rows.length;
+  document.getElementById('tac2-kpis').innerHTML=
+    '<div class="kpi" style="--kc:var(--c1)"><div class="kpi-label">Sites 4G+5G</div><div class="kpi-val">'+totalPares.toLocaleString('pt-BR')+'</div><div class="kpi-sub">analisados</div></div>'+
+    '<div class="kpi" style="--kc:var(--c3)"><div class="kpi-label">Conformes</div><div class="kpi-val" style="color:var(--c3)">'+nOK.toLocaleString('pt-BR')+'</div><div class="kpi-sub">'+pct(nOK,totalPares)+'</div></div>'+
+    '<div class="kpi" style="--kc:var(--c5)"><div class="kpi-label">Divergentes</div><div class="kpi-val" style="color:var(--c5)">'+rows.length.toLocaleString('pt-BR')+'</div><div class="kpi-sub">'+pct(rows.length,totalPares)+'</div></div>'+
+    '<div class="kpi" style="--kc:'+(rows.length?'var(--c5)':'var(--c3)')+'"><div class="kpi-label">Status</div><div class="kpi-val" style="color:'+(rows.length?'var(--c5)':'var(--c3)')+';font-size:14px;">'+(rows.length?'⚠ Revisar':'✅ OK')+'</div><div class="kpi-sub">TAC5G="10"+TAC4G</div></div>';
+  document.getElementById('tac2-count-badge').textContent=rows.length?('· '+rows.length.toLocaleString('pt-BR')+' encontrados'):'';
+  document.getElementById('tac2-empty-card').style.display=rows.length?'none':'block';
+  document.getElementById('tac2-table-card').style.display=rows.length?'block':'none';
+  document.getElementById('tac2-tbody').innerHTML=rows.map(function(r){
+    return '<tr><td class="hi" style="cursor:pointer;color:var(--c1);" onclick="goFinder(\''+esc(r.sid)+'\')">'+r.sid+'</td><td>'+(r.reg||'—')+'</td><td>'+(r.uf||'—')+'</td><td>'+(r.city||'—')+'</td><td class="t4g">'+r.tac4+'</td><td style="color:var(--c5);font-weight:700;">'+r.tac5+'</td><td class="t5g">'+r.esperado+'</td><td>'+(r.vend||'—')+'</td></tr>';
+  }).join('');
+}
+function exportTAC2(){
+  if(!_tac2List.length)return;
+  dlCsv(['STATION ID,REGIONAL,UF,CIDADE,TAC_4G,TAC_5G_ATUAL,TAC_5G_ESPERADO,VENDOR'].concat(
+    _tac2List.map(function(r){return csvRow([r.sid,r.reg,r.uf,r.city,r.tac4,r.tac5,r.esperado,r.vend]);})).join('\n'),'tac_regra_5g.csv');
+}
+
+// ── TAC — Regra 3: Fronteira / Ilha de TAC (proximidade geográfica) ────────
+var _tac3List=[];
+function buildTACBorderTab(){
+  if(!document.getElementById('tac3-radius-sel'))return;
+  var techF=V('tac3-tech-sel'),radiusKm=parseFloat(V('tac3-radius-sel'))||2;
+  var statusEl=document.getElementById('tac3-status');
+  statusEl.textContent='⏳ calculando...';
+  setTimeout(function(){
+    var pts=[];
+    mapVals(siteMap).forEach(function(s){
+      var coord=normCoord(s.lat,s.lon);if(!coord)return;
+      var techs=techF==='ALL'?['4G','5G']:[techF];
+      techs.forEach(function(t){
+        var tacs=setUniq(s.cells.filter(function(c){return c.tech===t;}).map(function(c){return String(c.tac||'').trim();}).filter(function(v){return v&&!isND(v)&&v!=='0';}));
+        if(tacs.length===1) pts.push({sid:s.id,tac:tacs[0],tech:t,lat:coord.lat,lon:coord.lon,reg:s.reg,uf:s.uf,city:s.city});
+      });
+    });
+    // Grid espacial (célula ≈ raio) p/ busca de vizinhos eficiente sem O(n²)
+    var gridDeg=Math.max(radiusKm/110,0.008);
+    var grid={};
+    function cellKey(lat,lon){return Math.floor(lat/gridDeg)+'_'+Math.floor(lon/gridDeg);}
+    pts.forEach(function(p){var k=cellKey(p.lat,p.lon);if(!grid[k])grid[k]=[];grid[k].push(p);});
+    function neighborsOf(p){
+      var cLat=Math.floor(p.lat/gridDeg),cLon=Math.floor(p.lon/gridDeg),out=[];
+      for(var dy=-1;dy<=1;dy++)for(var dx=-1;dx<=1;dx++){
+        var arr=grid[(cLat+dy)+'_'+(cLon+dx)];
+        if(arr)out=out.concat(arr);
+      }
+      return out;
+    }
+    var results=[];
+    pts.forEach(function(p){
+      var cands=neighborsOf(p).filter(function(o){return o!==p&&o.tech===p.tech;});
+      var nearestSame=null,nearestDiff=null,diffCount=0;
+      cands.forEach(function(o){
+        var d=haversineKm(p.lat,p.lon,o.lat,o.lon);
+        if(d>radiusKm)return;
+        if(o.tac===p.tac){if(nearestSame===null||d<nearestSame)nearestSame=d;}
+        else{diffCount++;if(nearestDiff===null||d<nearestDiff)nearestDiff=d;}
+      });
+      // Fronteira: existe vizinho de TAC diferente MAIS PERTO (ou igual) que o vizinho mais próximo do MESMO TAC
+      if(nearestDiff!==null&&nearestSame!==null&&nearestDiff<=nearestSame){
+        results.push({sid:p.sid,tech:p.tech,tac:p.tac,reg:p.reg,uf:p.uf,city:p.city,distDiff:nearestDiff,distSame:nearestSame,diffCount:diffCount});
+      }
+    });
+    results.sort(function(a,b){return a.distDiff-b.distDiff;});
+    _tac3List=results;
+    var totalAnalisado=pts.length;
+    document.getElementById('tac3-kpis').innerHTML=
+      '<div class="kpi" style="--kc:var(--c1)"><div class="kpi-label">Sites Analisados</div><div class="kpi-val">'+totalAnalisado.toLocaleString('pt-BR')+'</div><div class="kpi-sub">TAC único + coord válida</div></div>'+
+      '<div class="kpi" style="--kc:var(--c6)"><div class="kpi-label">Em Fronteira</div><div class="kpi-val" style="color:var(--c6)">'+results.length.toLocaleString('pt-BR')+'</div><div class="kpi-sub">'+pct(results.length,totalAnalisado)+'</div></div>'+
+      '<div class="kpi" style="--kc:var(--c4)"><div class="kpi-label">Raio Usado</div><div class="kpi-val" style="color:var(--c4)">'+radiusKm+' km</div><div class="kpi-sub">proximidade</div></div>'+
+      '<div class="kpi" style="--kc:'+(results.length?'var(--c6)':'var(--c3)')+'"><div class="kpi-label">Status</div><div class="kpi-val" style="color:'+(results.length?'var(--c6)':'var(--c3)')+';font-size:14px;">'+(results.length?'🧭 Revisar':'✅ OK')+'</div><div class="kpi-sub">fronteiras de TAC</div></div>';
+    document.getElementById('tac3-count-badge').textContent=results.length?('· '+results.length.toLocaleString('pt-BR')+' encontrados'):'';
+    document.getElementById('tac3-empty-card').style.display=results.length?'none':'block';
+    document.getElementById('tac3-table-card').style.display=results.length?'block':'none';
+    document.getElementById('tac3-tbody').innerHTML=results.slice(0,1000).map(function(r){
+      return '<tr><td class="hi" style="cursor:pointer;color:var(--c1);" onclick="goFinder(\''+esc(r.sid)+'\')">'+r.sid+'</td><td><span class="'+(r.tech==='5G'?'t5g':'t4g')+'">'+r.tech+'</span></td><td class="hi">'+r.tac+'</td><td>'+(r.reg||'—')+'</td><td>'+(r.uf||'—')+'</td><td>'+(r.city||'—')+'</td><td style="color:var(--c6);font-weight:700;">'+r.distDiff.toFixed(2)+'</td><td style="color:var(--text3);">'+r.distSame.toFixed(2)+'</td><td>'+r.diffCount+'</td></tr>';
+    }).join('');
+    statusEl.textContent=results.length?('⚠ '+results.length.toLocaleString('pt-BR')+' site(s) em possível fronteira.'):'✅ nenhuma fronteira detectada.';
+  },30);
+}
+function exportTAC3(){
+  if(!_tac3List.length)return;
+  dlCsv(['STATION ID,TECNOLOGIA,TAC,REGIONAL,UF,CIDADE,DIST_VIZINHO_TAC_DIFF_KM,DIST_VIZINHO_MESMO_TAC_KM,QTD_VIZINHOS_TAC_DIFF'].concat(
+    _tac3List.map(function(r){return csvRow([r.sid,r.tech,r.tac,r.reg,r.uf,r.city,r.distDiff.toFixed(3),r.distSame.toFixed(3),r.diffCount]);})).join('\n'),'tac_fronteiras.csv');
 }
 
 // ── KMZ ────────────────────────────────────────────────────────────────────
@@ -1762,7 +2056,7 @@ function _buildMapInstance(){
     options:{position:'topleft'},
     onAdd:function(){
       var btn=L.DomUtil.create('button','leaflet-bar leaflet-control');
-      btn.id='select-btn';btn.title='Selecionar área para gerar azimutes';
+      btn.id='select-btn';btn.title='Selecionar área — azimutes ou TACs';
       btn.innerHTML='⬚';
       btn.style.cssText='width:34px;height:34px;font-size:20px;cursor:pointer;background:#1e1e28;color:#fff;border:2px solid #444;border-radius:4px;display:flex;align-items:center;justify-content:center;font-weight:700;line-height:1;';
       L.DomEvent.on(btn,'click',function(e){L.DomEvent.stopPropagation(e);toggleSelectMode();});
@@ -1822,10 +2116,12 @@ function _buildMapInstance(){
     // Conta sites na área
     var inside=(_mapState.markers||[]).filter(function(m){return bounds.contains([m.coord.lat,m.coord.lon]);});
     var azCount=(_mapState.azPrepped||[]).filter(function(d){return bounds.contains([d.coord.lat,d.coord.lon]);}).length;
+    var tacCount=setUniq(inside.reduce(function(acc,m){return acc.concat(siteTACs(m.site));},[])).length;
     selPanel.innerHTML=
-      '<span style="color:#00d4ff;font-weight:700;">✅ '+inside.length+' sites selecionados</span> · <span style="color:#a78bfa;">'+azCount+' setores</span><br>'+
-      '<div style="display:flex;gap:8px;justify-content:center;margin-top:8px;">'+
+      '<span style="color:#00d4ff;font-weight:700;">✅ '+inside.length+' sites selecionados</span> · <span style="color:#a78bfa;">'+azCount+' setores</span> · <span style="color:#f59e0b;">'+tacCount+' TAC(s)</span><br>'+
+      '<div style="display:flex;gap:8px;justify-content:center;margin-top:8px;flex-wrap:wrap;">'+
       '<button onclick="genAzFromSelection()" style="background:rgba(167,139,250,.15);border:1px solid rgba(167,139,250,.4);color:#a78bfa;border-radius:7px;padding:5px 14px;cursor:pointer;font-size:11px;font-family:DM Mono,monospace;font-weight:700;">📡 Gerar Azimutes</button>'+
+      '<button onclick="genTACFromSelection()" style="background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.4);color:#f59e0b;border-radius:7px;padding:5px 14px;cursor:pointer;font-size:11px;font-family:DM Mono,monospace;font-weight:700;">🏷️ Ver TACs</button>'+
       '<button onclick="clearSelection()" style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);color:#ef4444;border-radius:7px;padding:5px 12px;cursor:pointer;font-size:10px;font-family:DM Mono,monospace;">✕ Limpar</button>'+
       '</div>';
     // Sai do modo seleção automaticamente
@@ -1850,6 +2146,9 @@ function _buildMapInstance(){
   window.clearSelection=function(){
     if(selectState.rect){map.removeLayer(selectState.rect);selectState.rect=null;}
     if(_mapState.azSelLayer){map.removeLayer(_mapState.azSelLayer);_mapState.azSelLayer=null;}
+    if(_mapState.tacSelLayer){map.removeLayer(_mapState.tacSelLayer);_mapState.tacSelLayer=null;}
+    if(_mapState.tacLegendEl){_mapState.tacLegendEl.remove();_mapState.tacLegendEl=null;}
+    map.off('zoomend.tacsel');
     selectState.bounds=null;
     selPanel.style.display='none';
     var btn=document.getElementById('select-btn');
@@ -1859,6 +2158,9 @@ function _buildMapInstance(){
   window.genAzFromSelection=function(){
     var bounds=selectState.bounds;
     if(!bounds||!_mapState.azPrepped)return;
+    if(_mapState.tacSelLayer){map.removeLayer(_mapState.tacSelLayer);_mapState.tacSelLayer=null;}
+    if(_mapState.tacLegendEl){_mapState.tacLegendEl.remove();_mapState.tacLegendEl=null;}
+    map.off('zoomend.tacsel');
     var data=_mapState.azPrepped.filter(function(d){return bounds.contains([d.coord.lat,d.coord.lon]);});
     if(!data.length){selPanel.innerHTML='<span style="color:#ef4444;">❌ Nenhum setor com coordenada na área.</span><br><button onclick="clearSelection()" style="margin-top:6px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.25);color:#ef4444;border-radius:6px;padding:3px 10px;cursor:pointer;font-size:10px;font-family:DM Mono,monospace;">✕ Limpar</button>';return;}
     // Remove layer anterior de azimutes selecionados
@@ -1963,6 +2265,88 @@ function _buildMapInstance(){
       map.off('zoomend.azsel');
       map.on('zoomend.azsel',rebuildAzSel);
     },30);
+  };
+
+  // ── Ver TACs na área selecionada ────────────────────────────────────────
+  // Colore cada site pelo seu TAC (4G/5G). Sites com MAIS DE 2 TACs distintos
+  // (potencial discrepância) recebem destaque especial (anel vermelho pulsante).
+  window.genTACFromSelection=function(){
+    var bounds=selectState.bounds;
+    if(!bounds||!_mapState.markers)return;
+    if(_mapState.azSelLayer){map.removeLayer(_mapState.azSelLayer);_mapState.azSelLayer=null;}
+    var inside=_mapState.markers.filter(function(m){return bounds.contains([m.coord.lat,m.coord.lon]);});
+    var data=inside.map(function(m){return {m:m,tacs:siteTACs(m.site)};}).filter(function(d){return d.tacs.length>0;});
+    if(_mapState.tacSelLayer){map.removeLayer(_mapState.tacSelLayer);_mapState.tacSelLayer=null;}
+    if(_mapState.tacLegendEl){_mapState.tacLegendEl.remove();_mapState.tacLegendEl=null;}
+    if(!data.length){selPanel.innerHTML='<span style="color:#ef4444;">❌ Nenhum site com TAC (4G/5G) válido na área.</span><br><button onclick="clearSelection()" style="margin-top:6px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.25);color:#ef4444;border-radius:6px;padding:3px 10px;cursor:pointer;font-size:10px;font-family:DM Mono,monospace;">✕ Limpar</button>';return;}
+
+    // Conta ocorrências de cada TAC na área p/ ordenar a legenda pelo mais comum
+    var tacFreq={};
+    data.forEach(function(d){d.tacs.forEach(function(t){tacFreq[t]=(tacFreq[t]||0)+1;});});
+    var tacsOrdered=Object.keys(tacFreq).sort(function(a,b){return tacFreq[b]-tacFreq[a];});
+    var tacColor={};tacsOrdered.forEach(function(t,i){tacColor[t]=PAL[i%PAL.length];});
+    var nMulti=data.filter(function(d){return d.tacs.length>2;}).length;
+
+    var layer=L.layerGroup();
+    function drawMarkers(){
+      layer.clearLayers();
+      data.forEach(function(d){
+        var anomaly=d.tacs.length>2;
+        var primaryColor=tacColor[d.tacs[0]]||'#aaa';
+        var mk=L.circleMarker([d.m.coord.lat,d.m.coord.lon],{
+          radius:anomaly?13:8,
+          fillColor:anomaly?'#ef4444':primaryColor,
+          fillOpacity:anomaly?0.9:0.88,
+          color:anomaly?'#fff':'#0a0a0f',
+          weight:anomaly?3:1.4,
+          dashArray:anomaly?'3,2':null,
+          renderer:svgRTac
+        });
+        (function(dd,marker){
+          marker.on('mouseover',function(e){
+            marker.setStyle({fillOpacity:1,weight:anomaly?4:2.2});
+            var tip=L.DomUtil.create('div');tip.id='tac-tooltip';
+            tip.style.cssText='position:absolute;z-index:800;background:#0d0d1a;border:1px solid '+(anomaly?'#ef4444':primaryColor)+';border-radius:8px;padding:9px 13px;font-family:DM Mono,monospace;font-size:11px;color:#f0f0f5;pointer-events:none;min-width:190px;box-shadow:0 4px 18px rgba(0,0,0,.6);';
+            var chips=dd.tacs.map(function(t){return '<span style="display:inline-block;background:'+(tacColor[t]||'#aaa')+'22;color:'+(tacColor[t]||'#aaa')+';border:1px solid '+(tacColor[t]||'#aaa')+'55;border-radius:10px;padding:1px 7px;margin:2px 3px 0 0;font-weight:700;">'+t+'</span>';}).join('');
+            tip.innerHTML=
+              '<div style="font-size:12px;font-weight:800;color:'+(anomaly?'#ef4444':primaryColor)+';margin-bottom:5px;">'+escXml(dd.m.site.id)+(anomaly?' ⚠️':'')+'</div>'+
+              '<div style="font-size:10px;color:#5a5a70;margin-bottom:3px;">'+(anomaly?dd.tacs.length+' TACs distintos — revisar':'TAC(s):')+'</div>'+
+              '<div>'+chips+'</div>'+
+              '<div style="margin-top:6px;font-size:10px;color:#9090a8;">'+escXml(dd.m.site.reg||'—')+' · '+escXml(dd.m.site.city||'—')+' / '+escXml(dd.m.site.uf||'—')+'</div>';
+            document.getElementById('map-container').appendChild(tip);
+            moveTip(e,tip);
+          });
+          marker.on('mousemove',function(e){var t=document.getElementById('tac-tooltip');if(t)moveTip(e,t);});
+          marker.on('mouseout',function(){marker.setStyle({fillOpacity:anomaly?0.9:0.88,weight:anomaly?3:1.4});var t=document.getElementById('tac-tooltip');if(t)t.remove();});
+          marker.on('click',function(){goFinder(dd.m.site.id);});
+        })(d,mk);
+        layer.addLayer(mk);
+      });
+    }
+    var svgRTac=L.svg({padding:0.3});
+    drawMarkers();
+    _mapState.tacSelLayer=layer;
+    map.addLayer(layer);
+
+    // Legenda flutuante de cores por TAC
+    var legendItems=tacsOrdered.slice(0,12).map(function(t){
+      return '<span style="display:flex;align-items:center;gap:4px;"><span style="width:9px;height:9px;border-radius:50%;background:'+tacColor[t]+';display:inline-block;"></span>'+t+' <span style="color:#5a5a70;">('+tacFreq[t]+')</span></span>';
+    }).join('');
+    var extra=tacsOrdered.length>12?'<span style="color:#5a5a70;">+'+(tacsOrdered.length-12)+' outros</span>':'';
+    var legend=L.DomUtil.create('div');
+    legend.style.cssText='position:absolute;top:10px;right:10px;z-index:900;background:#1e1e28;border:1px solid rgba(245,158,11,.3);border-radius:8px;padding:8px 11px;font-family:DM Mono,monospace;font-size:10px;color:#f0f0f5;max-width:230px;box-shadow:0 4px 16px rgba(0,0,0,.5);';
+    legend.innerHTML='<div style="font-weight:700;color:#f59e0b;margin-bottom:5px;">🏷️ TACs na área ('+tacsOrdered.length+')</div><div style="display:flex;flex-direction:column;gap:4px;">'+legendItems+extra+'</div>'+(nMulti?'<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:5px;color:#ef4444;font-weight:700;"><span style="width:11px;height:11px;border-radius:50%;background:#ef4444;border:2px solid #fff;display:inline-block;"></span>'+nMulti+' site(s) c/ >2 TACs</div>':'');
+    document.getElementById('map-container').appendChild(legend);
+    _mapState.tacLegendEl=legend;
+
+    selPanel.innerHTML=
+      '<span style="color:#f59e0b;font-weight:700;">🏷️ '+data.length+' sites</span> · '+tacsOrdered.length+' TAC(s) distintos'+(nMulti?' · <span style="color:#ef4444;font-weight:700;">'+nMulti+' com >2 TACs ⚠️</span>':'')+'<br>'+
+      '<div style="display:flex;gap:8px;justify-content:center;margin-top:8px;">'+
+      '<button onclick="clearSelection()" style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);color:#ef4444;border-radius:7px;padding:5px 12px;cursor:pointer;font-size:10px;font-family:DM Mono,monospace;">✕ Remover</button>'+
+      '</div>';
+
+    map.off('zoomend.tacsel');
+    map.on('zoomend.tacsel',function(){ /* circleMarker mantém raio fixo em px — sem necessidade de redesenho no zoom */ });
   };
 
   // ── Ferramenta de Medição ──────────────────────────────────────────────
@@ -2615,9 +2999,10 @@ function resetAll(){
   if(document.getElementById('map-container')) document.getElementById('map-container').innerHTML='';
   document.getElementById('map-popup').style.display='none';
   UFState={uf:'',cities:[],tp:[],citySnap:{}};RANState={ufs:[],byUF:{}};_ideiasData=[];
+  _tacPre=null;_tacListCurrent=[];_tacDrillData=[];_tac2List=[];_tac3List=[];
   Object.keys(charts).forEach(function(k){dChart(k);});
-  ['t-reg','t-uf','t-vend','t-ran'].forEach(function(id){document.getElementById(id).style.display='none';});
-  ['drill-section','uf-drill-section','uf-top-drill-section','vend-report-section'].forEach(function(id){document.getElementById(id).style.display='none';});
+  ['t-reg','t-uf','t-vend','t-ran','t-tac'].forEach(function(id){document.getElementById(id).style.display='none';});
+  ['drill-section','uf-drill-section','uf-top-drill-section','vend-report-section','tac-drill-section'].forEach(function(id){document.getElementById(id).style.display='none';});
 }
 </script>
 </body>
