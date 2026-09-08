@@ -519,6 +519,26 @@ body{background:var(--bg);color:var(--text);min-height:100vh;}
       </div>
       <div class="result-box" id="fin-result"></div>
     </div>
+
+    <div class="finder-box" style="margin-top:13px;border-color:rgba(16,185,129,.3);">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+        <span style="font-size:16px;">📡</span>
+        <div style="font-size:13px;font-weight:700;color:var(--c3);">Quantidade de Células por Tecnologia (por Vendor)</div>
+      </div>
+      <div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:11px;">Escolha a tecnologia e digite a quantidade exata de células por site — os resultados são agrupados por vendor</div>
+      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+        <label style="display:flex;align-items:center;gap:5px;font-size:10px;font-family:'DM Mono',monospace;color:var(--text2);cursor:pointer;"><input type="radio" name="lte-qty-tech" value="2G" onchange="runLteQtyFinder()"> 2G</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:10px;font-family:'DM Mono',monospace;color:var(--text2);cursor:pointer;"><input type="radio" name="lte-qty-tech" value="3G" onchange="runLteQtyFinder()"> 3G</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:10px;font-family:'DM Mono',monospace;color:var(--text2);cursor:pointer;"><input type="radio" name="lte-qty-tech" value="4G" checked onchange="runLteQtyFinder()"> 4G/LTE</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:10px;font-family:'DM Mono',monospace;color:var(--text2);cursor:pointer;"><input type="radio" name="lte-qty-tech" value="5G" onchange="runLteQtyFinder()"> 5G</label>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <input type="number" min="0" step="1" id="lte-qty-inp" placeholder="Ex: 3" style="width:120px;background:var(--bg4);border:1px solid var(--border2);border-radius:7px;color:var(--text);font-family:'DM Mono',monospace;font-size:12px;padding:8px 11px;outline:none;" onkeydown="if(event.key==='Enter')runLteQtyFinder()">
+        <button class="fbtn" onclick="runLteQtyFinder()" style="background:var(--c3);">🔍 Buscar</button>
+        <button class="rbtn" onclick="clearLteQtyFinder()">✕ Limpar</button>
+      </div>
+      <div id="lte-qty-result" style="margin-top:12px;"></div>
+    </div>
   </div>
 
   <!-- IDEIAS RF -->
@@ -1667,6 +1687,53 @@ function exportCityCSV(cityName,ufPart){
   var results=mapVals(siteMap).filter(function(s){return s.city&&s.city.toLowerCase()===cityName.toLowerCase()&&(!ufPart||s.uf===ufPart);});
   dlCsv(['STATION ID,SITE,TECNOLOGIAS,REGIONAL,UF,CIDADE,VENDOR,OPERADORA,LAT,LON'].concat(results.map(function(s){return csvRow([s.id,getSiteNames(s).join('|'),siteTechsStr(s),s.reg,s.uf,s.city,s.vend,s.oper,s.lat,s.lon]);})).join('\n'),(cityName+(ufPart?'_'+ufPart:''))+'_sites.csv');
 }
+// ── Busca por quantidade de células por tecnologia (agrupado por vendor) ───
+var _lteQtyData=[];
+var _lteQtyTechLbl={'2G':'2G','3G':'3G','4G':'4G/LTE','5G':'5G'};
+function getLteQtyTech(){return (document.querySelector('input[name="lte-qty-tech"]:checked')||{}).value||'4G';}
+function clearLteQtyFinder(){
+  document.getElementById('lte-qty-inp').value='';
+  document.getElementById('lte-qty-result').innerHTML='';
+  _lteQtyData=[];
+}
+function runLteQtyFinder(){
+  var el=document.getElementById('lte-qty-result');
+  var raw=document.getElementById('lte-qty-inp').value.trim();
+  if(raw===''){el.innerHTML='';_lteQtyData=[];return;}
+  var qty=parseInt(raw,10);
+  if(isNaN(qty)||qty<0){el.innerHTML='<div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:7px;padding:10px 13px;font-size:11px;color:var(--c5);font-family:\'DM Mono\',monospace;">❌ Digite um número válido.</div>';_lteQtyData=[];return;}
+  var tech=getLteQtyTech(),techLbl=_lteQtyTechLbl[tech]||tech;
+  var matches=[];
+  mapVals(siteMap).forEach(function(s){
+    var n=0;
+    s.cells.forEach(function(c){if(c.tech===tech)n++;});
+    if(n===qty) matches.push({site:s,n:n});
+  });
+  _lteQtyData=matches;
+  if(!matches.length){el.innerHTML=notFoundHTML(qty+' célula(s) '+techLbl);return;}
+  var vendMap={};
+  matches.forEach(function(m){var v=(m.site.vend&&!isND(m.site.vend))?m.site.vend:'N/D';if(!vendMap[v])vendMap[v]=[];vendMap[v].push(m);});
+  var vendors=Object.keys(vendMap).sort(function(a,b){return vendMap[b].length-vendMap[a].length;});
+  var kpis=vendors.map(function(v,i){return '<div class="kpi" style="--kc:'+PAL[i%PAL.length]+'"><div class="kpi-label">'+v+'</div><div class="kpi-val" style="color:'+PAL[i%PAL.length]+'">'+vendMap[v].length.toLocaleString('pt-BR')+'</div><div class="kpi-sub">'+pct(vendMap[v].length,matches.length)+' dos sites</div></div>';}).join('');
+  var header='<div class="info-banner">📡 '+matches.length.toLocaleString('pt-BR')+' site(s) com exatamente <span style="color:var(--c3);font-weight:700;">'+qty+'</span> célula(s) <span style="color:var(--c3);font-weight:700;">'+techLbl+'</span> — '+vendors.length+' vendor(es)</div>';
+  var sections=vendors.map(function(v){
+    var rows=vendMap[v].map(function(m){
+      var s=m.site;
+      return '<tr><td class="hi" style="cursor:pointer;color:var(--c1);" onclick="goFinder(\''+esc(s.id)+'\')">'+s.id+'</td><td>'+getSiteNames(s).join(', ')+'</td><td>'+(s.city||'—')+'</td><td>'+(s.uf||'—')+'</td><td>'+(s.reg||'—')+'</td><td style="text-align:center;color:var(--c3);font-weight:700;">'+m.n+'</td></tr>';
+    }).join('');
+    return '<div style="margin-top:14px;"><div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:6px;">🏭 '+v+' — '+vendMap[v].length+' site(s)</div>'+
+      '<div class="tscroll" style="max-height:320px;overflow-y:auto;"><table class="dtbl"><thead><tr><th>STATION ID</th><th>SITE</th><th>CIDADE</th><th>UF</th><th>REGIONAL</th><th>QTD '+techLbl+'</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+  }).join('');
+  el.innerHTML=header+'<div class="kpi-grid" style="margin-top:10px;margin-bottom:0;">'+kpis+'</div>'+sections+
+    '<div style="margin-top:12px;"><button class="ebtn" onclick="exportLteQtyCSV()">⬇ CSV</button></div>';
+}
+function exportLteQtyCSV(){
+  if(!_lteQtyData.length)return;
+  var qty=document.getElementById('lte-qty-inp').value.trim();
+  var tech=getLteQtyTech(),techLbl=_lteQtyTechLbl[tech]||tech;
+  dlCsv(['STATION ID,SITE,UF,CIDADE,REGIONAL,VENDOR,QTD_'+tech].concat(_lteQtyData.map(function(m){var s=m.site;return csvRow([s.id,getSiteNames(s).join('|'),s.uf,s.city,s.reg,(s.vend&&!isND(s.vend))?s.vend:'N/D',m.n]);})).join('\n'),'sites_'+qty+'_celulas_'+tech+'.csv');
+}
+
 function renderSiteDetail(site){
   var techs=siteTechs(site).sort();
   var freqByTech={};
