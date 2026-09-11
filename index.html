@@ -87,6 +87,17 @@ body{background:var(--bg);color:var(--text);min-height:100vh;}
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
 #load-status{margin-top:12px;font-size:11px;font-family:'DM Mono',monospace;color:var(--text2);min-height:16px;}
 #tac-tbody tr:hover td{background:rgba(0,212,255,.06);}
+@media print{
+  .header,.nav,.comp-no-print{display:none !important;}
+  .page:not(.active){display:none !important;}
+  html,body{background:#fff !important;}
+  #dashboard,#page-comp{padding:0 !important;margin:0 !important;background:#fff !important;}
+  .comp-print-area{position:static !important;background:#fff !important;padding:12px !important;}
+  .comp-print-area,.comp-print-area *{color:#111 !important;text-shadow:none !important;box-shadow:none !important;background-image:none !important;}
+  .comp-print-area .tscroll{max-height:none !important;overflow:visible !important;}
+  .comp-print-area .kpi,.comp-print-area table,.comp-print-area th,.comp-print-area td{background:#fff !important;border:1px solid #ccc !important;}
+  .comp-print-area .kpi::before{background:#111 !important;}
+}
 </style>
 </head>
 <body>
@@ -157,6 +168,7 @@ body{background:var(--bg);color:var(--text);min-height:100vh;}
     <div class="tab" data-page="kmz" onclick="P('kmz',this)">🗺️ KMZ</div>
     <div class="tab" data-page="busca" onclick="P('busca',this)">🔍 Busca</div>
     <div class="tab" data-page="ideias" onclick="P('ideias',this)">💡 Ideias RF</div>
+    <div class="tab" data-page="comp" onclick="P('comp',this)">🔄 Comparação CGI</div>
   </nav>
 
   <!-- OVERVIEW -->
@@ -506,11 +518,12 @@ body{background:var(--bg);color:var(--text);min-height:100vh;}
 
     <div class="finder-box">
       <div style="font-size:13px;font-weight:700;margin-bottom:4px;">🔍 Busca Avançada</div>
-      <div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:11px;">Pesquise por Station ID, nome do Site ou Cidade</div>
+      <div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:11px;">Pesquise por Station ID, nome do Site, Cidade ou FREQ</div>
       <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
         <label style="display:flex;align-items:center;gap:5px;font-size:10px;font-family:'DM Mono',monospace;color:var(--text2);cursor:pointer;"><input type="radio" name="fin-mode" value="sid" checked onchange="clearFinder()"> Station ID</label>
         <label style="display:flex;align-items:center;gap:5px;font-size:10px;font-family:'DM Mono',monospace;color:var(--text2);cursor:pointer;"><input type="radio" name="fin-mode" value="site" onchange="clearFinder()"> Nome do Site</label>
         <label style="display:flex;align-items:center;gap:5px;font-size:10px;font-family:'DM Mono',monospace;color:var(--text2);cursor:pointer;"><input type="radio" name="fin-mode" value="city" onchange="clearFinder()"> Cidade</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:10px;font-family:'DM Mono',monospace;color:var(--text2);cursor:pointer;"><input type="radio" name="fin-mode" value="freq" onchange="clearFinder()"> 📊 FREQ</label>
       </div>
       <div class="finder-row">
         <input class="finder-inp" id="fin-inp" placeholder="Digite para buscar..." oninput="onFinInp()" onkeydown="if(event.key==='Enter')runFinder()">
@@ -573,6 +586,34 @@ body{background:var(--bg);color:var(--text);min-height:100vh;}
       </div>
       <div id="ideias-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:13px;"></div>
     </div>
+  </div>
+
+  <!-- COMPARAÇÃO CGI -->
+  <div id="page-comp" class="page">
+    <div id="comp-upload-section">
+      <div style="font-size:18px;font-weight:800;margin-bottom:4px;">Comparação entre CGIs</div>
+      <div style="font-size:11px;color:var(--text2);font-family:'DM Mono',monospace;margin-bottom:18px;">Carregue um CGI anterior (baseline) e um CGI mais atual para comparar a evolução da rede e gerar um relatório executivo.</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;">
+        <div class="finder-box" style="border-color:rgba(124,58,237,.35);">
+          <div style="font-size:12px;font-weight:700;color:var(--c2);margin-bottom:10px;">📂 CGI Anterior (baseline)</div>
+          <button class="upload-btn" style="width:100%;" onclick="document.getElementById('comp-file-a').click()">Selecionar CSV ou XLSX</button>
+          <input type="file" id="comp-file-a" accept=".csv,.txt,.xlsx,.xls" style="display:none" onchange="loadCompFile(this.files[0],'a')">
+          <div id="comp-status-a" style="font-size:10px;font-family:'DM Mono',monospace;color:var(--text2);margin-top:8px;min-height:16px;"></div>
+          <div id="comp-map-a" style="display:none;margin-top:10px;"></div>
+        </div>
+        <div class="finder-box" style="border-color:rgba(16,185,129,.35);">
+          <div style="font-size:12px;font-weight:700;color:var(--c3);margin-bottom:10px;">📂 CGI Atual</div>
+          <button class="upload-btn" style="width:100%;" onclick="document.getElementById('comp-file-b').click()">Selecionar CSV ou XLSX</button>
+          <input type="file" id="comp-file-b" accept=".csv,.txt,.xlsx,.xls" style="display:none" onchange="loadCompFile(this.files[0],'b')">
+          <div id="comp-status-b" style="font-size:10px;font-family:'DM Mono',monospace;color:var(--text2);margin-top:8px;min-height:16px;"></div>
+          <div id="comp-map-b" style="display:none;margin-top:10px;"></div>
+        </div>
+      </div>
+      <div style="text-align:center;margin-top:18px;">
+        <button class="process-btn" id="comp-proc-btn" onclick="runComparison()" disabled>Comparar e Gerar Relatório</button>
+      </div>
+    </div>
+    <div id="comp-report" style="display:none;"></div>
   </div>
 </div>
 
@@ -1611,6 +1652,10 @@ function onFinInp(){
     var seen={};
     mapVals(siteMap).forEach(function(s){getSiteNames(s).forEach(function(sn){if(siteNameMatches(sn,q)&&!seen[sn]){seen[sn]=1;suggestions.push({label:sn+' ('+s.id+')',value:sn});}});});
     suggestions=suggestions.slice(0,12);
+  } else if(mode==='freq'){
+    var freqMap={};
+    mapVals(siteMap).forEach(function(s){s.cells.forEach(function(c){if(c.freq){var f=String(c.freq);if(f.toLowerCase().indexOf(q)>=0)freqMap[f]=(freqMap[f]||0)+1;}});});
+    Object.keys(freqMap).sort().slice(0,12).forEach(function(f){suggestions.push({label:f+' ('+freqMap[f]+' célula(s))',value:f});});
   } else {
     var cityUFMap={};
     mapVals(siteMap).forEach(function(s){var c=s.city||'',u=s.uf||'';if(!c)return;var ck=c.toLowerCase();if(!cityUFMap[ck])cityUFMap[ck]={city:c,ufs:{}};if(u)cityUFMap[ck].ufs[u]=1;});
@@ -1644,6 +1689,16 @@ function runFinder(){
         return '<tr><td class="hi" style="cursor:pointer;color:var(--c1);" onclick="goFinder(\''+esc(s.id)+'\')">'+s.id+'</td><td>'+getSiteNames(s).join(', ')+'</td><td>'+(s.city||'—')+'</td><td>'+(s.uf||'—')+'</td><td>'+(s.reg||'—')+'</td><td>'+chips+'</td><td>'+(s.vend||'—')+'</td></tr>';
       }).join('')+'</tbody></table></div>';
     el.classList.add('show');
+  } else if(mode==='freq'){
+    var qlow=q.toLowerCase();
+    var matches=[];
+    mapVals(siteMap).forEach(function(s){
+      s.cells.forEach(function(c){
+        if(c.freq&&String(c.freq).toLowerCase().indexOf(qlow)>=0) matches.push({site:s,cell:c});
+      });
+    });
+    if(!matches.length){el.innerHTML=notFoundHTML(q);el.classList.add('show');return;}
+    el.innerHTML=renderFreqResults(q,matches);el.classList.add('show');
   } else {
     var cityPart=q,ufPart=null;
     if(q.indexOf('||')>=0){var parts=q.split('||');cityPart=parts[0];ufPart=parts[1];}
@@ -1686,6 +1741,35 @@ function renderCityDetail(cityName,ufPart,sites){
 function exportCityCSV(cityName,ufPart){
   var results=mapVals(siteMap).filter(function(s){return s.city&&s.city.toLowerCase()===cityName.toLowerCase()&&(!ufPart||s.uf===ufPart);});
   dlCsv(['STATION ID,SITE,TECNOLOGIAS,REGIONAL,UF,CIDADE,VENDOR,OPERADORA,LAT,LON'].concat(results.map(function(s){return csvRow([s.id,getSiteNames(s).join('|'),siteTechsStr(s),s.reg,s.uf,s.city,s.vend,s.oper,s.lat,s.lon]);})).join('\n'),(cityName+(ufPart?'_'+ufPart:''))+'_sites.csv');
+}
+// ── Busca por FREQ (coluna de frequência por célula) ────────────────────────
+var _freqSearchData=[];
+function renderFreqResults(q,matches){
+  _freqSearchData=matches;
+  var vendMap={};
+  matches.forEach(function(m){
+    var v=(m.cell.vend&&!isND(m.cell.vend))?m.cell.vend:((m.site.vend&&!isND(m.site.vend))?m.site.vend:'N/D');
+    if(!vendMap[v])vendMap[v]=[];
+    vendMap[v].push(m);
+  });
+  var vendors=Object.keys(vendMap).sort(function(a,b){return vendMap[b].length-vendMap[a].length;});
+  var kpis=vendors.map(function(v,i){return '<div class="kpi" style="--kc:'+PAL[i%PAL.length]+'"><div class="kpi-label">'+esc(v)+'</div><div class="kpi-val" style="color:'+PAL[i%PAL.length]+'">'+vendMap[v].length.toLocaleString('pt-BR')+'</div><div class="kpi-sub">'+pct(vendMap[v].length,matches.length)+' das células</div></div>';}).join('');
+  var header='<div class="info-banner">📊 '+matches.length.toLocaleString('pt-BR')+' célula(s) encontrada(s) para FREQ "'+esc(q)+'" — '+vendors.length+' vendor(es)</div>';
+  var sections=vendors.map(function(v){
+    var rows=vendMap[v].map(function(m){
+      var s=m.site,c=m.cell;
+      return '<tr><td class="hi" style="cursor:pointer;color:var(--c1);white-space:nowrap;" onclick="goFinder(\''+esc(s.id)+'\')">'+s.id+'</td><td style="max-width:200px;white-space:normal;word-break:break-word;">'+esc(getSiteNames(s).join(', '))+'</td><td style="white-space:nowrap;"><span class="tchip '+techChipClass(c.tech)+'">'+esc(c.tech||'—')+'</span></td><td style="white-space:nowrap;">'+esc(s.city||'—')+'</td><td style="white-space:nowrap;">'+esc(s.uf||'—')+'</td><td style="white-space:nowrap;">'+esc(s.reg||'—')+'</td><td style="color:var(--c4);font-weight:700;white-space:nowrap;">'+esc(c.freq||'—')+'</td><td style="white-space:nowrap;">'+esc(c.larg||'—')+'</td></tr>';
+    }).join('');
+    return '<div style="margin-top:14px;"><div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:6px;">🏭 '+esc(v)+' — '+vendMap[v].length+' célula(s)</div>'+
+      '<div class="tscroll" style="max-height:320px;overflow-y:auto;"><table class="dtbl" style="table-layout:fixed;width:100%;"><colgroup><col style="width:11%;"><col style="width:22%;"><col style="width:8%;"><col style="width:15%;"><col style="width:6%;"><col style="width:11%;"><col style="width:9%;"><col style="width:9%;"></colgroup><thead><tr><th>STATION ID</th><th>SITE</th><th>TECH</th><th>CIDADE</th><th>UF</th><th>REGIONAL</th><th>FREQ</th><th>LARGURA</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+  }).join('');
+  return header+'<div class="kpi-grid" style="margin-top:10px;margin-bottom:0;">'+kpis+'</div>'+sections+
+    '<div style="margin-top:12px;"><button class="ebtn" onclick="exportFreqCSV()">⬇ CSV</button></div>';
+}
+function exportFreqCSV(){
+  if(!_freqSearchData.length) return;
+  var q=document.getElementById('fin-inp').value.trim();
+  dlCsv(['STATION ID,SITE,TECH,CIDADE,UF,REGIONAL,VENDOR,FREQ,LARGURA'].concat(_freqSearchData.map(function(m){var s=m.site,c=m.cell;var vend=(c.vend&&!isND(c.vend))?c.vend:((s.vend&&!isND(s.vend))?s.vend:'N/D');return csvRow([s.id,getSiteNames(s).join('|'),c.tech,s.city,s.uf,s.reg,vend,c.freq,c.larg]);})).join('\n'),'busca_freq_'+q+'.csv');
 }
 // ── Busca por quantidade de células por tecnologia (agrupado por vendor) ───
 var _lteQtyData=[];
@@ -3070,6 +3154,385 @@ function resetAll(){
   Object.keys(charts).forEach(function(k){dChart(k);});
   ['t-reg','t-uf','t-vend','t-ran','t-tac'].forEach(function(id){document.getElementById(id).style.display='none';});
   ['drill-section','uf-drill-section','uf-top-drill-section','vend-report-section','tac-drill-section'].forEach(function(id){document.getElementById(id).style.display='none';});
+}
+
+// ── COMPARAÇÃO CGI (Anterior x Atual) — relatório executivo ────────────────
+var compRaw={a:null,b:null};
+var compFileName={a:'',b:''};
+var compSites={a:null,b:null};
+var _compDiff=null;
+var COMP_AUTO={sid:['station_id','stationid','site_id','siteid','id_site','enodeb','bts_id'],
+  tech:['tecno','tecnologia','technology','tech','rat','radio'],
+  vend:['vendor','fabricante'],
+  uf:['uf','estado','state'],
+  city:['cidade','municipio','city'],
+  reg:['regional','region','gerencia']};
+
+// SWAPs de vendor conhecidos/finalizados — usados para contextualizar o relatório
+// e evitar que uma migração já mapeada apareça como alerta de risco genérico.
+var KNOWN_SWAPS=[
+  {region:'Salvador (DDD 71)',from:'Ericsson',to:'Huawei',status:'finalizado',match:function(s){return matchCity(s,'Salvador');}},
+  {region:'São Paulo (DDD 11)',from:'Ericsson',to:'Huawei',status:'finalizado',match:function(s){return matchCity(s,'Sao Paulo');}},
+  {region:'Brasília (DDD 61)',from:'Ericsson',to:'Nokia',status:'finalizado',match:function(s){return matchCity(s,'Brasilia');}},
+  {region:'Belo Horizonte (DDD 31)',from:'Ericsson',to:'Nokia',status:'finalizado',match:function(s){return matchCity(s,'Belo Horizonte');}}
+];
+function stripAcc(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();}
+function matchCity(s,name){return stripAcc(s.city).indexOf(stripAcc(name))>-1;}
+function vendEq(v,name){return String(v||'').toLowerCase().trim()===String(name).toLowerCase().trim();}
+function computeSwapStatus(sw){
+  var sa=mapVals(compSites.a).filter(sw.match),sb=mapVals(compSites.b).filter(sw.match);
+  var fromA=sa.filter(function(s){return vendEq(s.vend,sw.from);}).length;
+  var fromB=sb.filter(function(s){return vendEq(s.vend,sw.from);}).length;
+  var toA=sa.filter(function(s){return vendEq(s.vend,sw.to);}).length;
+  var toB=sb.filter(function(s){return vendEq(s.vend,sw.to);}).length;
+  var completo=fromB===0&&toB>0;
+  var parcial=!completo&&(fromB<fromA)&&(toB>toA);
+  var confirmed=completo||parcial;
+  var migrated=completo?toB:(parcial?Math.min(fromA-fromB,toB-toA):0);
+  var stage=completo?'completo':(parcial?'parcial':'sem_variacao');
+  return {region:sw.region,from:sw.from,to:sw.to,fromA:fromA,fromB:fromB,toA:toA,toB:toB,totalA:sa.length,totalB:sb.length,confirmed:confirmed,migrated:migrated,stage:stage};
+}
+function findConfirmedSwaps(swapStatuses,vendorName,role){
+  return swapStatuses.filter(function(sw){return sw.confirmed&&vendEq(role==='from'?sw.from:sw.to,vendorName);});
+}
+
+function loadCompFile(f,which){
+  if(!f) return;
+  compFileName[which]=f.name;
+  var ext=f.name.split('.').pop().toLowerCase();
+  var st=document.getElementById('comp-status-'+which);
+  st.textContent='⏳ Carregando '+f.name+'…';st.style.color='var(--text2)';
+  if(ext==='xlsx'||ext==='xls'){
+    var reader=new FileReader();
+    reader.onload=function(e){
+      try{
+        var data=new Uint8Array(e.target.result);
+        var wb=XLSX.read(data,{type:'array',cellDates:true});
+        var wsName=wb.SheetNames[0];
+        var csv=XLSX.utils.sheet_to_csv(wb.Sheets[wsName],{blankrows:false});
+        Papa.parse(csv,{header:true,skipEmptyLines:true,complete:function(r){
+          compRaw[which]=r.data;
+          st.textContent='✅ '+f.name+' — '+r.data.length.toLocaleString('pt-BR')+' linhas ("'+wsName+'")';st.style.color='#10b981';
+          renderCompColMap(which,r.meta.fields);
+        }});
+      }catch(err){st.textContent='❌ '+err.message;st.style.color='#ef4444';}
+    };
+    reader.readAsArrayBuffer(f);
+  } else {
+    Papa.parse(f,{header:true,skipEmptyLines:true,encoding:'UTF-8',complete:function(r){
+      compRaw[which]=r.data;
+      st.textContent='✅ '+f.name+' — '+r.data.length.toLocaleString('pt-BR')+' linhas';st.style.color='#10b981';
+      renderCompColMap(which,r.meta.fields);
+    },error:function(e){st.textContent='❌ '+e.message;st.style.color='#ef4444';}});
+  }
+}
+function renderCompColMap(which,fields){
+  var box=document.getElementById('comp-map-'+which);
+  var defs=[['sid','🔑 Station ID *'],['tech','📶 Tecno'],['vend','🔧 Vendor'],['uf','🗺️ UF'],['city','🏙️ Cidade'],['reg','🏢 Regional']];
+  box.innerHTML=defs.map(function(d){
+    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:5px;"><span style="font-size:10px;color:var(--text3);font-family:\'DM Mono\',monospace;">'+d[1]+'</span><select class="col-select" id="comp-'+which+'-'+d[0]+'" style="max-width:150px;" onchange="checkCompReady()"></select></div>';
+  }).join('');
+  defs.forEach(function(d){
+    var el=document.getElementById('comp-'+which+'-'+d[0]);
+    el.innerHTML='<option value="">—</option>';
+    fields.forEach(function(f){el.appendChild(new Option(f,f));});
+    var hit=fields.filter(function(f){return COMP_AUTO[d[0]].indexOf(String(f).toLowerCase().trim())>-1;})[0];
+    if(hit) el.value=hit;
+  });
+  box.style.display='block';
+  checkCompReady();
+}
+function checkCompReady(){
+  var aOk=compRaw.a&&document.getElementById('comp-a-sid')&&document.getElementById('comp-a-sid').value;
+  var bOk=compRaw.b&&document.getElementById('comp-b-sid')&&document.getElementById('comp-b-sid').value;
+  document.getElementById('comp-proc-btn').disabled=!(aOk&&bOk);
+}
+function buildCompSiteMap(rows,map){
+  var sm=new Map();
+  rows.forEach(function(row){
+    var sid=gv(row,map.sid);if(!sid)return;
+    var tech=map.tech?normT(gv(row,map.tech)):null;
+    var vend=gv(row,map.vend),uf=gv(row,map.uf),city=gv(row,map.city),reg=gv(row,map.reg);
+    if(!sm.has(sid)) sm.set(sid,{id:sid,techs:new Map(),vend:'',uf:'',city:'',reg:''});
+    var s=sm.get(sid);
+    if(tech) s.techs.set(tech,1);
+    if(!s.vend&&vend&&!isND(vend)) s.vend=vend;
+    if(!s.uf&&uf) s.uf=uf;
+    if(!s.city&&city) s.city=city;
+    if(!s.reg&&reg) s.reg=reg;
+  });
+  return sm;
+}
+function runComparison(){
+  var mapA={sid:V('comp-a-sid'),tech:V('comp-a-tech'),vend:V('comp-a-vend'),uf:V('comp-a-uf'),city:V('comp-a-city'),reg:V('comp-a-reg')};
+  var mapB={sid:V('comp-b-sid'),tech:V('comp-b-tech'),vend:V('comp-b-vend'),uf:V('comp-b-uf'),city:V('comp-b-city'),reg:V('comp-b-reg')};
+  if(!mapA.sid||!mapB.sid){alert('Selecione a coluna Station ID em ambos os arquivos.');return;}
+  compSites.a=buildCompSiteMap(compRaw.a,mapA);
+  compSites.b=buildCompSiteMap(compRaw.b,mapB);
+  renderCompReport();
+}
+function computeCompDiff(){
+  var sa=mapVals(compSites.a),sb=mapVals(compSites.b);
+  var na=sa.length,nb=sb.length;
+  var idsA={};sa.forEach(function(s){idsA[s.id]=s;});
+  var idsB={};sb.forEach(function(s){idsB[s.id]=s;});
+  var added=[],removed=[],kept=0;
+  sb.forEach(function(s){if(!idsA[s.id])added.push(s);else kept++;});
+  sa.forEach(function(s){if(!idsB[s.id])removed.push(s);});
+
+  var vA={},vB={};
+  sa.forEach(function(s){var v=(s.vend&&!isND(s.vend))?s.vend:'N/D';vA[v]=(vA[v]||0)+1;});
+  sb.forEach(function(s){var v=(s.vend&&!isND(s.vend))?s.vend:'N/D';vB[v]=(vB[v]||0)+1;});
+  var vendors=Object.keys(vA).concat(Object.keys(vB)).filter(function(v,i,arr){return arr.indexOf(v)===i;});
+  var vendRows=vendors.map(function(v){
+    var a=vA[v]||0,b=vB[v]||0,d=b-a,p=a>0?(d/a*100):(b>0?100:0);
+    var status=(a===0&&b>0)?'novo':((b===0&&a>0)?'saiu':(d>0?'cresceu':(d<0?'reduziu':'estavel')));
+    return {vendor:v,a:a,b:b,delta:d,pct:p,status:status};
+  }).sort(function(x,y){return Math.abs(y.delta)-Math.abs(x.delta);});
+
+  var techs=['2G','3G','4G','5G'];
+  var techRows=techs.map(function(t){
+    var a=sa.filter(function(s){return s.techs.has(t);}).length;
+    var b=sb.filter(function(s){return s.techs.has(t);}).length;
+    var d=b-a,p=a>0?(d/a*100):(b>0?100:0);
+    return {tech:t,a:a,b:b,delta:d,pct:p};
+  }).filter(function(r){return r.a>0||r.b>0;});
+
+  var ufA={},ufB={};
+  sa.forEach(function(s){var u=s.uf||'N/D';ufA[u]=(ufA[u]||0)+1;});
+  sb.forEach(function(s){var u=s.uf||'N/D';ufB[u]=(ufB[u]||0)+1;});
+  var ufs=Object.keys(ufA).concat(Object.keys(ufB)).filter(function(v,i,arr){return arr.indexOf(v)===i;});
+  var ufRows=ufs.map(function(u){var a=ufA[u]||0,b=ufB[u]||0;return {uf:u,a:a,b:b,delta:b-a};}).sort(function(x,y){return Math.abs(y.delta)-Math.abs(x.delta);});
+
+  return {na:na,nb:nb,added:added,removed:removed,kept:kept,vendRows:vendRows,techRows:techRows,ufRows:ufRows};
+}
+function genCompInsights(diff,deltaSites,pctSites,swapStatuses){
+  swapStatuses=swapStatuses||[];
+  var out=[];
+  if(deltaSites>0){
+    out.push('A base total cresceu <b>'+deltaSites.toLocaleString('pt-BR')+' sites</b> (<b>+'+pctSites.toFixed(1)+'%</b>) entre os dois períodos. Recomenda-se validar se a expansão está concentrada em regionais/UFs específicas e se o investimento em capacidade está alinhado à demanda de tráfego observada.');
+  } else if(deltaSites<0){
+    out.push('A base total reduziu <b>'+Math.abs(deltaSites).toLocaleString('pt-BR')+' sites</b> (<b>'+pctSites.toFixed(1)+'%</b>). Recomenda-se confirmar se a redução é resultado de desativação planejada (RAN Sharing, otimização de tecnologia legada) e medir eventual impacto em cobertura antes de prosseguir com novas reduções.');
+  } else {
+    out.push('O número total de sites permaneceu estável entre os dois períodos analisados.');
+  }
+  var confirmedSwaps=swapStatuses.filter(function(s){return s.confirmed;});
+  if(confirmedSwaps.length){
+    out.push('🔀 Foram confirmados <b>'+confirmedSwaps.length+' SWAP(s) de vendor</b> já mapeado(s) pela operação em andamento — detalhes na seção "SWAPs de Vendor Monitorados". As variações de vendor abaixo que coincidem com esses SWAPs estão sinalizadas como planejadas, não como risco.');
+  }
+  diff.vendRows.filter(function(v){return v.status==='novo';}).forEach(function(v){
+    var sw=findConfirmedSwaps(swapStatuses,v.vendor,'to');
+    if(sw.length){
+      out.push('🆕 <b>'+v.vendor+'</b> entrou na rede com <b>'+v.b.toLocaleString('pt-BR')+' sites</b>, consistente com o SWAP finalizado em '+sw.map(function(s){return s.region;}).join(', ')+' ('+sw[0].from+' → '+sw[0].to+'). Recomenda-se apenas acompanhar o cronograma e confirmar aceite/homologação dos sites migrados.');
+    } else {
+      out.push('🆕 <b>'+v.vendor+'</b> é um novo entrante na rede, já operando <b>'+v.b.toLocaleString('pt-BR')+' sites</b>. Recomenda-se validar a formalização contratual, o SLA de suporte técnico e o nível de dependência antes de ampliar a presença desse fornecedor.');
+    }
+  });
+  diff.vendRows.filter(function(v){return v.status==='saiu';}).forEach(function(v){
+    var sw=findConfirmedSwaps(swapStatuses,v.vendor,'from');
+    if(sw.length){
+      out.push('🔀 <b>'+v.vendor+'</b> deixou de constar na rede (operava <b>'+v.a.toLocaleString('pt-BR')+' sites</b>), consistente com o SWAP finalizado em '+sw.map(function(s){return s.region;}).join(', ')+'. Recomenda-se apenas confirmar a baixa contratual e a devolução/descomissionamento formal dos ativos.');
+    } else {
+      out.push('⚠️ <b>'+v.vendor+'</b> deixou de constar na rede — operava <b>'+v.a.toLocaleString('pt-BR')+' sites</b> na base anterior. Avaliar se a saída foi planejada (fim de contrato, migração de tecnologia) e verificar pendências contratuais (multas, devolução de ativos, garantias).');
+    }
+  });
+  diff.vendRows.filter(function(v){return v.status==='cresceu'&&v.a>0&&Math.abs(v.pct)>=10&&Math.abs(v.delta)>=3;}).forEach(function(v){
+    var sw=findConfirmedSwaps(swapStatuses,v.vendor,'to');
+    if(sw.length){
+      out.push('🔀 <b>'+v.vendor+'</b> ampliou a presença em <b>'+v.delta+' sites</b> (<b>+'+v.pct.toFixed(1)+'%</b>), em linha com o SWAP finalizado em '+sw.map(function(s){return s.region;}).join(', ')+'. Sem ação adicional necessária além do acompanhamento do cronograma.');
+    } else {
+      out.push('📈 <b>'+v.vendor+'</b> ampliou a presença em <b>'+v.delta+' sites</b> (<b>+'+v.pct.toFixed(1)+'%</b>). Vale avaliar o risco de concentração/dependência de fornecedor único e o potencial de negociação de volume em próximos contratos.');
+    }
+  });
+  diff.vendRows.filter(function(v){return v.status==='reduziu'&&v.b>0&&Math.abs(v.pct)>=10&&Math.abs(v.delta)>=3;}).forEach(function(v){
+    var sw=findConfirmedSwaps(swapStatuses,v.vendor,'from');
+    if(sw.length){
+      out.push('🔀 <b>'+v.vendor+'</b> reduziu a presença em <b>'+Math.abs(v.delta)+' sites</b> (<b>'+v.pct.toFixed(1)+'%</b>), explicado pelo SWAP finalizado em '+sw.map(function(s){return s.region;}).join(', ')+' — não representa risco de descontinuidade fora do escopo do projeto.');
+    } else {
+      out.push('📉 <b>'+v.vendor+'</b> reduziu a presença em <b>'+Math.abs(v.delta)+' sites</b> (<b>'+v.pct.toFixed(1)+'%</b>). Verificar se decorre de descomissionamento de tecnologia legada ou redução contratual — pode representar oportunidade de economia operacional (energia, aluguel, manutenção) ou risco de descontinuidade de suporte.');
+    }
+  });
+  var t5=diff.techRows.filter(function(t){return t.tech==='5G';})[0];
+  if(t5&&t5.delta>0){
+    out.push('🚀 A cobertura 5G avançou <b>'+t5.delta+' sites</b> (<b>+'+t5.pct.toFixed(1)+'%</b>), totalizando <b>'+t5.b.toLocaleString('pt-BR')+' sites</b>. Recomenda-se priorizar ações comerciais (planos, marketing, parcerias) nas regionais onde a expansão foi concentrada.');
+  }
+  var t2=diff.techRows.filter(function(t){return t.tech==='2G';})[0];
+  if(t2&&t2.delta<0){
+    out.push('♻️ A base 2G reduziu <b>'+Math.abs(t2.delta)+' sites</b> (<b>'+t2.pct.toFixed(1)+'%</b>), indicando avanço do desligamento de tecnologia legada — normalmente associado a economia operacional (energia, aluguel de infraestrutura, manutenção).');
+  }
+  var t3=diff.techRows.filter(function(t){return t.tech==='3G';})[0];
+  if(t3&&t3.delta<0&&Math.abs(t3.pct)>=10){
+    out.push('♻️ A base 3G reduziu <b>'+Math.abs(t3.delta)+' sites</b> (<b>'+t3.pct.toFixed(1)+'%</b>), sinalizando possível continuidade do processo de sunset de tecnologia legada.');
+  }
+  if(diff.added.length>0||diff.removed.length>0){
+    out.push('🔁 Foram identificados <b>'+diff.added.length.toLocaleString('pt-BR')+' sites novos</b> ('+pct(diff.added.length,diff.nb)+' da base atual) e <b>'+diff.removed.length.toLocaleString('pt-BR')+' sites descomissionados</b> ('+pct(diff.removed.length,diff.na)+' da base anterior). Um volume elevado de movimentação pode indicar reorganização relevante da rede (RAN Sharing, fusão de sites, migração de infraestrutura) e merece validação operacional.');
+  }
+  if(diff.ufRows.length&&Math.abs(diff.ufRows[0].delta)>0){
+    var topUf=diff.ufRows[0];
+    out.push('📍 A UF com maior variação foi <b>'+topUf.uf+'</b> ('+(topUf.delta>=0?'+':'')+topUf.delta+' sites), o que pode indicar prioridade regional de investimento ou concentração de desativações.');
+  }
+  if(!out.length) out.push('Não foram identificadas variações relevantes entre os dois períodos analisados.');
+  return out;
+}
+function renderCompReport(){
+  var diff=computeCompDiff();
+  _compDiff=diff;
+  document.getElementById('comp-upload-section').style.display='none';
+  var el=document.getElementById('comp-report');
+  el.style.display='block';
+
+  var swapStatuses=KNOWN_SWAPS.map(function(sw){return computeSwapStatus(sw);});
+  var deltaSites=diff.nb-diff.na,pctSites=diff.na>0?(deltaSites/diff.na*100):0;
+  var arrow=function(d){return d>0?'▲':(d<0?'▼':'●');};
+  var col=function(d){return d>0?'#10b981':(d<0?'#ef4444':'var(--text2)');};
+
+  var kpis=''
+    +'<div class="kpi"><div class="kpi-label">TOTAL DE SITES</div><div class="kpi-val">'+diff.nb.toLocaleString('pt-BR')+'</div><div class="kpi-sub" style="color:'+col(deltaSites)+';">'+arrow(deltaSites)+' '+(deltaSites>=0?'+':'')+deltaSites.toLocaleString('pt-BR')+' ('+(pctSites>=0?'+':'')+pctSites.toFixed(1)+'%) vs anterior</div></div>'
+    +'<div class="kpi"><div class="kpi-label">SITES NOVOS</div><div class="kpi-val" style="color:#10b981;">'+diff.added.length.toLocaleString('pt-BR')+'</div><div class="kpi-sub">'+pct(diff.added.length,diff.nb)+' da base atual</div></div>'
+    +'<div class="kpi"><div class="kpi-label">SITES DESCOMISSIONADOS</div><div class="kpi-val" style="color:#ef4444;">'+diff.removed.length.toLocaleString('pt-BR')+'</div><div class="kpi-sub">'+pct(diff.removed.length,diff.na)+' da base anterior</div></div>'
+    +'<div class="kpi"><div class="kpi-label">VENDORS ATIVOS</div><div class="kpi-val">'+diff.vendRows.filter(function(v){return v.b>0;}).length+'</div><div class="kpi-sub">'+diff.vendRows.filter(function(v){return v.status==='novo';}).length+' novo(s) entrante(s)</div></div>';
+
+  var swapTbl='<table class="dtbl"><thead><tr><th>REGIÃO</th><th>SWAP</th><th>VENDOR ANTERIOR (antes → depois)</th><th>VENDOR ATUAL (antes → depois)</th><th>STATUS</th></tr></thead><tbody>'+
+    swapStatuses.map(function(sw){
+      var badge=sw.stage==='completo'?'<span style="color:#10b981;font-weight:700;">✅ Finalizado — confirmado na base atual ('+sw.toB+' sites '+esc(sw.to)+')</span>':
+                sw.stage==='parcial'?'<span style="color:#f59e0b;font-weight:700;">🔶 Em andamento — migração parcial detectada ('+sw.migrated+' sites)</span>':
+                '<span style="color:var(--text2);">ℹ️ Sem variação clara nos dados carregados</span>';
+      return '<tr><td style="font-weight:700;">'+esc(sw.region)+'</td><td>'+esc(sw.from)+' → '+esc(sw.to)+'</td><td>'+sw.fromA+' → '+sw.fromB+'</td><td>'+sw.toA+' → '+sw.toB+'</td><td>'+badge+'</td></tr>';
+    }).join('')+'</tbody></table>';
+
+  var vendTbl='<table class="dtbl"><thead><tr><th>VENDOR</th><th>SITES ANTERIOR</th><th>SITES ATUAL</th><th>Δ</th><th>Δ%</th><th>STATUS</th></tr></thead><tbody>'+
+    diff.vendRows.map(function(v){
+      var badge=v.status==='novo'?'<span style="color:#10b981;font-weight:700;">🆕 Novo entrante</span>':
+                v.status==='saiu'?'<span style="color:#ef4444;font-weight:700;">⚠️ Saiu da rede</span>':
+                v.status==='cresceu'?'<span style="color:#10b981;">▲ Cresceu</span>':
+                v.status==='reduziu'?'<span style="color:#ef4444;">▼ Reduziu</span>':'<span style="color:var(--text2);">● Estável</span>';
+      return '<tr><td style="font-weight:700;">'+esc(v.vendor)+'</td><td>'+v.a.toLocaleString('pt-BR')+'</td><td>'+v.b.toLocaleString('pt-BR')+'</td><td style="color:'+col(v.delta)+';font-weight:700;">'+(v.delta>=0?'+':'')+v.delta+'</td><td>'+(v.pct>=0?'+':'')+v.pct.toFixed(1)+'%</td><td>'+badge+'</td></tr>';
+    }).join('')+'</tbody></table>';
+
+  var techTbl='<table class="dtbl"><thead><tr><th>TECNOLOGIA</th><th>SITES ANTERIOR</th><th>SITES ATUAL</th><th>Δ</th><th>Δ%</th></tr></thead><tbody>'+
+    diff.techRows.map(function(t){
+      return '<tr><td style="font-weight:700;color:'+(TC[t.tech]||'var(--text)')+';">'+t.tech+'</td><td>'+t.a.toLocaleString('pt-BR')+'</td><td>'+t.b.toLocaleString('pt-BR')+'</td><td style="color:'+col(t.delta)+';font-weight:700;">'+(t.delta>=0?'+':'')+t.delta+'</td><td>'+(t.pct>=0?'+':'')+t.pct.toFixed(1)+'%</td></tr>';
+    }).join('')+'</tbody></table>';
+
+  var ufTop=diff.ufRows.slice(0,8);
+  var ufTbl='<table class="dtbl"><thead><tr><th>UF</th><th>ANTERIOR</th><th>ATUAL</th><th>Δ</th></tr></thead><tbody>'+
+    ufTop.map(function(u){return '<tr><td style="font-weight:700;">'+esc(u.uf)+'</td><td>'+u.a+'</td><td>'+u.b+'</td><td style="color:'+col(u.delta)+';font-weight:700;">'+(u.delta>=0?'+':'')+u.delta+'</td></tr>';}).join('')+'</tbody></table>';
+
+  var insights=genCompInsights(diff,deltaSites,pctSites,swapStatuses);
+  var insightsHtml='<ul style="margin:0;padding-left:18px;line-height:1.9;font-size:12.5px;">'+insights.map(function(i){return '<li style="margin-bottom:8px;">'+i+'</li>';}).join('')+'</ul>';
+
+  var reportBody=
+    '<h1>Relatório Executivo — Evolução da Rede</h1>'+
+    '<div class="sub">Comparação: '+esc(compFileName.a||'CGI Anterior')+' → '+esc(compFileName.b||'CGI Atual')+' · Gerado em '+new Date().toLocaleDateString('pt-BR')+'</div>'+
+    '<div class="kpi-grid">'+kpis+'</div>'+
+    '<div class="box"><h2>📋 Leitura Executiva</h2>'+insightsHtml+'</div>'+
+    '<h3>🔀 SWAPs de Vendor Monitorados</h3>'+swapTbl+
+    '<h3>🏭 Evolução por Vendor</h3>'+vendTbl+
+    '<h3>📶 Evolução por Tecnologia</h3>'+techTbl+
+    '<h3>🗺️ Maiores Variações por UF</h3>'+ufTbl;
+  _compPrintHtml=reportBody;
+
+  el.innerHTML=
+    '<div class="comp-print-area">'+
+    '<div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:6px;">'+
+      '<div><div style="font-size:19px;font-weight:800;">Relatório Executivo — Evolução da Rede</div>'+
+      '<div style="font-size:11px;color:var(--text2);font-family:\'DM Mono\',monospace;">Comparação: '+esc(compFileName.a||'CGI Anterior')+' → '+esc(compFileName.b||'CGI Atual')+' · Gerado em '+new Date().toLocaleDateString('pt-BR')+'</div></div>'+
+      '<div class="comp-no-print" style="display:flex;gap:8px;flex-wrap:wrap;">'+
+        '<button class="ebtn" onclick="printCompReport()">🖨️ Imprimir / PDF</button>'+
+        '<button class="ebtn" onclick="openCompReportTab()">↗ Abrir em nova aba</button>'+
+        '<button class="ebtn" onclick="downloadCompReportHtml()">⬇ Baixar relatório (HTML)</button>'+
+        '<button class="ebtn" onclick="exportCompCSV()">⬇ CSV</button>'+
+        '<button class="rbtn" onclick="resetComp()">↩ Nova Comparação</button>'+
+      '</div>'+
+    '</div>'+
+    '<div class="kpi-grid" style="margin-top:14px;">'+kpis+'</div>'+
+    '<div style="background:linear-gradient(135deg,rgba(0,212,255,.06),rgba(124,58,237,.06));border:1px solid var(--border2);border-radius:10px;padding:16px;margin-top:16px;">'+
+      '<div style="font-size:13px;font-weight:800;color:var(--c1);margin-bottom:10px;">📋 Leitura Executiva</div>'+insightsHtml+
+    '</div>'+
+    '<div style="font-size:13px;font-weight:800;margin-top:20px;margin-bottom:8px;">🔀 SWAPs de Vendor Monitorados</div>'+
+    '<div class="tscroll" style="max-height:260px;overflow-y:auto;">'+swapTbl+'</div>'+
+    '<div style="font-size:13px;font-weight:800;margin-top:20px;margin-bottom:8px;">🏭 Evolução por Vendor</div>'+
+    '<div class="tscroll" style="max-height:360px;overflow-y:auto;">'+vendTbl+'</div>'+
+    '<div style="font-size:13px;font-weight:800;margin-top:20px;margin-bottom:8px;">📶 Evolução por Tecnologia</div>'+techTbl+
+    '<div style="font-size:13px;font-weight:800;margin-top:20px;margin-bottom:8px;">🗺️ Maiores Variações por UF</div>'+ufTbl+
+    '</div>';
+}
+var _compPrintHtml=null;
+function buildCompPrintDoc(){
+  return '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatório Executivo — Evolução da Rede</title><style>'+
+    'body{font-family:Arial,Helvetica,sans-serif;background:#fff;color:#111;padding:26px;}'+
+    'h1{font-size:19px;margin-bottom:4px;}'+
+    '.sub{font-size:11px;color:#555;font-family:"Courier New",monospace;margin-bottom:18px;}'+
+    '.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:11px;margin-bottom:18px;}'+
+    '.kpi{border:1px solid #ccc;border-radius:8px;padding:10px;}'+
+    '.kpi-label{font-size:9px;text-transform:uppercase;letter-spacing:1px;color:#777;margin-bottom:3px;}'+
+    '.kpi-val{font-size:19px;font-weight:800;margin-bottom:2px;}'+
+    '.kpi-sub{font-size:10px;color:#555;}'+
+    '.box{border:1px solid #ccc;border-radius:8px;padding:14px;margin:16px 0;background:#f9f9f9;}'+
+    '.box h2{font-size:13px;margin-bottom:8px;}'+
+    'ul{margin:0;padding-left:18px;line-height:1.8;font-size:12px;}'+
+    'li{margin-bottom:7px;}'+
+    'h3{font-size:13px;margin:18px 0 8px;}'+
+    'table{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:6px;}'+
+    'th,td{border:1px solid #ccc;padding:5px 7px;text-align:left;}'+
+    'th{background:#f0f0f0;text-transform:uppercase;font-size:9px;letter-spacing:.5px;}'+
+    '@media print{body{padding:0;}}'+
+    '</style></head><body>'+_compPrintHtml+'</body></html>';
+}
+function printCompReport(){
+  if(!_compPrintHtml){alert('Gere a comparação antes de imprimir.');return;}
+  var old=document.getElementById('comp-print-frame');
+  if(old&&old.parentNode) old.parentNode.removeChild(old);
+  var iframe=document.createElement('iframe');
+  iframe.id='comp-print-frame';
+  iframe.style.cssText='position:absolute;width:800px;height:600px;left:-9999px;top:-9999px;border:0;';
+  document.body.appendChild(iframe);
+  var doc=iframe.contentWindow.document;
+  doc.open();
+  doc.write(buildCompPrintDoc());
+  doc.close();
+  setTimeout(function(){
+    try{
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+    }catch(e){
+      alert('Não foi possível imprimir diretamente. Use o botão "Abrir relatório em nova aba" para imprimir por lá.');
+    }
+  },450);
+}
+function openCompReportTab(){
+  if(!_compPrintHtml){alert('Gere a comparação antes de abrir o relatório.');return;}
+  var win=window.open('','_blank');
+  if(!win){alert('O navegador bloqueou a abertura da nova aba. Verifique as permissões de pop-up para esta página.');return;}
+  var doc=win.document;
+  doc.open();
+  doc.write(buildCompPrintDoc());
+  doc.close();
+  win.focus();
+}
+function downloadCompReportHtml(){
+  if(!_compPrintHtml){alert('Gere a comparação antes de baixar o relatório.');return;}
+  var blob=new Blob([buildCompPrintDoc()],{type:'text/html;charset=utf-8;'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');a.href=url;a.download='relatorio_comparacao_cgi_'+new Date().toISOString().slice(0,10)+'.html';a.style.display='none';
+  document.body.appendChild(a);a.click();
+  setTimeout(function(){URL.revokeObjectURL(url);a.remove();},200);
+}
+function exportCompCSV(){
+  if(!_compDiff) return;
+  var lines=['TIPO,ITEM,ANTERIOR,ATUAL,DELTA,DELTA_PCT'];
+  KNOWN_SWAPS.map(function(sw){return computeSwapStatus(sw);}).forEach(function(sw){
+    lines.push(csvRow(['SWAP',sw.region+' ('+sw.from+' -> '+sw.to+')',sw.fromA+'/'+sw.toA,sw.fromB+'/'+sw.toB,sw.migrated,sw.confirmed?'CONFIRMADO':'NAO CONFIRMADO']));
+  });
+  _compDiff.vendRows.forEach(function(v){lines.push(csvRow(['VENDOR',v.vendor,v.a,v.b,v.delta,v.pct.toFixed(1)+'%']));});
+  _compDiff.techRows.forEach(function(t){lines.push(csvRow(['TECNOLOGIA',t.tech,t.a,t.b,t.delta,t.pct.toFixed(1)+'%']));});
+  _compDiff.ufRows.forEach(function(u){lines.push(csvRow(['UF',u.uf,u.a,u.b,u.delta,'']));});
+  dlCsv(lines.join('\n'),'comparacao_cgi_'+new Date().toISOString().slice(0,10)+'.csv');
+}
+function resetComp(){
+  document.getElementById('comp-upload-section').style.display='block';
+  document.getElementById('comp-report').style.display='none';
+  document.getElementById('comp-report').innerHTML='';
 }
 </script>
 </body>
