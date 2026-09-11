@@ -569,8 +569,10 @@ body{background:var(--bg);color:var(--text);min-height:100vh;}
             <option value="15">Top 15</option><option value="30">Top 30</option><option value="50">Top 50</option><option value="999">Todas</option>
           </select>
           <button class="ebtn" onclick="exportIdeias()">⬇ CSV</button>
+          <button class="ebtn" onclick="generateIdeiasReport()" style="background:rgba(16,185,129,.12);border-color:rgba(16,185,129,.3);color:#10b981;">📤 Relatório para Diretoria</button>
         </div>
       </div>
+      <div id="ideias-report-box" style="display:none;margin-bottom:18px;"></div>
       <div class="kpi-grid" id="ideias-kpis"></div>
       <div id="ideias-drill-section" style="display:none;background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:16px;margin-bottom:16px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
@@ -2148,6 +2150,139 @@ function exportIdeias(){
     filtered.map(function(d){return csvRow([d.uf,d.city,d.N,d.prioridade.replace(/[🔴🟡🔵🟢]/g,'').trim(),d.score,d.pct4G,d.pct5G,d.pct3G,d.pct2G,d.ranPct,d.vendors.join('|'),d.acoes.map(function(a){return a.txt;}).join(' | ')]);})
   ).join('\n'),'ideias_rf.csv');
 }
+// ── Relatório para Diretoria — Ideias RF ────────────────────────────────────
+var _ideiasPrintHtml=null;
+function genIdeiasInsights(filtered,tot){
+  var out=[];
+  var crit=filtered.filter(function(d){return d.prioridade.indexOf('Crítica')>=0;});
+  var alta=filtered.filter(function(d){return d.prioridade.indexOf('Alta')>=0;});
+  var sem4G=filtered.filter(function(d){return !d.has4G;});
+  var sem5G=filtered.filter(function(d){return !d.has5G;});
+  var multiVend=filtered.filter(function(d){return d.vendors.length>1;});
+  var altoRan=filtered.filter(function(d){return d.ranPct>40;});
+  var only2G=filtered.filter(function(d){return d.acoes.some(function(a){return a.txt.indexOf('legados 2G')>=0;});});
+
+  if(crit.length){
+    out.push('<b>'+crit.length+' cidade(s)</b> ('+pct(crit.length,tot)+') estão em prioridade <b>crítica</b> de modernização — geralmente por ausência total de 4G/LTE ou concentração relevante de sites 2G legados. Recomenda-se priorizar essas cidades no próximo ciclo de investimento em RAN, já que atrasos aqui têm maior risco de impacto em qualidade percebida e em churn de clientes.');
+  }
+  if(sem4G.length){
+    out.push('<b>'+sem4G.length+' cidade(s)</b> ('+pct(sem4G.length,tot)+') ainda não têm cobertura 4G/LTE. Isso representa risco competitivo direto — clientes sem acesso a dados de banda larga móvel — e deve ser tratado como prioridade de negócio, não apenas técnica.');
+  }
+  if(only2G.length){
+    out.push('<b>'+only2G.length+' cidade(s)</b> têm sites operando exclusivamente em 2G. São candidatos diretos a modernização (upgrade de hardware/rádio), com potencial ganho de receita por maior consumo de dados e possível economia operacional ao consolidar a rede legada.');
+  }
+  if(sem5G.length){
+    out.push('<b>'+sem5G.length+' cidade(s)</b> ('+pct(sem5G.length,tot)+') ainda não têm 5G. Priorizar a expansão nas cidades de maior densidade populacional/receita dentro desse grupo tende a maximizar o retorno comercial do investimento em 5G.');
+  }
+  if(multiVend.length){
+    out.push('<b>'+multiVend.length+' cidade(s)</b> operam com mais de um vendor simultaneamente. Vale avaliar oportunidades de consolidação de fornecedor por região — o que costuma reduzir custo operacional (contratos, treinamento, sobressalentes) e simplificar a gestão de SLA.');
+  }
+  if(altoRan.length){
+    out.push('<b>'+altoRan.length+' cidade(s)</b> têm mais de 40% dos sites em RAN Sharing. Alta dependência de RAN Sharing pode limitar a flexibilidade de expansão própria e deve ser considerada em decisões de investimento e na negociação de contratos de compartilhamento.');
+  }
+  if(alta.length){
+    out.push('<b>'+alta.length+' cidade(s)</b> ('+pct(alta.length,tot)+') estão em prioridade alta — recomenda-se incluí-las no planejamento do ciclo seguinte ao das cidades críticas.');
+  }
+  if(!out.length) out.push('Não foram identificados pontos críticos relevantes para o escopo analisado — o portfólio tecnológico está adequado na maioria das cidades.');
+  return out;
+}
+function buildIdeiasReportBody(){
+  var ufF=document.getElementById('ideias-uf-sel').value;
+  var filtered=ufF==='ALL'?_ideiasData:_ideiasData.filter(function(d){return d.uf===ufF;});
+  var tot=filtered.length;
+  var crit=filtered.filter(function(d){return d.prioridade.indexOf('Crítica')>=0;}).length;
+  var alta=filtered.filter(function(d){return d.prioridade.indexOf('Alta')>=0;}).length;
+  var sem5G=filtered.filter(function(d){return !d.has5G;}).length;
+
+  var kpis=''
+    +'<div class="kpi"><div class="kpi-label">CIDADES ANALISADAS</div><div class="kpi-val">'+tot+'</div><div class="kpi-sub">'+(ufF==='ALL'?'todas as UFs':esc(ufF))+'</div></div>'
+    +'<div class="kpi"><div class="kpi-label">PRIORIDADE CRÍTICA</div><div class="kpi-val" style="color:#ef4444;">'+crit+'</div><div class="kpi-sub">'+pct(crit,tot)+' do total</div></div>'
+    +'<div class="kpi"><div class="kpi-label">PRIORIDADE ALTA</div><div class="kpi-val" style="color:#f59e0b;">'+alta+'</div><div class="kpi-sub">'+pct(alta,tot)+' do total</div></div>'
+    +'<div class="kpi"><div class="kpi-label">SEM COBERTURA 5G</div><div class="kpi-val">'+sem5G+'</div><div class="kpi-sub">'+pct(sem5G,tot)+' do total</div></div>';
+
+  var insights=genIdeiasInsights(filtered,tot);
+  var insightsHtml='<ul>'+insights.map(function(i){return '<li>'+i+'</li>';}).join('')+'</ul>';
+
+  var topList=filtered.slice(0,30);
+  var rows=topList.map(function(d){
+    return '<tr><td>'+esc(d.city)+'</td><td>'+esc(d.uf)+'</td><td>'+d.N+'</td><td>'+esc(d.prioridade.replace(/[🔴🟡🔵🟢]/g,'').trim())+'</td><td>'+d.pct4G+'%</td><td>'+d.pct5G+'%</td><td>'+d.ranPct+'%</td><td>'+esc(d.vendors.join(', '))+'</td><td>'+esc(d.acoes.slice(0,2).map(function(a){return a.txt;}).join(' | '))+'</td></tr>';
+  }).join('');
+  var table='<table><thead><tr><th>CIDADE</th><th>UF</th><th>SITES</th><th>PRIORIDADE</th><th>4G%</th><th>5G%</th><th>RAN%</th><th>VENDORS</th><th>PRINCIPAIS AÇÕES</th></tr></thead><tbody>'+rows+'</tbody></table>';
+
+  return {kpis:kpis,insightsHtml:insightsHtml,table:table,tot:tot,topN:topList.length,ufF:ufF};
+}
+function generateIdeiasReport(){
+  if(!_ideiasData.length){alert('Carregue um arquivo e gere o diagnóstico RF antes de criar o relatório.');return;}
+  var parts=buildIdeiasReportBody();
+  var subtitle='Escopo: '+(parts.ufF==='ALL'?'Todas as UFs':esc(parts.ufF))+' · '+parts.tot+' cidade(s) analisada(s) · Gerado em '+new Date().toLocaleDateString('pt-BR');
+
+  _ideiasPrintHtml=
+    '<h1>Relatório Executivo — Prioridades de Modernização de Rede (RF)</h1>'+
+    '<div class="sub">'+subtitle+'</div>'+
+    '<div class="kpi-grid">'+parts.kpis+'</div>'+
+    '<div class="box"><h2>📋 Leitura Executiva</h2>'+parts.insightsHtml+'</div>'+
+    '<h3>🏙️ Cidades Prioritárias (top '+parts.topN+' de '+parts.tot+')</h3>'+parts.table;
+
+  var box=document.getElementById('ideias-report-box');
+  box.innerHTML=
+    '<div style="background:linear-gradient(135deg,rgba(0,212,255,.06),rgba(124,58,237,.06));border:1px solid var(--border2);border-radius:10px;padding:16px;">'+
+    '<div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:6px;">'+
+      '<div><div style="font-size:16px;font-weight:800;">📤 Relatório Executivo — Prioridades de Modernização (RF)</div>'+
+      '<div style="font-size:11px;color:var(--text2);font-family:\'DM Mono\',monospace;">'+subtitle+'</div></div>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
+        '<button class="ebtn" onclick="printIdeiasReport()">🖨️ Imprimir / PDF</button>'+
+        '<button class="ebtn" onclick="openIdeiasReportTab()">↗ Abrir em nova aba</button>'+
+        '<button class="ebtn" onclick="downloadIdeiasReportHtml()">⬇ Baixar relatório (HTML)</button>'+
+        '<button class="rbtn" onclick="document.getElementById(\'ideias-report-box\').style.display=\'none\'">✕</button>'+
+      '</div>'+
+    '</div>'+
+    '<div style="font-size:11px;color:var(--text3);font-family:\'DM Mono\',monospace;">Use um dos botões acima para gerar o arquivo pronto para enviar à diretoria (o conteúdo é o mesmo mostrado nos cartões e recomendações desta aba).</div>'+
+    '</div>';
+  box.style.display='block';
+  box.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function buildIdeiasPrintDoc(){
+  return buildPrintDoc('Relatório Executivo — Prioridades de Modernização de Rede (RF)',_ideiasPrintHtml);
+}
+function printIdeiasReport(){
+  if(!_ideiasPrintHtml){alert('Gere o relatório antes de imprimir.');return;}
+  var old=document.getElementById('ideias-print-frame');
+  if(old&&old.parentNode) old.parentNode.removeChild(old);
+  var iframe=document.createElement('iframe');
+  iframe.id='ideias-print-frame';
+  iframe.style.cssText='position:absolute;width:800px;height:600px;left:-9999px;top:-9999px;border:0;';
+  document.body.appendChild(iframe);
+  var doc=iframe.contentWindow.document;
+  doc.open();
+  doc.write(buildIdeiasPrintDoc());
+  doc.close();
+  setTimeout(function(){
+    try{
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+    }catch(e){
+      alert('Não foi possível imprimir diretamente. Use o botão "Abrir em nova aba" para imprimir por lá.');
+    }
+  },450);
+}
+function openIdeiasReportTab(){
+  if(!_ideiasPrintHtml){alert('Gere o relatório antes de abrir.');return;}
+  var win=window.open('','_blank');
+  if(!win){alert('O navegador bloqueou a abertura da nova aba. Verifique as permissões de pop-up para esta página.');return;}
+  var doc=win.document;
+  doc.open();
+  doc.write(buildIdeiasPrintDoc());
+  doc.close();
+  win.focus();
+}
+function downloadIdeiasReportHtml(){
+  if(!_ideiasPrintHtml){alert('Gere o relatório antes de baixar.');return;}
+  var blob=new Blob([buildIdeiasPrintDoc()],{type:'text/html;charset=utf-8;'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');a.href=url;a.download='relatorio_ideias_rf_'+new Date().toISOString().slice(0,10)+'.html';a.style.display='none';
+  document.body.appendChild(a);a.click();
+  setTimeout(function(){URL.revokeObjectURL(url);a.remove();},200);
+}
 
 // ── MAPA ───────────────────────────────────────────────────────────────────
 // Estratégia: Leaflet CSS pré-carregado no head imediatamente.
@@ -3458,8 +3593,8 @@ function renderCompReport(){
     '</div>';
 }
 var _compPrintHtml=null;
-function buildCompPrintDoc(){
-  return '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatório Executivo — Evolução da Rede</title><style>'+
+function buildPrintDoc(title,bodyHtml){
+  return '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>'+esc(title)+'</title><style>'+
     'body{font-family:Arial,Helvetica,sans-serif;background:#fff;color:#111;padding:26px;}'+
     'h1{font-size:19px;margin-bottom:4px;}'+
     '.sub{font-size:11px;color:#555;font-family:"Courier New",monospace;margin-bottom:18px;}'+
@@ -3477,7 +3612,10 @@ function buildCompPrintDoc(){
     'th,td{border:1px solid #ccc;padding:5px 7px;text-align:left;}'+
     'th{background:#f0f0f0;text-transform:uppercase;font-size:9px;letter-spacing:.5px;}'+
     '@media print{body{padding:0;}}'+
-    '</style></head><body>'+_compPrintHtml+'</body></html>';
+    '</style></head><body>'+bodyHtml+'</body></html>';
+}
+function buildCompPrintDoc(){
+  return buildPrintDoc('Relatório Executivo — Evolução da Rede',_compPrintHtml);
 }
 function printCompReport(){
   if(!_compPrintHtml){alert('Gere a comparação antes de imprimir.');return;}
