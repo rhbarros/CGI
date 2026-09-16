@@ -3331,6 +3331,143 @@ function findConfirmedSwaps(swapStatuses,vendorName,role){
   return swapStatuses.filter(function(sw){return sw.confirmed&&vendEq(role==='from'?sw.from:sw.to,vendorName);});
 }
 
+// 27 capitais (26 estados + DF) com principais municípios da região metropolitana.
+// Correspondência por nome de cidade (exata, sem acento) — lista de referência,
+// pode não refletir 100% da composição oficial de cada Região Metropolitana.
+// Regiões Metropolitanas, RIDEs e Aglomerações Urbanas oficiais do Brasil, agrupadas
+// por macrorregião e UF. Fonte: IBGE / leis estaduais e federais (levantamento 2024/2025).
+// Para RMs de grande porte (capitais e principais polos), a lista de municípios-membros
+// é a mais completa possível; para RMs menores/menos documentadas, a correspondência
+// considera apenas o município-sede — ver aviso no relatório.
+var RM_BRASIL=[
+  // ── NORTE ──
+  {macro:'Norte',uf:'AC',tipo:'RM',nome:'RM Rio Branco',membros:['Rio Branco','Porto Acre','Bujari','Senador Guiomard']},
+  {macro:'Norte',uf:'AP',tipo:'RM',nome:'RM Macapá',membros:['Macapá','Santana','Mazagão']},
+  {macro:'Norte',uf:'AM',tipo:'RM',nome:'RM Manaus',membros:['Manaus','Iranduba','Manacapuru','Rio Preto da Eva','Presidente Figueiredo','Careiro','Careiro da Várzea','Novo Airão']},
+  {macro:'Norte',uf:'PA',tipo:'RM',nome:'RM Belém',membros:['Belém','Ananindeua','Marituba','Benevides','Santa Bárbara do Pará','Santa Izabel do Pará','Castanhal','Barcarena']},
+  {macro:'Norte',uf:'PA',tipo:'RM',nome:'RM Santarém',membros:['Santarém']},
+  {macro:'Norte',uf:'RO',tipo:'RM',nome:'RM Porto Velho',membros:['Porto Velho']},
+  {macro:'Norte',uf:'RR',tipo:'RM',nome:'RM Boa Vista',membros:['Boa Vista']},
+  {macro:'Norte',uf:'RR',tipo:'RM',nome:'RM Central (RR)',membros:['Caracaraí']},
+  {macro:'Norte',uf:'RR',tipo:'RM',nome:'RM Sul de Roraima',membros:['Caroebe']},
+  {macro:'Norte',uf:'TO',tipo:'RM',nome:'RM Araguaína',membros:['Araguaína']},
+  {macro:'Norte',uf:'TO',tipo:'RM',nome:'RM Palmas',membros:['Palmas','Porto Nacional','Lajeado']},
+  {macro:'Norte',uf:'TO',tipo:'RM',nome:'RM Gurupi',membros:['Gurupi']},
+
+  // ── NORDESTE ──
+  {macro:'Nordeste',uf:'MA',tipo:'RM',nome:'RM Grande São Luís',membros:['São Luís','São José de Ribamar','Paço do Lumiar','Raposa','Alcântara']},
+  {macro:'Nordeste',uf:'MA',tipo:'RM',nome:'RM Grande Pedreiras',membros:['Pedreiras','Lago dos Rodrigues','Igarapé Grande','Trizidela do Vale','Lima Campos','Joselândia','Poção de Pedras','Bernardo do Mearim']},
+  {macro:'Nordeste',uf:'MA',tipo:'RM',nome:'RM Sudoeste Maranhense',membros:['Imperatriz']},
+  {macro:'Nordeste',uf:'MA',tipo:'RM',nome:'RM Leste Maranhense',membros:['Caxias']},
+  {macro:'Nordeste',uf:'PI',tipo:'RM',nome:'RM Grande Parnaíba',membros:['Parnaíba']},
+  {macro:'Nordeste',uf:'CE',tipo:'RM',nome:'RM Fortaleza',membros:['Fortaleza','Caucaia','Maracanaú','Eusébio','Aquiraz','Itaitinga','Pacatuba','Maranguape','Guaiúba','Chorozinho','Pacajus','Horizonte','São Gonçalo do Amarante']},
+  {macro:'Nordeste',uf:'CE',tipo:'RM',nome:'RM Cariri',membros:['Juazeiro do Norte','Crato','Barbalha']},
+  {macro:'Nordeste',uf:'CE',tipo:'RM',nome:'RM Sobral',membros:['Sobral']},
+  {macro:'Nordeste',uf:'RN',tipo:'RM',nome:'RM Natal',membros:['Natal','Parnamirim','São Gonçalo do Amarante','Macaíba','Ceará-Mirim','Extremoz','Nísia Floresta','São José de Mipibu']},
+  {macro:'Nordeste',uf:'PB',tipo:'RM',nome:'RM João Pessoa',membros:['João Pessoa','Bayeux','Santa Rita','Cabedelo','Conde']},
+  {macro:'Nordeste',uf:'PB',tipo:'RM',nome:'RM Campina Grande',membros:['Campina Grande']},
+  {macro:'Nordeste',uf:'PB',tipo:'RM',nome:'RM Patos',membros:['Patos']},
+  {macro:'Nordeste',uf:'PB',tipo:'RM',nome:'RM Sousa',membros:['Sousa']},
+  {macro:'Nordeste',uf:'PB',tipo:'RM',nome:'RM Cajazeiras',membros:['Cajazeiras']},
+  {macro:'Nordeste',uf:'PB',tipo:'RM',nome:'RM Guarabira',membros:['Guarabira']},
+  {macro:'Nordeste',uf:'PB',tipo:'RM',nome:'RM Esperança',membros:['Esperança']},
+  {macro:'Nordeste',uf:'PB',tipo:'RM',nome:'RM Itabaiana (PB)',membros:['Itabaiana']},
+  {macro:'Nordeste',uf:'PB',tipo:'RM',nome:'RM Araruna (PB)',membros:['Araruna']},
+  {macro:'Nordeste',uf:'PB',tipo:'RM',nome:'RM Barra de Santa Rosa',membros:['Barra de Santa Rosa']},
+  {macro:'Nordeste',uf:'PB',tipo:'RM',nome:'RM Vale do Mamanguape',membros:['Mamanguape']},
+  {macro:'Nordeste',uf:'PB',tipo:'RM',nome:'RM Vale do Piancó',membros:['Piancó']},
+  {macro:'Nordeste',uf:'PE',tipo:'RM',nome:'RM Recife',membros:['Recife','Olinda','Jaboatão dos Guararapes','Paulista','Camaragibe','São Lourenço da Mata','Cabo de Santo Agostinho','Igarassu','Abreu e Lima','Ipojuca','Moreno']},
+  {macro:'Nordeste',uf:'AL',tipo:'RM',nome:'RM Maceió',membros:['Maceió','Rio Largo','Marechal Deodoro','Satuba','Barra de Santo Antônio','Santa Luzia do Norte','Messias','Coqueiro Seco','Paripueira','Pilar']},
+  {macro:'Nordeste',uf:'AL',tipo:'RM',nome:'RM Agreste',membros:['Arapiraca']},
+  {macro:'Nordeste',uf:'AL',tipo:'RM',nome:'RM Médio Sertão',membros:['Palmeira dos Índios']},
+  {macro:'Nordeste',uf:'AL',tipo:'RM',nome:'RM São Francisco (AL)',membros:['Penedo']},
+  {macro:'Nordeste',uf:'AL',tipo:'RM',nome:'RM Sertão (AL)',membros:['Santana do Ipanema']},
+  {macro:'Nordeste',uf:'AL',tipo:'RM',nome:'RM Vale do Paraíba (AL)',membros:['União dos Palmares']},
+  {macro:'Nordeste',uf:'AL',tipo:'RM',nome:'RM Zona da Mata (AL)',membros:['Viçosa']},
+  {macro:'Nordeste',uf:'AL',tipo:'RM',nome:'RM Caetés',membros:[]},
+  {macro:'Nordeste',uf:'SE',tipo:'RM',nome:'RM Aracaju',membros:['Aracaju','Nossa Senhora do Socorro','São Cristóvão','Barra dos Coqueiros']},
+  {macro:'Nordeste',uf:'BA',tipo:'RM',nome:'RM Salvador',membros:['Salvador','Lauro de Freitas','Simões Filho','Camaçari','Candeias','Dias d\'Ávila','Madre de Deus','Mata de São João','São Francisco do Conde','Vera Cruz','Itaparica','São Sebastião do Passé','Pojuca']},
+  {macro:'Nordeste',uf:'BA',tipo:'RM',nome:'RM Feira de Santana',membros:['Feira de Santana']},
+
+  // ── CENTRO-OESTE ──
+  {macro:'Centro-Oeste',uf:'MT',tipo:'RM',nome:'RM Vale do Rio Cuiabá',membros:['Cuiabá','Várzea Grande','Santo Antônio de Leverger','Nossa Senhora do Livramento','Acorizal','Chapada dos Guimarães']},
+  {macro:'Centro-Oeste',uf:'MS',tipo:'RM',nome:'RM Campo Grande',membros:['Campo Grande','Terenos','Jaraguari','Rochedo','Dois Irmãos do Buriti','Ribas do Rio Pardo','Sidrolândia','Corguinho','Bandeirantes']},
+  {macro:'Centro-Oeste',uf:'GO',tipo:'RM',nome:'RM Goiânia',membros:['Goiânia','Aparecida de Goiânia','Senador Canedo','Trindade','Goianira','Santo Antônio de Goiás','Nerópolis','Bela Vista de Goiás','Hidrolândia','Abadia de Goiás']},
+  {macro:'Centro-Oeste',uf:'GO',tipo:'RM',nome:'RM Entorno do Distrito Federal',membros:['Luziânia','Águas Lindas de Goiás','Valparaíso de Goiás','Novo Gama','Santo Antônio do Descoberto','Planaltina','Padre Bernardo','Cristalina','Cocalzinho de Goiás','Cidade Ocidental','Formosa']},
+  {macro:'Centro-Oeste',uf:'DF',tipo:'RIDE',nome:'RIDE Distrito Federal e Entorno',membros:['Brasília']},
+
+  // ── SUDESTE ──
+  {macro:'Sudeste',uf:'MG',tipo:'RM',nome:'RM Belo Horizonte',membros:['Belo Horizonte','Contagem','Betim','Nova Lima','Sabará','Santa Luzia','Ribeirão das Neves','Ibirité','Vespasiano','Lagoa Santa','Caeté','Igarapé','Esmeraldas','Confins','São José da Lapa']},
+  {macro:'Sudeste',uf:'MG',tipo:'RM',nome:'RM Vale do Aço',membros:['Ipatinga','Coronel Fabriciano','Timóteo','Santana do Paraíso']},
+  {macro:'Sudeste',uf:'ES',tipo:'RM',nome:'RM Grande Vitória',membros:['Vitória','Vila Velha','Cariacica','Serra','Viana','Guarapari','Fundão']},
+  {macro:'Sudeste',uf:'RJ',tipo:'RM',nome:'RM Rio de Janeiro',membros:['Rio de Janeiro','Niterói','São Gonçalo','Duque de Caxias','Nova Iguaçu','Belford Roxo','São João de Meriti','Nilópolis','Mesquita','Itaboraí','Maricá','Magé','Queimados','Japeri','Seropédica','Itaguaí','Guapimirim','Tanguá']},
+  {macro:'Sudeste',uf:'SP',tipo:'RM',nome:'RM de São Paulo (Grande SP)',membros:['São Paulo','Guarulhos','Osasco','São Bernardo do Campo','Santo André','Diadema','Mauá','Carapicuíba','Barueri','Cotia','Itapevi','Suzano','Taboão da Serra','Embu das Artes','São Caetano do Sul','Ferraz de Vasconcelos','Itaquaquecetuba','Franco da Rocha','Mogi das Cruzes']},
+  {macro:'Sudeste',uf:'SP',tipo:'RM',nome:'RM de Campinas',membros:['Campinas','Hortolândia','Sumaré','Indaiatuba','Valinhos','Vinhedo','Paulínia','Americana','Santa Bárbara d\'Oeste','Nova Odessa']},
+  {macro:'Sudeste',uf:'SP',tipo:'RM',nome:'RM da Baixada Santista',membros:['Santos','São Vicente','Guarujá','Praia Grande','Cubatão','Itanhaém','Peruíbe','Mongaguá','Bertioga']},
+  {macro:'Sudeste',uf:'SP',tipo:'RM',nome:'RM do Vale do Paraíba e Litoral Norte',membros:['São José dos Campos','Taubaté','Jacareí','Caçapava','Pindamonhangaba','Guaratinguetá','Ubatuba','Caraguatatuba','São Sebastião','Ilhabela']},
+  {macro:'Sudeste',uf:'SP',tipo:'RM',nome:'RM de Sorocaba',membros:['Sorocaba','Itu','Salto','Votorantim','Araçoiaba da Serra','Alumínio','Iperó']},
+  {macro:'Sudeste',uf:'SP',tipo:'RM',nome:'RM de Ribeirão Preto',membros:['Ribeirão Preto','Sertãozinho','Franca','Jardinópolis','Cravinhos']},
+  {macro:'Sudeste',uf:'SP',tipo:'RM',nome:'RM de São José do Rio Preto',membros:['São José do Rio Preto']},
+  {macro:'Sudeste',uf:'SP',tipo:'RM',nome:'RM de Piracicaba',membros:['Piracicaba','Limeira','Rio Claro']},
+  {macro:'Sudeste',uf:'SP',tipo:'RM',nome:'RM de Jundiaí',membros:['Jundiaí']},
+  {macro:'Sudeste',uf:'SP',tipo:'AU',nome:'Aglomeração Urbana de Franca',membros:['Franca']},
+
+  // ── SUL ──
+  {macro:'Sul',uf:'PR',tipo:'RM',nome:'RM Curitiba',membros:['Curitiba','São José dos Pinhais','Colombo','Araucária','Pinhais','Campo Largo','Almirante Tamandaré','Fazenda Rio Grande','Piraquara']},
+  {macro:'Sul',uf:'PR',tipo:'RM',nome:'RM Londrina',membros:['Londrina']},
+  {macro:'Sul',uf:'PR',tipo:'RM',nome:'RM Maringá',membros:['Maringá']},
+  {macro:'Sul',uf:'PR',tipo:'RM',nome:'RM Apucarana',membros:['Apucarana']},
+  {macro:'Sul',uf:'PR',tipo:'RM',nome:'RM Campo Mourão',membros:['Campo Mourão']},
+  {macro:'Sul',uf:'PR',tipo:'RM',nome:'RM Cascavel',membros:['Cascavel']},
+  {macro:'Sul',uf:'PR',tipo:'RM',nome:'RM Toledo',membros:['Toledo']},
+  {macro:'Sul',uf:'PR',tipo:'RM',nome:'RM Umuarama',membros:['Umuarama']},
+  {macro:'Sul',uf:'SC',tipo:'RM',nome:'RM Florianópolis',membros:['Florianópolis','São José','Palhoça','Biguaçu','Santo Amaro da Imperatriz']},
+  {macro:'Sul',uf:'SC',tipo:'RM',nome:'RM Vale do Itajaí',membros:['Blumenau']},
+  {macro:'Sul',uf:'SC',tipo:'RM',nome:'RM Norte/Nordeste Catarinense',membros:['Joinville']},
+  {macro:'Sul',uf:'SC',tipo:'RM',nome:'RM Lages',membros:['Lages']},
+  {macro:'Sul',uf:'SC',tipo:'RM',nome:'RM Foz do Rio Itajaí',membros:['Itajaí']},
+  {macro:'Sul',uf:'SC',tipo:'RM',nome:'RM Carbonífera',membros:['Criciúma']},
+  {macro:'Sul',uf:'SC',tipo:'RM',nome:'RM Tubarão',membros:['Tubarão']},
+  {macro:'Sul',uf:'SC',tipo:'RM',nome:'RM Chapecó',membros:['Chapecó']},
+  {macro:'Sul',uf:'SC',tipo:'RM',nome:'RM Joinville',membros:['Joinville']},
+  {macro:'Sul',uf:'SC',tipo:'RM',nome:'RM Jaraguá do Sul',membros:['Jaraguá do Sul']},
+  {macro:'Sul',uf:'SC',tipo:'RM',nome:'RM Planalto Norte',membros:['Canoinhas']},
+  {macro:'Sul',uf:'SC',tipo:'RM',nome:'RM Alto Vale do Itajaí',membros:['Rio do Sul']},
+  {macro:'Sul',uf:'SC',tipo:'RM',nome:'RM Extremo Oeste',membros:['São Miguel do Oeste']},
+  {macro:'Sul',uf:'SC',tipo:'RM',nome:'RM Contestado',membros:['Joaçaba']},
+  {macro:'Sul',uf:'RS',tipo:'RM',nome:'RM Porto Alegre',membros:['Porto Alegre','Canoas','Gravataí','Viamão','Alvorada','Novo Hamburgo','São Leopoldo','Cachoeirinha','Esteio','Sapucaia do Sul']},
+  {macro:'Sul',uf:'RS',tipo:'RM',nome:'RM Serra Gaúcha',membros:['Caxias do Sul']},
+  {macro:'Sul',uf:'RS',tipo:'AU',nome:'Aglomeração Urbana do Litoral Norte',membros:['Osório','Torres','Capão da Canoa']},
+  {macro:'Sul',uf:'RS',tipo:'AU',nome:'Aglomeração Urbana do Sul',membros:['Pelotas','Rio Grande','Capão do Leão','Arroio do Padre','São José do Norte']},
+
+  // ── RIDEs (Regiões Integradas de Desenvolvimento — lei federal) ──
+  {macro:'RIDE',uf:'PE/BA',tipo:'RIDE',nome:'RIDE Polo Petrolina/Juazeiro',membros:['Petrolina','Juazeiro']},
+  {macro:'RIDE',uf:'PI/MA',tipo:'RIDE',nome:'RIDE Grande Teresina',membros:['Teresina','Timon']}
+];
+
+function cityInList(s,names){
+  var c=stripAcc(s.city);
+  return names.some(function(n){return c===stripAcc(n);});
+}
+function computeRMVendorDiff(){
+  var sa=mapVals(compSites.a),sb=mapVals(compSites.b);
+  return RM_BRASIL.map(function(rm){
+    var setA=rm.membros.length?sa.filter(function(s){return cityInList(s,rm.membros);}):[];
+    var setB=rm.membros.length?sb.filter(function(s){return cityInList(s,rm.membros);}):[];
+    var vA={},vB={};
+    setA.forEach(function(s){var v=(s.vend&&!isND(s.vend))?s.vend:'N/D';vA[v]=(vA[v]||0)+1;});
+    setB.forEach(function(s){var v=(s.vend&&!isND(s.vend))?s.vend:'N/D';vB[v]=(vB[v]||0)+1;});
+    var domA=Object.keys(vA).sort(function(x,y){return vA[y]-vA[x];})[0]||'—';
+    var domB=Object.keys(vB).sort(function(x,y){return vB[y]-vB[x];})[0]||'—';
+    var vendors=Object.keys(vA).concat(Object.keys(vB)).filter(function(v,i,arr){return arr.indexOf(v)===i;});
+    var deltas=vendors.map(function(v){return {vendor:v,a:vA[v]||0,b:vB[v]||0,delta:(vB[v]||0)-(vA[v]||0)};}).filter(function(d){return d.delta!==0;}).sort(function(x,y){return Math.abs(y.delta)-Math.abs(x.delta);});
+    return {macro:rm.macro,uf:rm.uf,tipo:rm.tipo,region:rm.nome,totalA:setA.length,totalB:setB.length,domA:domA,domB:domB,changed:domA!==domB&&setA.length>0&&setB.length>0,deltas:deltas,semCorrespondencia:!rm.membros.length};
+  }).filter(function(r){return r.totalA>0||r.totalB>0;}).sort(function(x,y){
+    if(x.changed!==y.changed) return x.changed?-1:1;
+    return y.totalB-x.totalB;
+  });
+}
+
 function loadCompFile(f,which){
   if(!f) return;
   compFileName[which]=f.name;
@@ -3441,8 +3578,9 @@ function computeCompDiff(){
 
   return {na:na,nb:nb,added:added,removed:removed,kept:kept,vendRows:vendRows,techRows:techRows,ufRows:ufRows};
 }
-function genCompInsights(diff,deltaSites,pctSites,swapStatuses){
+function genCompInsights(diff,deltaSites,pctSites,swapStatuses,rmDiff){
   swapStatuses=swapStatuses||[];
+  rmDiff=rmDiff||[];
   var out=[];
   if(deltaSites>0){
     out.push('A base total cresceu <b>'+deltaSites.toLocaleString('pt-BR')+' sites</b> (<b>+'+pctSites.toFixed(1)+'%</b>) entre os dois períodos. Recomenda-se validar se a expansão está concentrada em regionais/UFs específicas e se o investimento em capacidade está alinhado à demanda de tráfego observada.');
@@ -3453,7 +3591,7 @@ function genCompInsights(diff,deltaSites,pctSites,swapStatuses){
   }
   var confirmedSwaps=swapStatuses.filter(function(s){return s.confirmed;});
   if(confirmedSwaps.length){
-    out.push('🔀 Foram confirmados <b>'+confirmedSwaps.length+' SWAP(s) de vendor</b> já mapeado(s) pela operação em andamento — detalhes na seção "SWAPs de Vendor Monitorados". As variações de vendor abaixo que coincidem com esses SWAPs estão sinalizadas como planejadas, não como risco.');
+    out.push('🔀 Foram identificados <b>'+confirmedSwaps.length+' SWAP(s) de vendor</b> já mapeado(s) pela operação. As variações de vendor abaixo que coincidem com esses SWAPs estão sinalizadas como planejadas, não como risco.');
   }
   diff.vendRows.filter(function(v){return v.status==='novo';}).forEach(function(v){
     var sw=findConfirmedSwaps(swapStatuses,v.vendor,'to');
@@ -3506,6 +3644,12 @@ function genCompInsights(diff,deltaSites,pctSites,swapStatuses){
     var topUf=diff.ufRows[0];
     out.push('📍 A UF com maior variação foi <b>'+topUf.uf+'</b> ('+(topUf.delta>=0?'+':'')+topUf.delta+' sites), o que pode indicar prioridade regional de investimento ou concentração de desativações.');
   }
+  var capChanged=rmDiff.filter(function(c){return c.changed;});
+  if(capChanged.length){
+    out.push('🏙️ Dentre as regiões metropolitanas/RIDEs presentes na base, <b>'+capChanged.length+' de '+rmDiff.length+'</b> tiveram troca do vendor principal: '+capChanged.slice(0,8).map(function(c){return '<b>'+esc(c.region)+'</b> ('+esc(c.domA)+' → '+esc(c.domB)+')';}).join(', ')+(capChanged.length>8?' e outras':'')+'. Ver detalhamento completo na seção "Comparação de Vendor — Regiões Metropolitanas".');
+  } else if(rmDiff.length){
+    out.push('🏙️ Nenhuma das '+rmDiff.length+' regiões metropolitanas/RIDEs presentes na base teve troca do vendor principal entre os dois períodos.');
+  }
   if(!out.length) out.push('Não foram identificadas variações relevantes entre os dois períodos analisados.');
   return out;
 }
@@ -3527,13 +3671,22 @@ function renderCompReport(){
     +'<div class="kpi"><div class="kpi-label">SITES DESCOMISSIONADOS</div><div class="kpi-val" style="color:#ef4444;">'+diff.removed.length.toLocaleString('pt-BR')+'</div><div class="kpi-sub">'+pct(diff.removed.length,diff.na)+' da base anterior</div></div>'
     +'<div class="kpi"><div class="kpi-label">VENDORS ATIVOS</div><div class="kpi-val">'+diff.vendRows.filter(function(v){return v.b>0;}).length+'</div><div class="kpi-sub">'+diff.vendRows.filter(function(v){return v.status==='novo';}).length+' novo(s) entrante(s)</div></div>';
 
-  var swapTbl='<table class="dtbl"><thead><tr><th>REGIÃO</th><th>SWAP</th><th>VENDOR ANTERIOR (antes → depois)</th><th>VENDOR ATUAL (antes → depois)</th><th>STATUS</th></tr></thead><tbody>'+
-    swapStatuses.map(function(sw){
-      var badge=sw.stage==='completo'?'<span style="color:#10b981;font-weight:700;">✅ Finalizado — confirmado na base atual ('+sw.toB+' sites '+esc(sw.to)+')</span>':
-                sw.stage==='parcial'?'<span style="color:#f59e0b;font-weight:700;">🔶 Em andamento — migração parcial detectada ('+sw.migrated+' sites)</span>':
-                '<span style="color:var(--text2);">ℹ️ Sem variação clara nos dados carregados</span>';
-      return '<tr><td style="font-weight:700;">'+esc(sw.region)+'</td><td>'+esc(sw.from)+' → '+esc(sw.to)+'</td><td>'+sw.fromA+' → '+sw.fromB+'</td><td>'+sw.toA+' → '+sw.toB+'</td><td>'+badge+'</td></tr>';
-    }).join('')+'</tbody></table>';
+  var rmDiff=computeRMVendorDiff();
+  var rmChanged=rmDiff.filter(function(c){return c.changed;});
+  var rmNote='<div style="font-size:10px;color:var(--text3);font-family:\'DM Mono\',monospace;margin-bottom:8px;">Universo de referência: 83 Regiões Metropolitanas + 3 RIDEs + 3 Aglomerações Urbanas oficiais do Brasil (IBGE/leis estaduais e federal). Para RMs de grande porte a correspondência usa a lista completa de municípios-membros; para RMs menores/menos documentadas, apenas o município-sede — os números podem não refletir 100% da composição oficial de cada região. '+rmDiff.length+' região(ões) têm sites na base carregada — '+rmChanged.length+' com mudança de vendor principal.</div>';
+  var macros=['Norte','Nordeste','Centro-Oeste','Sudeste','Sul','RIDE'];
+  var rmSections=macros.map(function(macro){
+    var rows=rmDiff.filter(function(r){return r.macro===macro;});
+    if(!rows.length) return '';
+    var body=rows.map(function(c){
+      var badge=c.changed?'<span style="color:#f59e0b;font-weight:700;">🔀 Mudou</span>':'<span style="color:var(--text2);">● Estável</span>';
+      var varTxt=c.deltas.slice(0,3).map(function(d){return esc(d.vendor)+' '+(d.delta>=0?'+':'')+d.delta;}).join(' · ')||'—';
+      return '<tr><td style="font-weight:700;">'+esc(c.region)+' ('+esc(c.uf)+')</td><td>'+c.totalA.toLocaleString('pt-BR')+'</td><td>'+c.totalB.toLocaleString('pt-BR')+'</td><td>'+esc(c.domA)+'</td><td>'+esc(c.domB)+'</td><td>'+badge+'</td><td style="font-size:10.5px;">'+varTxt+'</td></tr>';
+    }).join('');
+    return '<div style="margin-top:14px;"><div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:6px;">'+(macro==='RIDE'?'RIDEs':'Região '+macro)+' — '+rows.length+' região(ões)</div>'+
+      '<table class="dtbl"><thead><tr><th>REGIÃO (UF)</th><th>SITES ANTERIOR</th><th>SITES ATUAL</th><th>VENDOR PRINCIPAL ANTERIOR</th><th>VENDOR PRINCIPAL ATUAL</th><th>STATUS</th><th>PRINCIPAIS VARIAÇÕES</th></tr></thead><tbody>'+body+'</tbody></table></div>';
+  }).join('');
+  var rmTbl=rmDiff.length?rmSections:'<div class="info-banner">Nenhuma das regiões metropolitanas/RIDEs de referência foi encontrada na base carregada.</div>';
 
   var vendTbl='<table class="dtbl"><thead><tr><th>VENDOR</th><th>SITES ANTERIOR</th><th>SITES ATUAL</th><th>Δ</th><th>Δ%</th><th>STATUS</th></tr></thead><tbody>'+
     diff.vendRows.map(function(v){
@@ -3553,7 +3706,7 @@ function renderCompReport(){
   var ufTbl='<table class="dtbl"><thead><tr><th>UF</th><th>ANTERIOR</th><th>ATUAL</th><th>Δ</th></tr></thead><tbody>'+
     ufTop.map(function(u){return '<tr><td style="font-weight:700;">'+esc(u.uf)+'</td><td>'+u.a+'</td><td>'+u.b+'</td><td style="color:'+col(u.delta)+';font-weight:700;">'+(u.delta>=0?'+':'')+u.delta+'</td></tr>';}).join('')+'</tbody></table>';
 
-  var insights=genCompInsights(diff,deltaSites,pctSites,swapStatuses);
+  var insights=genCompInsights(diff,deltaSites,pctSites,swapStatuses,rmDiff);
   var insightsHtml='<ul style="margin:0;padding-left:18px;line-height:1.9;font-size:12.5px;">'+insights.map(function(i){return '<li style="margin-bottom:8px;">'+i+'</li>';}).join('')+'</ul>';
 
   var reportBody=
@@ -3561,7 +3714,7 @@ function renderCompReport(){
     '<div class="sub">Comparação: '+esc(compFileName.a||'CGI Anterior')+' → '+esc(compFileName.b||'CGI Atual')+' · Gerado em '+new Date().toLocaleDateString('pt-BR')+'</div>'+
     '<div class="kpi-grid">'+kpis+'</div>'+
     '<div class="box"><h2>📋 Leitura Executiva</h2>'+insightsHtml+'</div>'+
-    '<h3>🔀 SWAPs de Vendor Monitorados</h3>'+swapTbl+
+    '<h3>🏙️ Comparação de Vendor — Regiões Metropolitanas</h3>'+rmNote+rmTbl+
     '<h3>🏭 Evolução por Vendor</h3>'+vendTbl+
     '<h3>📶 Evolução por Tecnologia</h3>'+techTbl+
     '<h3>🗺️ Maiores Variações por UF</h3>'+ufTbl;
@@ -3584,8 +3737,8 @@ function renderCompReport(){
     '<div style="background:linear-gradient(135deg,rgba(0,212,255,.06),rgba(124,58,237,.06));border:1px solid var(--border2);border-radius:10px;padding:16px;margin-top:16px;">'+
       '<div style="font-size:13px;font-weight:800;color:var(--c1);margin-bottom:10px;">📋 Leitura Executiva</div>'+insightsHtml+
     '</div>'+
-    '<div style="font-size:13px;font-weight:800;margin-top:20px;margin-bottom:8px;">🔀 SWAPs de Vendor Monitorados</div>'+
-    '<div class="tscroll" style="max-height:260px;overflow-y:auto;">'+swapTbl+'</div>'+
+    '<div style="font-size:13px;font-weight:800;margin-top:20px;margin-bottom:8px;">🏙️ Comparação de Vendor — Regiões Metropolitanas</div>'+rmNote+
+    '<div class="tscroll" style="max-height:460px;overflow-y:auto;">'+rmTbl+'</div>'+
     '<div style="font-size:13px;font-weight:800;margin-top:20px;margin-bottom:8px;">🏭 Evolução por Vendor</div>'+
     '<div class="tscroll" style="max-height:360px;overflow-y:auto;">'+vendTbl+'</div>'+
     '<div style="font-size:13px;font-weight:800;margin-top:20px;margin-bottom:8px;">📶 Evolução por Tecnologia</div>'+techTbl+
@@ -3659,8 +3812,8 @@ function downloadCompReportHtml(){
 function exportCompCSV(){
   if(!_compDiff) return;
   var lines=['TIPO,ITEM,ANTERIOR,ATUAL,DELTA,DELTA_PCT'];
-  KNOWN_SWAPS.map(function(sw){return computeSwapStatus(sw);}).forEach(function(sw){
-    lines.push(csvRow(['SWAP',sw.region+' ('+sw.from+' -> '+sw.to+')',sw.fromA+'/'+sw.toA,sw.fromB+'/'+sw.toB,sw.migrated,sw.confirmed?'CONFIRMADO':'NAO CONFIRMADO']));
+  computeRMVendorDiff().forEach(function(c){
+    lines.push(csvRow(['RM',c.macro+' | '+c.region+' ('+c.uf+') '+c.domA+' -> '+c.domB,c.totalA,c.totalB,c.totalB-c.totalA,c.changed?'MUDOU VENDOR PRINCIPAL':'ESTAVEL']));
   });
   _compDiff.vendRows.forEach(function(v){lines.push(csvRow(['VENDOR',v.vendor,v.a,v.b,v.delta,v.pct.toFixed(1)+'%']));});
   _compDiff.techRows.forEach(function(t){lines.push(csvRow(['TECNOLOGIA',t.tech,t.a,t.b,t.delta,t.pct.toFixed(1)+'%']));});
