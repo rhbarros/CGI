@@ -136,6 +136,7 @@ body{background:var(--bg);color:var(--text);min-height:100vh;}
         <div class="col-row"><span class="col-label">🏷️ TAC</span><select class="col-select" id="c-tac"></select></div>
         <div class="col-row"><span class="col-label">🗼 ENODEBID</span><select class="col-select" id="c-enodeb"></select></div>
         <div class="col-row"><span class="col-label">📡 GNBID</span><select class="col-select" id="c-gnbid"></select></div>
+        <div class="col-row"><span class="col-label">🆔 CI (col. V)</span><select class="col-select" id="c-ci"></select></div>
         <div class="col-row"><span class="col-label">📏 ALTURA</span><select class="col-select" id="c-altura"></select></div>
         <div class="col-row"><span class="col-label">🔧 VENDOR</span><select class="col-select" id="c-vend"></select></div>
         <div class="col-row"><span class="col-label">🏭 OPERADORA</span><select class="col-select" id="c-oper"></select></div>
@@ -518,12 +519,13 @@ body{background:var(--bg);color:var(--text);min-height:100vh;}
 
     <div class="finder-box">
       <div style="font-size:13px;font-weight:700;margin-bottom:4px;">🔍 Busca Avançada</div>
-      <div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:11px;">Pesquise por Station ID, nome do Site, Cidade ou FREQ</div>
+      <div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:11px;">Pesquise por Station ID, nome do Site, Cidade, FREQ ou CI</div>
       <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
         <label style="display:flex;align-items:center;gap:5px;font-size:10px;font-family:'DM Mono',monospace;color:var(--text2);cursor:pointer;"><input type="radio" name="fin-mode" value="sid" checked onchange="clearFinder()"> Station ID</label>
         <label style="display:flex;align-items:center;gap:5px;font-size:10px;font-family:'DM Mono',monospace;color:var(--text2);cursor:pointer;"><input type="radio" name="fin-mode" value="site" onchange="clearFinder()"> Nome do Site</label>
         <label style="display:flex;align-items:center;gap:5px;font-size:10px;font-family:'DM Mono',monospace;color:var(--text2);cursor:pointer;"><input type="radio" name="fin-mode" value="city" onchange="clearFinder()"> Cidade</label>
         <label style="display:flex;align-items:center;gap:5px;font-size:10px;font-family:'DM Mono',monospace;color:var(--text2);cursor:pointer;"><input type="radio" name="fin-mode" value="freq" onchange="clearFinder()"> 📊 FREQ</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:10px;font-family:'DM Mono',monospace;color:var(--text2);cursor:pointer;"><input type="radio" name="fin-mode" value="ci" onchange="clearFinder()"> 🆔 CI</label>
       </div>
       <div class="finder-row">
         <input class="finder-inp" id="fin-inp" placeholder="Digite para buscar..." oninput="onFinInp()" onkeydown="if(event.key==='Enter')runFinder()">
@@ -811,7 +813,7 @@ function handleXLSX(f){
   reader.readAsArrayBuffer(f);
 }
 function popColMap(fields){
-  var ids=['c-sid','c-tech','c-uf','c-city','c-reg','c-ibge','c-anf','c-lat','c-lon','c-az','c-bsc','c-site','c-cel','c-cgi','c-freq','c-larg','c-vend','c-oper','c-tac','c-enodeb','c-altura','c-gnbid'];
+  var ids=['c-sid','c-tech','c-uf','c-city','c-reg','c-ibge','c-anf','c-lat','c-lon','c-az','c-bsc','c-site','c-cel','c-cgi','c-freq','c-larg','c-vend','c-oper','c-tac','c-enodeb','c-altura','c-gnbid','c-ci'];
   ids.forEach(function(id){
     var s=document.getElementById(id);
     s.innerHTML='<option value="">—</option>';
@@ -848,6 +850,7 @@ function popColMap(fields){
     })[0];
     if(match) s.value=match;
   });
+  if(fields.length>21) document.getElementById('c-ci').value=fields[21]; // CI = coluna V
   document.getElementById('col-map-section').style.display='block';
   document.getElementById('proc-btn').disabled=false;
 }
@@ -856,7 +859,7 @@ function processData(){
      ibge:V('c-ibge'),anf:V('c-anf'),lat:V('c-lat'),lon:V('c-lon'),az:V('c-az'),
      bsc:V('c-bsc'),site:V('c-site'),cel:V('c-cel'),cgi:V('c-cgi'),
      freq:V('c-freq'),larg:V('c-larg'),vend:V('c-vend'),oper:V('c-oper'),
-     tac:V('c-tac'),enodeb:V('c-enodeb'),altura:V('c-altura'),gnbid:V('c-gnbid')};
+     tac:V('c-tac'),enodeb:V('c-enodeb'),altura:V('c-altura'),gnbid:V('c-gnbid'),ci:V('c-ci')};
   if(!C.sid){alert('Selecione Station ID.');return;}
   siteMap=new Map();cellRows=[];
   var totalIn=rawRows.length;
@@ -870,10 +873,10 @@ function processData(){
     var cel=gv(row,C.cel),cgi=gv(row,C.cgi);
     var freq=gv(row,C.freq),larg=gv(row,C.larg);
     var vend=gv(row,C.vend),oper=gv(row,C.oper);
-    var tac=gv(row,C.tac),enodeb=gv(row,C.enodeb),altura=gv(row,C.altura),gnbid=gv(row,C.gnbid);
+    var tac=gv(row,C.tac),enodeb=gv(row,C.enodeb),altura=gv(row,C.altura),gnbid=gv(row,C.gnbid),ci=gv(row,C.ci);
     var cell={sid:sid,tech:tech,uf:uf,city:city,reg:reg,ibge:ibge,anf:anf,
               lat:lat,lon:lon,az:az,bsc:bsc,siteName:siteName,cel:cel,cgi:cgi,
-              freq:freq,larg:larg,vend:vend,oper:oper,tac:tac,enodeb:enodeb,altura:altura,gnbid:gnbid};
+              freq:freq,larg:larg,vend:vend,oper:oper,tac:tac,enodeb:enodeb,altura:altura,gnbid:gnbid,ci:ci};
     cellRows.push(cell);
     if(!siteMap.has(sid)) siteMap.set(sid,{id:sid,techs:new Map(),cells:[],uf:'',city:'',reg:'',vend:'',lat:'',lon:'',oper:''});
     var s=siteMap.get(sid);
@@ -1654,6 +1657,15 @@ function onFinInp(){
     var seen={};
     mapVals(siteMap).forEach(function(s){getSiteNames(s).forEach(function(sn){if(siteNameMatches(sn,q)&&!seen[sn]){seen[sn]=1;suggestions.push({label:sn+' ('+s.id+')',value:sn});}});});
     suggestions=suggestions.slice(0,12);
+  } else if(mode==='ci'){
+    var ciSeen={};
+    mapVals(siteMap).some(function(s){
+      s.cells.some(function(c){
+        if(c.ci&&!ciSeen[c.ci]&&c.ci.toLowerCase().indexOf(q)>=0){ciSeen[c.ci]=1;suggestions.push({label:c.ci+' ('+(c.tech||'—')+' · '+s.id+')',value:c.ci});}
+        return suggestions.length>=12;
+      });
+      return suggestions.length>=12;
+    });
   } else if(mode==='freq'){
     var freqMap={};
     mapVals(siteMap).forEach(function(s){s.cells.forEach(function(c){if(c.freq){var f=String(c.freq);if(f.toLowerCase().indexOf(q)>=0)freqMap[f]=(freqMap[f]||0)+1;}});});
@@ -1691,6 +1703,23 @@ function runFinder(){
         return '<tr><td class="hi" style="cursor:pointer;color:var(--c1);" onclick="goFinder(\''+esc(s.id)+'\')">'+s.id+'</td><td>'+getSiteNames(s).join(', ')+'</td><td>'+(s.city||'—')+'</td><td>'+(s.uf||'—')+'</td><td>'+(s.reg||'—')+'</td><td>'+chips+'</td><td>'+(s.vend||'—')+'</td></tr>';
       }).join('')+'</tbody></table></div>';
     el.classList.add('show');
+  } else if(mode==='ci'){
+    if(!C||!C.ci){el.innerHTML='<div class="info-banner">⚠️ Coluna CI não mapeada. Recarregue o arquivo e selecione a coluna em "CI (col. V)".</div>';el.classList.add('show');return;}
+    var ciTerms=q.split(/[\s,;]+/).filter(function(t){return t;}).map(function(t){return t.toLowerCase();});
+    var ciMatches=[],ciPartial=false;
+    mapVals(siteMap).forEach(function(s){s.cells.forEach(function(c){
+      if(c.ci&&ciTerms.indexOf(c.ci.toLowerCase())>=0) ciMatches.push({site:s,cell:c});
+    });});
+    if(!ciMatches.length){
+      ciPartial=true;
+      mapVals(siteMap).forEach(function(s){s.cells.forEach(function(c){
+        if(!c.ci) return;
+        var cl=c.ci.toLowerCase();
+        if(ciTerms.some(function(t){return cl.indexOf(t)>=0;})) ciMatches.push({site:s,cell:c});
+      });});
+    }
+    if(!ciMatches.length){el.innerHTML=notFoundHTML(q);el.classList.add('show');return;}
+    el.innerHTML=renderCiResults(q,ciMatches,ciPartial);el.classList.add('show');
   } else if(mode==='freq'){
     var qlow=q.toLowerCase();
     var matches=[];
@@ -1743,6 +1772,37 @@ function renderCityDetail(cityName,ufPart,sites){
 function exportCityCSV(cityName,ufPart){
   var results=mapVals(siteMap).filter(function(s){return s.city&&s.city.toLowerCase()===cityName.toLowerCase()&&(!ufPart||s.uf===ufPart);});
   dlCsv(['STATION ID,SITE,TECNOLOGIAS,REGIONAL,UF,CIDADE,VENDOR,OPERADORA,LAT,LON'].concat(results.map(function(s){return csvRow([s.id,getSiteNames(s).join('|'),siteTechsStr(s),s.reg,s.uf,s.city,s.vend,s.oper,s.lat,s.lon]);})).join('\n'),(cityName+(ufPart?'_'+ufPart:''))+'_sites.csv');
+}
+// ── Busca por CI (coluna V do arquivo) ──────────────────────────────────────
+var _ciSearchData=[];
+function ciHtml(v){return String(v===undefined||v===null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function goFinderSid(sid){var r=document.querySelector('input[name="fin-mode"][value="sid"]');if(r)r.checked=true;goFinder(sid);}
+function renderCiResults(q,matches,partial){
+  _ciSearchData=matches;
+  var siteIds={},nSites=0,lastSite=null;
+  matches.forEach(function(m){if(!siteIds[m.site.id]){siteIds[m.site.id]=1;nSites++;lastSite=m.site;}});
+  var header='<div class="info-banner">🆔 '+matches.length.toLocaleString('pt-BR')+' célula(s) em '+nSites.toLocaleString('pt-BR')+' site(s) para CI "'+ciHtml(q)+'"'+(partial?' — correspondência parcial (nenhum CI exato)':'')+'</div>';
+  var rows=matches.slice(0,500).map(function(m){
+    var s=m.site,c=m.cell;
+    return '<tr><td class="hi" style="white-space:nowrap;"><span style="cursor:pointer;color:var(--c1);" onclick="goFinderSid(\''+esc(s.id)+'\')">'+ciHtml(s.id)+'</span> '+
+      '<span onclick="goMap(\'sid\',\''+esc(s.id)+'\')" title="Ver no mapa" style="cursor:pointer;font-size:11px;opacity:.7;user-select:none;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.7">🗺️</span></td>'+
+      '<td style="max-width:180px;white-space:normal;word-break:break-word;">'+ciHtml(getSiteNames(s).join(', ')||'—')+'</td>'+
+      '<td style="white-space:nowrap;"><span class="tchip '+techChipClass(c.tech)+'">'+ciHtml(c.tech||'—')+'</span></td>'+
+      '<td style="color:var(--c4);font-weight:700;white-space:nowrap;">'+ciHtml(c.ci)+'</td>'+
+      '<td style="white-space:nowrap;">'+ciHtml(c.cel||'—')+'</td>'+
+      '<td style="white-space:nowrap;">'+ciHtml(s.city||'—')+'</td><td>'+ciHtml(s.uf||'—')+'</td><td style="white-space:nowrap;">'+ciHtml(s.reg||'—')+'</td>'+
+      '<td style="white-space:nowrap;">'+ciHtml((c.vend&&!isND(c.vend))?c.vend:(s.vend||'—'))+'</td></tr>';
+  }).join('');
+  var more=matches.length>500?'<div style="font-size:10px;color:var(--text3);font-family:\'DM Mono\',monospace;margin-top:6px;">Exibindo as primeiras 500 células — use o CSV para a lista completa.</div>':'';
+  var out=header+'<div class="tscroll" style="max-height:360px;overflow-y:auto;margin-top:10px;"><table class="dtbl"><thead><tr><th>STATION ID</th><th>SITE</th><th>TECH</th><th>CI</th><th>CÉLULA</th><th>CIDADE</th><th>UF</th><th>REGIONAL</th><th>VENDOR</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+more+
+    '<div style="margin-top:12px;"><button class="ebtn" onclick="exportCiCSV()">⬇ CSV</button></div>';
+  if(nSites===1&&lastSite) out+='<div style="margin-top:14px;">'+renderSiteDetail(lastSite)+'</div>';
+  return out;
+}
+function exportCiCSV(){
+  if(!_ciSearchData.length) return;
+  var q=document.getElementById('fin-inp').value.trim();
+  dlCsv(['STATION ID,SITE,TECH,CI,CELULA,CGI,CIDADE,UF,REGIONAL,VENDOR,FREQ,LARGURA'].concat(_ciSearchData.map(function(m){var s=m.site,c=m.cell;var vend=(c.vend&&!isND(c.vend))?c.vend:((s.vend&&!isND(s.vend))?s.vend:'N/D');return csvRow([s.id,getSiteNames(s).join('|'),c.tech,c.ci,c.cel,c.cgi,s.city,s.uf,s.reg,vend,c.freq,c.larg]);})).join('\n'),'busca_ci_'+q.replace(/[^\w.-]+/g,'_')+'.csv');
 }
 // ── Busca por FREQ (coluna de frequência por célula) ────────────────────────
 var _freqSearchData=[];
@@ -1844,6 +1904,7 @@ function renderSiteDetail(site){
       '<td>'+          (c.siteName||'—')+'</td>'+
       '<td class="hi">'+(c.cel||'—')+'</td>'+
       '<td>'+          (c.cgi||'—')+'</td>'+
+      '<td style="color:var(--c2);font-family:\'DM Mono\',monospace;font-weight:600;">'+(c.ci||'—')+'</td>'+
       '<td style="color:var(--c4);font-weight:600;">'+(c.freq||'—')+'</td>'+
       '<td style="color:var(--c4);">'+(c.larg||'—')+'</td>'+
       '<td>'+          (c.vend||'—')+'</td>'+
@@ -1869,7 +1930,7 @@ function renderSiteDetail(site){
     '<div class="tscroll"><table class="dtbl"><thead><tr>'+
       '<th>REGIONAL</th><th>STATION ID</th><th>UF</th><th>CIDADE</th><th>IBGE</th>'+
       '<th>TECNO</th><th>ANF</th><th>LATITUDE</th><th>LONGITUDE</th><th>BSC/RNC</th>'+
-      '<th>SITE</th><th>CÉLULA</th><th>CGI</th><th>FREQ</th><th>LARGURA</th>'+
+      '<th>SITE</th><th>CÉLULA</th><th>CGI</th><th style="color:var(--c2);">CI</th><th>FREQ</th><th>LARGURA</th>'+
       '<th>VENDOR</th><th>OPERADORA</th>'+
       '<th style="color:var(--c1);">TAC</th>'+
       '<th style="color:var(--c3);">ENODEBID</th>'+
@@ -1879,9 +1940,9 @@ function renderSiteDetail(site){
 }
 function exportFinderCSV(sid){
   var site=siteMap.get(sid);if(!site)return;
-  dlCsv(['REGIONAL,STATION ID,UF,CIDADE,IBGE,TECNO,ANF,LATITUDE,LONGITUDE,BSC,SITE,CELULA,CGI,FREQ,LARGURA,VENDOR,OPERADORA,TAC,ENODEBID,AZIMUTE,ALTURA'].concat(site.cells.map(function(c){
+  dlCsv(['REGIONAL,STATION ID,UF,CIDADE,IBGE,TECNO,ANF,LATITUDE,LONGITUDE,BSC,SITE,CELULA,CGI,CI,FREQ,LARGURA,VENDOR,OPERADORA,TAC,ENODEBID,AZIMUTE,ALTURA'].concat(site.cells.map(function(c){
     var azVal=toNum(c.az);var azStr=isNaN(azVal)?'':Math.round(azVal);
-    return csvRow([c.reg,c.sid,c.uf,c.city,c.ibge,c.tech,c.anf,c.lat,c.lon,c.bsc,c.siteName,c.cel,c.cgi,c.freq,c.larg,c.vend,c.oper,c.tac,c.enodeb,azStr,c.altura]);
+    return csvRow([c.reg,c.sid,c.uf,c.city,c.ibge,c.tech,c.anf,c.lat,c.lon,c.bsc,c.siteName,c.cel,c.cgi,c.ci,c.freq,c.larg,c.vend,c.oper,c.tac,c.enodeb,azStr,c.altura]);
   })).join('\n'),sid+'_celulas.csv');
 }
 
