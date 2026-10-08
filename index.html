@@ -210,7 +210,15 @@ body{background:var(--bg);color:var(--text);min-height:100vh;}
   <!-- REGIONAIS -->
   <div id="page-regional" class="page">
     <div class="info-banner">ℹ️ Registros ND / N/A / vazios excluídos.</div>
-    <div class="card"><div class="card-title">Sites por Regional</div><canvas id="regChart" height="210"></canvas></div>
+    <div class="card"><div class="card-title"><span>Sites por Regional</span><span style="font-size:9px;color:var(--c1);">clique na barra → lista de sites</span></div><canvas id="regChart" height="210"></canvas></div>
+    <div class="drill-section" id="reg-drill-section" style="display:none;">
+      <div class="drill-title"><span id="reg-drill-title">—</span>
+        <span style="display:flex;gap:6px;"><button class="ebtn" onclick="exportRegDrillXlsx()">⬇ Excel</button><button class="ebtn" onclick="document.getElementById('reg-drill-section').style.display='none'">✕</button></span></div>
+      <div id="reg-drill-note" style="font-size:9px;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:6px;"></div>
+      <div class="tscroll" style="max-height:420px;overflow-y:auto;">
+        <table class="dtbl"><thead><tr><th>STATION ID</th><th>SITE</th><th>TECNOLOGIAS</th><th>UF</th><th>CIDADE</th><th>REGIONAL</th><th>VENDOR</th><th>LAT</th><th>LON</th></tr></thead><tbody id="reg-drill-tbody"></tbody></table>
+      </div>
+    </div>
     <div class="card"><div class="card-title">% Tecnologia por Regional</div><canvas id="regTechChart" height="250"></canvas></div>
   </div>
 
@@ -258,8 +266,16 @@ body{background:var(--bg);color:var(--text);min-height:100vh;}
       <select class="rsub-filter" id="ran-oper-sel" onchange="renderRANCharts()"></select>
     </div>
     <div class="grid2">
-      <div class="card"><div class="card-title">Por Regional</div><canvas id="ranRegChart" height="260"></canvas></div>
+      <div class="card"><div class="card-title"><span>Por Regional</span><span style="font-size:9px;color:var(--c1);">clique na barra → lista de sites</span></div><canvas id="ranRegChart" height="260"></canvas></div>
       <div class="card"><div class="card-title">Por UF</div><canvas id="ranUFChart" height="260"></canvas></div>
+    </div>
+    <div class="drill-section" id="ranreg-drill-section" style="display:none;">
+      <div class="drill-title"><span id="ranreg-drill-title">—</span>
+        <span style="display:flex;gap:6px;"><button class="ebtn" onclick="exportRANRegDrillXlsx()">⬇ Excel</button><button class="ebtn" onclick="document.getElementById('ranreg-drill-section').style.display='none'">✕</button></span></div>
+      <div id="ranreg-drill-note" style="font-size:9px;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:6px;"></div>
+      <div class="tscroll" style="max-height:420px;overflow-y:auto;">
+        <table class="dtbl"><thead><tr><th>STATION ID</th><th>SITE</th><th>OPERADORA</th><th>TECNOLOGIAS</th><th>UF</th><th>CIDADE</th><th>REGIONAL</th><th>VENDOR</th><th>LAT</th><th>LON</th></tr></thead><tbody id="ranreg-drill-tbody"></tbody></table>
+      </div>
     </div>
     <div class="card">
       <div class="card-title"><span id="ran-city-title">Por Cidade</span>
@@ -586,6 +602,50 @@ body{background:var(--bg);color:var(--text);min-height:100vh;}
         </div>
         <div class="tscroll" style="max-height:420px;overflow-y:auto;">
           <table class="dtbl"><thead><tr><th>CIDADE</th><th>UF</th><th>SITES</th><th>PRIORIDADE</th><th>4G%</th><th>5G%</th><th>3G%</th><th>2G%</th><th>RAN%</th><th>VENDORS</th><th>RECOMENDAÇÕES</th></tr></thead><tbody id="ideias-drill-tbody"></tbody></table>
+        </div>
+      </div>
+      <div id="refarm-section" style="background:var(--bg3);border:1px solid var(--border2);border-top:2px solid #a78bfa;border-radius:10px;padding:16px;margin-bottom:16px;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px;">
+          <div>
+            <div style="font-size:13px;font-weight:800;">🔁 Refarming 3G → 4G · Nokia</div>
+            <div style="font-size:10px;color:var(--text2);font-family:'DM Mono',monospace;margin-top:3px;line-height:1.5;">Regra: o mesmo END_ID (Station ID) possui célula <b>3G Nokia</b> e célula <b>4G Nokia</b>.</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="ebtn" onclick="renderRefarm()" style="background:rgba(167,139,250,.12);border-color:rgba(167,139,250,.35);color:#a78bfa;">🔍 Listar sites elegíveis</button>
+            <button class="ebtn" id="refarm-xlsx-btn" onclick="exportRefarmXlsx()" style="display:none;">⬇ Excel</button>
+            <button class="ebtn" id="refarm-close-btn" onclick="closeRefarm()" style="display:none;">✕</button>
+          </div>
+        </div>
+        <div id="refarm-body" style="display:none;">
+          <div class="kpi-grid" id="refarm-kpis"></div>
+          <div id="refarm-note" style="font-size:9px;color:var(--text3);font-family:'DM Mono',monospace;margin:6px 0;"></div>
+          <div class="tscroll" style="max-height:420px;overflow-y:auto;">
+            <table class="dtbl"><thead><tr><th>STATION ID</th><th>SITE</th><th>TECNOLOGIAS</th><th>UF</th><th>CIDADE</th><th>REGIONAL</th><th>VENDOR</th><th>LAT</th><th>LON</th></tr></thead><tbody id="refarm-tbody"></tbody></table>
+          </div>
+        </div>
+      </div>
+      <div id="refarm2-section" style="background:var(--bg3);border:1px solid var(--border2);border-top:2px solid #10b981;border-radius:10px;padding:16px;margin-bottom:16px;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px;">
+          <div>
+            <div style="font-size:13px;font-weight:800;">🔁 Refarming 2G → 4G</div>
+            <div style="font-size:10px;color:var(--text2);font-family:'DM Mono',monospace;margin-top:3px;line-height:1.5;">Regra: o mesmo END_ID (Station ID) possui célula <b>2G</b> e célula <b>4G</b> do <b>mesmo vendor</b>, sendo o 4G em <b>LTE 1800 com largura de 5 MHz</b>.</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <span style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;">Vendor:</span>
+            <select class="f-select" id="refarm2-vend-sel" style="min-width:90px;" onchange="refarm2VendChanged()">
+              <option value="ALL">Todos</option><option value="NOKIA">Nokia</option><option value="ERICSSON">Ericsson</option><option value="HUAWEI">Huawei</option><option value="ZTE">ZTE</option>
+            </select>
+            <button class="ebtn" onclick="renderRefarm2()" style="background:rgba(16,185,129,.12);border-color:rgba(16,185,129,.35);color:#10b981;">🔍 Listar sites elegíveis</button>
+            <button class="ebtn" id="refarm2-xlsx-btn" onclick="exportRefarm2Xlsx()" style="display:none;">⬇ Excel</button>
+            <button class="ebtn" id="refarm2-close-btn" onclick="closeRefarm2()" style="display:none;">✕</button>
+          </div>
+        </div>
+        <div id="refarm2-body" style="display:none;">
+          <div class="kpi-grid" id="refarm2-kpis"></div>
+          <div id="refarm2-note" style="font-size:9px;color:var(--text3);font-family:'DM Mono',monospace;margin:6px 0;"></div>
+          <div class="tscroll" style="max-height:420px;overflow-y:auto;">
+            <table class="dtbl"><thead><tr><th>STATION ID</th><th>SITE</th><th>TECNOLOGIAS</th><th>UF</th><th>CIDADE</th><th>REGIONAL</th><th>VENDOR</th><th>LAT</th><th>LON</th></tr></thead><tbody id="refarm2-tbody"></tbody></table>
+          </div>
         </div>
       </div>
       <div id="ideias-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:13px;"></div>
@@ -972,7 +1032,7 @@ function buildDash(removed){
     var trMap={};sites.forEach(function(s){mapKeys(s.techs).forEach(function(t){trMap[t]=1;});});
     var tr=Object.keys(trMap).sort();
     dChart('regChart');
-    charts.reg=new Chart(document.getElementById('regChart'),{type:'bar',data:{labels:regs,datasets:[{data:regs.map(function(r){return rC[r];}),backgroundColor:regs.map(function(_,i){return PAL[i%PAL.length];}),borderRadius:6,borderSkipped:false,borderWidth:0}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{autoSkip:false,maxRotation:40,font:{size:9}}},y:{ticks:{callback:fmtK},grid:{color:'rgba(255,255,255,.04)'}}}}});
+    charts.reg=new Chart(document.getElementById('regChart'),{type:'bar',data:{labels:regs,datasets:[{data:regs.map(function(r){return rC[r];}),backgroundColor:regs.map(function(_,i){return PAL[i%PAL.length];}),borderRadius:6,borderSkipped:false,borderWidth:0}]},options:{responsive:true,onHover:function(evt,els){if(evt&&evt.native&&evt.native.target)evt.native.target.style.cursor=els.length?'pointer':'default';},onClick:function(evt,els){if(!els.length)return;showRegDrill(regs[els[0].index]);},plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{autoSkip:false,maxRotation:40,font:{size:9}}},y:{ticks:{callback:fmtK},grid:{color:'rgba(255,255,255,.04)'}}}}});
     dChart('regTechChart');
     charts.regTech=new Chart(document.getElementById('regTechChart'),{type:'bar',data:{labels:regs,datasets:tr.map(function(t,i){return {label:t,data:regs.map(function(r){return rC[r]?Math.round(((rT[r]&&rT[r][t])||0)/rC[r]*100):0;}),backgroundColor:TC[t]||PAL[i],borderRadius:3,borderWidth:0};})},options:{responsive:true,plugins:{legend:{position:'bottom',labels:{boxWidth:8,padding:8}}},scales:{x:{grid:{display:false}},y:{max:100,ticks:{callback:function(v){return v+'%';}},grid:{color:'rgba(255,255,255,.04)'}}}}});
   }
@@ -1018,6 +1078,38 @@ function showComboDrill(combo,ids){
 function exportDrill(){
   dlCsv(['STATION ID,TECNOLOGIAS,UF,CIDADE,REGIONAL,VENDOR,FREQ,LARGURA,LATITUDE,LONGITUDE'].concat(
     drillDataG.map(function(d){return csvRow([d.id,d.techs,d.uf,d.city,d.reg,d.vend,d.freq,d.larg,d.lat,d.lon]);})).join('\n'),'combo_drill.csv');
+}
+
+// ── Regional Drill ─────────────────────────────────────────────────────────
+var _regDrillData=[],_regDrillName='';
+function showRegDrill(reg){
+  var LIM=2000;
+  _regDrillName=reg;
+  _regDrillData=mapVals(siteMap).filter(function(s){return s.reg===reg;}).map(function(s){
+    return {id:s.id,site:getSiteNames(s).join(' | '),techs:(siteTechs(s).sort().join(', ')||'—'),uf:s.uf,city:s.city,reg:s.reg,vend:s.vend,lat:s.lat,lon:s.lon};
+  }).sort(function(a,b){return String(a.id)<String(b.id)?-1:(String(a.id)>String(b.id)?1:0);});
+  document.getElementById('reg-drill-title').textContent=reg+' — '+_regDrillData.length.toLocaleString('pt-BR')+' sites';
+  document.getElementById('reg-drill-note').textContent=_regDrillData.length>LIM?('Exibindo os primeiros '+LIM.toLocaleString('pt-BR')+' sites na tela — o Excel exporta todos.'):'';
+  document.getElementById('reg-drill-tbody').innerHTML=_regDrillData.slice(0,LIM).map(function(d){
+    return '<tr><td class="hi" style="cursor:pointer;color:var(--c1);" onclick="goFinder(\''+esc(d.id)+'\')">'+d.id+'</td><td>'+(d.site||'—')+'</td><td style="color:var(--c1);">'+d.techs+'</td><td>'+(d.uf||'—')+'</td><td>'+(d.city||'—')+'</td><td>'+(d.reg||'—')+'</td><td style="color:var(--c1);">'+(d.vend||'—')+'</td><td style="color:var(--text3);">'+(d.lat||'—')+'</td><td style="color:var(--text3);">'+(d.lon||'—')+'</td></tr>';
+  }).join('');
+  var sec=document.getElementById('reg-drill-section');
+  sec.style.display='block';
+  sec.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function exportRegDrillXlsx(){
+  var head=['STATION ID','SITE','TECNOLOGIAS','UF','CIDADE','REGIONAL','VENDOR','LATITUDE','LONGITUDE'];
+  var fname='regional_'+String(_regDrillName).replace(/[^\w.-]+/g,'_')+'_sites';
+  if(typeof XLSX==='undefined'){
+    dlCsv([csvRow(head)].concat(_regDrillData.map(function(d){return csvRow([d.id,d.site,d.techs,d.uf,d.city,d.reg,d.vend,d.lat,d.lon]);})).join('\n'),fname+'.csv');
+    return;
+  }
+  var aoa=[head].concat(_regDrillData.map(function(d){return [d.id,d.site,d.techs,d.uf,d.city,d.reg,d.vend,d.lat,d.lon];}));
+  var ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols']=[{wch:14},{wch:26},{wch:16},{wch:5},{wch:26},{wch:10},{wch:10},{wch:12},{wch:12}];
+  var wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,String(_regDrillName).replace(/[\\\/?*\[\]:]/g,'_').slice(0,31)||'Regional');
+  XLSX.writeFile(wb,fname+'.xlsx');
 }
 
 // helper: valores únicos de campo nas células de um site
@@ -1176,7 +1268,7 @@ function renderRANCharts(){
   var byReg={};filt.forEach(function(s){if(s.reg&&!isND(s.reg))byReg[s.reg]=(byReg[s.reg]||0)+1;});
   var regs=Object.keys(byReg).sort(function(a,b){return byReg[b]-byReg[a];});
   dChart('ranRegChart');
-  if(regs.length) charts.ranReg=new Chart(document.getElementById('ranRegChart'),{type:'bar',data:{labels:regs,datasets:[{data:regs.map(function(r){return byReg[r];}),backgroundColor:regs.map(function(_,i){return PAL[i%PAL.length];}),borderRadius:7,borderSkipped:false,borderWidth:0}]},options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false}},scales:{x:{ticks:{callback:fmtK},grid:{color:'rgba(255,255,255,.04)'}},y:{grid:{display:false}}}}});
+  if(regs.length) charts.ranReg=new Chart(document.getElementById('ranRegChart'),{type:'bar',data:{labels:regs,datasets:[{data:regs.map(function(r){return byReg[r];}),backgroundColor:regs.map(function(_,i){return PAL[i%PAL.length];}),borderRadius:7,borderSkipped:false,borderWidth:0}]},options:{indexAxis:'y',responsive:true,onHover:function(evt,els){if(evt&&evt.native&&evt.native.target)evt.native.target.style.cursor=els.length?'pointer':'default';},onClick:function(evt,els){try{if(!els.length)return;showRANRegDrill(regs[els[0].index]);}catch(e){console.error(e);}},plugins:{legend:{display:false}},scales:{x:{ticks:{callback:fmtK},grid:{color:'rgba(255,255,255,.04)'}},y:{grid:{display:false}}}}});
   var byUF={};filt.forEach(function(s){if(s.uf&&!isND(s.uf))byUF[s.uf]=(byUF[s.uf]||0)+1;});
   var ufs=Object.keys(byUF).sort(function(a,b){return byUF[b]-byUF[a];}).slice(0,20);
   RANState.ufs=ufs.slice();RANState.byUF=Object.assign({},byUF);
@@ -1214,6 +1306,40 @@ function exportRAN(){
   if(!_ranPre)return;
   dlCsv(['STATION ID,OPERADORA,TECNOLOGIAS,REGIONAL,UF,CIDADE,VENDOR,FREQ,LAT,LON'].concat(
     _ranPre.ranSites.map(function(s){return csvRow([s.id,s.oper,siteTechsStr(s),s.reg,s.uf,s.city,s.vend,uniqCellVals(s,'freq').join('|'),s.lat,s.lon]);})).join('\n'),'ran_sharing.csv');
+}
+
+// ── RAN Sharing: drill por Regional ────────────────────────────────────────
+var _ranRegDrillData=[],_ranRegDrillName='';
+function showRANRegDrill(reg){
+  if(!_ranPre)return;
+  var LIM=2000;
+  var opF=document.getElementById('ran-oper-sel').value;
+  _ranRegDrillName=reg+(opF==='ALL'?'':'_'+opF);
+  _ranRegDrillData=_ranPre.ranSites.filter(function(s){return s.reg===reg&&(opF==='ALL'||s.oper===opF);}).map(function(s){
+    return {id:s.id,site:getSiteNames(s).join(' | '),oper:s.oper,techs:(siteTechs(s).sort().join(', ')||'—'),uf:s.uf,city:s.city,reg:s.reg,vend:s.vend,lat:s.lat,lon:s.lon};
+  }).sort(function(a,b){return String(a.id)<String(b.id)?-1:(String(a.id)>String(b.id)?1:0);});
+  document.getElementById('ranreg-drill-title').textContent='RAN Sharing · '+reg+(opF==='ALL'?'':' · '+opF)+' — '+_ranRegDrillData.length.toLocaleString('pt-BR')+' sites';
+  document.getElementById('ranreg-drill-note').textContent=_ranRegDrillData.length>LIM?('Exibindo os primeiros '+LIM.toLocaleString('pt-BR')+' sites na tela — o Excel exporta todos.'):'';
+  document.getElementById('ranreg-drill-tbody').innerHTML=_ranRegDrillData.slice(0,LIM).map(function(d){
+    return '<tr><td class="hi" style="cursor:pointer;color:var(--c1);" onclick="goFinder(\''+esc(d.id)+'\')">'+d.id+'</td><td>'+(d.site||'—')+'</td><td>'+(d.oper||'—')+'</td><td style="color:var(--c1);">'+d.techs+'</td><td>'+(d.uf||'—')+'</td><td>'+(d.city||'—')+'</td><td>'+(d.reg||'—')+'</td><td style="color:var(--c1);">'+(d.vend||'—')+'</td><td style="color:var(--text3);">'+(d.lat||'—')+'</td><td style="color:var(--text3);">'+(d.lon||'—')+'</td></tr>';
+  }).join('');
+  var sec=document.getElementById('ranreg-drill-section');
+  sec.style.display='block';
+  sec.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function exportRANRegDrillXlsx(){
+  var head=['STATION ID','SITE','OPERADORA','TECNOLOGIAS','UF','CIDADE','REGIONAL','VENDOR','LATITUDE','LONGITUDE'];
+  var fname='ran_sharing_'+String(_ranRegDrillName).replace(/[^\w.-]+/g,'_')+'_sites';
+  if(typeof XLSX==='undefined'){
+    dlCsv([csvRow(head)].concat(_ranRegDrillData.map(function(d){return csvRow([d.id,d.site,d.oper,d.techs,d.uf,d.city,d.reg,d.vend,d.lat,d.lon]);})).join('\n'),fname+'.csv');
+    return;
+  }
+  var aoa=[head].concat(_ranRegDrillData.map(function(d){return [d.id,d.site,d.oper,d.techs,d.uf,d.city,d.reg,d.vend,d.lat,d.lon];}));
+  var ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols']=[{wch:14},{wch:26},{wch:12},{wch:16},{wch:5},{wch:26},{wch:10},{wch:10},{wch:12},{wch:12}];
+  var wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,String(_ranRegDrillName).replace(/[\\\/?*\[\]:]/g,'_').slice(0,31)||'Regional');
+  XLSX.writeFile(wb,fname+'.xlsx');
 }
 
 // ── TAC — Auditoria de TAC/Regional (4G/5G) ─────────────────────────────────
@@ -2211,6 +2337,146 @@ function exportIdeias(){
     filtered.map(function(d){return csvRow([d.uf,d.city,d.N,d.prioridade.replace(/[🔴🟡🔵🟢]/g,'').trim(),d.score,d.pct4G,d.pct5G,d.pct3G,d.pct2G,d.ranPct,d.vendors.join('|'),d.acoes.map(function(a){return a.txt;}).join(' | ')]);})
   ).join('\n'),'ideias_rf.csv');
 }
+// ── Refarming 3G → 4G Nokia (mesmo END_ID com 3G Nokia + 4G Nokia) ─────────
+var _refarmData=[],_refarmName='';
+function refarmCellVend(s,c){var v=(c.vend&&!isND(c.vend))?c.vend:s.vend;return String(v||'').toUpperCase();}
+function refarmFreqs(arr){var seen={},out=[];arr.forEach(function(c){var f=c.freq;if(f&&!isND(f)&&!seen[f]){seen[f]=1;out.push(f);}});return out.join(', ');}
+function computeRefarm(){
+  var ufF=document.getElementById('ideias-uf-sel').value;
+  var out=[];
+  mapVals(siteMap).forEach(function(s){
+    if(ufF!=='ALL'&&s.uf!==ufF)return;
+    var c3=[],c4=[];
+    s.cells.forEach(function(c){
+      if(refarmCellVend(s,c).indexOf('NOKIA')<0)return;
+      if(c.tech==='3G')c3.push(c);else if(c.tech==='4G')c4.push(c);
+    });
+    if(!c3.length||!c4.length)return;
+    out.push({id:s.id,site:getSiteNames(s).join(' | '),techs:(siteTechs(s).sort().join(', ')||'—'),vend:s.vend,uf:s.uf,city:s.city,reg:s.reg,n3:c3.length,f3:refarmFreqs(c3),n4:c4.length,f4:refarmFreqs(c4),lat:s.lat,lon:s.lon});
+  });
+  out.sort(function(a,b){return String(a.id)<String(b.id)?-1:(String(a.id)>String(b.id)?1:0);});
+  return out;
+}
+function renderRefarm(){
+  try{
+    var LIM=2000;
+    var ufF=document.getElementById('ideias-uf-sel').value;
+    _refarmData=computeRefarm();
+    _refarmName=ufF==='ALL'?'Brasil':ufF;
+    var cells3=0,cells4=0,ufs={},cities={};
+    _refarmData.forEach(function(d){cells3+=d.n3;cells4+=d.n4;if(d.uf)ufs[d.uf]=1;cities[(d.uf||'')+'|'+(d.city||'')]=1;});
+    document.getElementById('refarm-kpis').innerHTML=
+      '<div class="kpi" style="--kc:#a78bfa"><div class="kpi-label">Sites elegíveis</div><div class="kpi-val" style="color:#a78bfa">'+_refarmData.length.toLocaleString('pt-BR')+'</div><div class="kpi-sub">3G + 4G Nokia</div></div>'+
+      '<div class="kpi" style="--kc:var(--c2)"><div class="kpi-label">Células 3G Nokia</div><div class="kpi-val" style="color:var(--c2)">'+cells3.toLocaleString('pt-BR')+'</div><div class="kpi-sub">nesses sites</div></div>'+
+      '<div class="kpi" style="--kc:var(--c1)"><div class="kpi-label">Células 4G Nokia</div><div class="kpi-val" style="color:var(--c1)">'+cells4.toLocaleString('pt-BR')+'</div><div class="kpi-sub">nesses sites</div></div>'+
+      '<div class="kpi" style="--kc:var(--c3)"><div class="kpi-label">UFs / Cidades</div><div class="kpi-val" style="color:var(--c3)">'+Object.keys(ufs).length+' / '+Object.keys(cities).length.toLocaleString('pt-BR')+'</div><div class="kpi-sub">'+(ufF==='ALL'?'todas as UFs':'UF '+ufF)+'</div></div>';
+    document.getElementById('refarm-note').textContent=_refarmData.length>LIM?('Exibindo os primeiros '+LIM.toLocaleString('pt-BR')+' sites na tela — o Excel exporta todos.'):'';
+    document.getElementById('refarm-tbody').innerHTML=_refarmData.length?_refarmData.slice(0,LIM).map(function(d){
+      return '<tr><td class="hi" style="cursor:pointer;color:var(--c1);" onclick="goFinder(\''+esc(d.id)+'\')">'+d.id+'</td><td>'+(d.site||'—')+'</td><td style="color:var(--c1);">'+d.techs+'</td><td>'+(d.uf||'—')+'</td><td>'+(d.city||'—')+'</td><td>'+(d.reg||'—')+'</td><td style="color:var(--c1);">'+(d.vend||'—')+'</td><td style="color:var(--text3);">'+(d.lat||'—')+'</td><td style="color:var(--text3);">'+(d.lon||'—')+'</td></tr>';
+    }).join(''):'<tr><td colspan="9" style="text-align:center;padding:18px;color:var(--text3);">Nenhum site com 3G Nokia e 4G Nokia no mesmo END_ID.</td></tr>';
+    document.getElementById('refarm-body').style.display='block';
+    document.getElementById('refarm-xlsx-btn').style.display='';
+    document.getElementById('refarm-close-btn').style.display='';
+  }catch(e){console.error(e);}
+}
+function closeRefarm(){
+  document.getElementById('refarm-body').style.display='none';
+  document.getElementById('refarm-xlsx-btn').style.display='none';
+  document.getElementById('refarm-close-btn').style.display='none';
+}
+function exportRefarmXlsx(){
+  var head=['STATION ID','SITE','TECNOLOGIAS','UF','CIDADE','REGIONAL','VENDOR','LATITUDE','LONGITUDE','CELULAS_3G_NOKIA','FREQ_3G','CELULAS_4G_NOKIA','FREQ_4G'];
+  var fname='refarming_3G_4G_nokia_'+String(_refarmName).replace(/[^\w.-]+/g,'_');
+  if(typeof XLSX==='undefined'){
+    dlCsv([csvRow(head)].concat(_refarmData.map(function(d){return csvRow([d.id,d.site,d.techs,d.uf,d.city,d.reg,d.vend,d.lat,d.lon,d.n3,d.f3,d.n4,d.f4]);})).join('\n'),fname+'.csv');
+    return;
+  }
+  var aoa=[head].concat(_refarmData.map(function(d){return [d.id,d.site,d.techs,d.uf,d.city,d.reg,d.vend,d.lat,d.lon,d.n3,d.f3,d.n4,d.f4];}));
+  var ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols']=[{wch:14},{wch:26},{wch:16},{wch:5},{wch:26},{wch:10},{wch:10},{wch:12},{wch:12},{wch:16},{wch:14},{wch:16},{wch:14}];
+  var wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Refarming 3G-4G Nokia');
+  XLSX.writeFile(wb,fname+'.xlsx');
+}
+(function(){var u=document.getElementById('ideias-uf-sel');if(u)u.addEventListener('change',function(){var b=document.getElementById('refarm-body');if(b&&b.style.display!=='none')renderRefarm();});})();
+
+// ── Refarming 2G → 4G (mesmo END_ID com 2G e 4G do mesmo vendor) ───────────
+var _refarm2Data=[],_refarm2Name='';
+function refarmNums(v){var m=String(v==null?'':v).match(/\d+(?:[.,]\d+)?/g)||[];return m.map(function(x){return parseFloat(x.replace(',','.'));});}
+function isLte1800W5(c){
+  var fOk=refarmNums(c.freq).some(function(n){return (n>=1700&&n<=1890)||(n>=1.7&&n<=1.89);});
+  var wOk=refarmNums(c.larg).some(function(n){return n===5;});
+  return fOk&&wOk;
+}
+function computeRefarm2(){
+  var ufF=document.getElementById('ideias-uf-sel').value;
+  var vF=document.getElementById('refarm2-vend-sel').value;
+  var out=[];
+  mapVals(siteMap).forEach(function(s){
+    if(ufF!=='ALL'&&s.uf!==ufF)return;
+    var byV={};
+    s.cells.forEach(function(c){
+      if(c.tech!=='2G'&&c.tech!=='4G')return;
+      var v=refarmCellVend(s,c).trim();
+      if(!v||isND(v))return;
+      if(c.tech==='4G'&&!isLte1800W5(c))return;
+      if(!byV[v])byV[v]={c2:[],c4:[]};
+      if(c.tech==='2G')byV[v].c2.push(c);else byV[v].c4.push(c);
+    });
+    var ok=Object.keys(byV).filter(function(v){return byV[v].c2.length&&byV[v].c4.length&&(vF==='ALL'||v.indexOf(vF)>=0);}).sort();
+    if(!ok.length)return;
+    var c2=[],c4=[];
+    ok.forEach(function(v){c2=c2.concat(byV[v].c2);c4=c4.concat(byV[v].c4);});
+    out.push({id:s.id,site:getSiteNames(s).join(' | '),techs:(siteTechs(s).sort().join(', ')||'—'),vend:ok.join(' / '),uf:s.uf,city:s.city,reg:s.reg,n2:c2.length,f2:refarmFreqs(c2),n4:c4.length,f4:refarmFreqs(c4),lat:s.lat,lon:s.lon});
+  });
+  out.sort(function(a,b){return String(a.id)<String(b.id)?-1:(String(a.id)>String(b.id)?1:0);});
+  return out;
+}
+function renderRefarm2(){
+  try{
+    var LIM=2000;
+    var ufF=document.getElementById('ideias-uf-sel').value;
+    var vF=document.getElementById('refarm2-vend-sel').value;
+    _refarm2Data=computeRefarm2();
+    _refarm2Name=(ufF==='ALL'?'Brasil':ufF)+(vF==='ALL'?'':'_'+vF);
+    var cells2=0,cells4=0,ufs={},cities={};
+    _refarm2Data.forEach(function(d){cells2+=d.n2;cells4+=d.n4;if(d.uf)ufs[d.uf]=1;cities[(d.uf||'')+'|'+(d.city||'')]=1;});
+    document.getElementById('refarm2-kpis').innerHTML=
+      '<div class="kpi" style="--kc:#10b981"><div class="kpi-label">Sites elegíveis</div><div class="kpi-val" style="color:#10b981">'+_refarm2Data.length.toLocaleString('pt-BR')+'</div><div class="kpi-sub">2G + 4G 1800/5 MHz</div></div>'+
+      '<div class="kpi" style="--kc:var(--c3)"><div class="kpi-label">Células 2G</div><div class="kpi-val" style="color:var(--c3)">'+cells2.toLocaleString('pt-BR')+'</div><div class="kpi-sub">nesses sites</div></div>'+
+      '<div class="kpi" style="--kc:var(--c1)"><div class="kpi-label">Células 4G 1800/5</div><div class="kpi-val" style="color:var(--c1)">'+cells4.toLocaleString('pt-BR')+'</div><div class="kpi-sub">LTE 1800 · 5 MHz</div></div>'+
+      '<div class="kpi" style="--kc:var(--c4)"><div class="kpi-label">UFs / Cidades</div><div class="kpi-val" style="color:var(--c4)">'+Object.keys(ufs).length+' / '+Object.keys(cities).length.toLocaleString('pt-BR')+'</div><div class="kpi-sub">'+(ufF==='ALL'?'todas as UFs':'UF '+ufF)+'</div></div>';
+    document.getElementById('refarm2-note').textContent=_refarm2Data.length>LIM?('Exibindo os primeiros '+LIM.toLocaleString('pt-BR')+' sites na tela — o Excel exporta todos.'):'';
+    document.getElementById('refarm2-tbody').innerHTML=_refarm2Data.length?_refarm2Data.slice(0,LIM).map(function(d){
+      return '<tr><td class="hi" style="cursor:pointer;color:var(--c1);" onclick="goFinder(\''+esc(d.id)+'\')">'+d.id+'</td><td>'+(d.site||'—')+'</td><td style="color:var(--c1);">'+d.techs+'</td><td>'+(d.uf||'—')+'</td><td>'+(d.city||'—')+'</td><td>'+(d.reg||'—')+'</td><td style="color:var(--c1);">'+(d.vend||'—')+'</td><td style="color:var(--text3);">'+(d.lat||'—')+'</td><td style="color:var(--text3);">'+(d.lon||'—')+'</td></tr>';
+    }).join(''):'<tr><td colspan="9" style="text-align:center;padding:18px;color:var(--text3);">Nenhum site com 2G e 4G (LTE 1800, 5 MHz) do mesmo vendor no mesmo END_ID.</td></tr>';
+    document.getElementById('refarm2-body').style.display='block';
+    document.getElementById('refarm2-xlsx-btn').style.display='';
+    document.getElementById('refarm2-close-btn').style.display='';
+  }catch(e){console.error(e);}
+}
+function refarm2VendChanged(){var b=document.getElementById('refarm2-body');if(b&&b.style.display!=='none')renderRefarm2();}
+function closeRefarm2(){
+  document.getElementById('refarm2-body').style.display='none';
+  document.getElementById('refarm2-xlsx-btn').style.display='none';
+  document.getElementById('refarm2-close-btn').style.display='none';
+}
+function exportRefarm2Xlsx(){
+  var head=['STATION ID','SITE','TECNOLOGIAS','UF','CIDADE','REGIONAL','VENDOR','LATITUDE','LONGITUDE','CELULAS_2G','FREQ_2G','CELULAS_4G','FREQ_4G'];
+  var fname='refarming_2G_4G_'+String(_refarm2Name).replace(/[^\w.-]+/g,'_');
+  if(typeof XLSX==='undefined'){
+    dlCsv([csvRow(head)].concat(_refarm2Data.map(function(d){return csvRow([d.id,d.site,d.techs,d.uf,d.city,d.reg,d.vend,d.lat,d.lon,d.n2,d.f2,d.n4,d.f4]);})).join('\n'),fname+'.csv');
+    return;
+  }
+  var aoa=[head].concat(_refarm2Data.map(function(d){return [d.id,d.site,d.techs,d.uf,d.city,d.reg,d.vend,d.lat,d.lon,d.n2,d.f2,d.n4,d.f4];}));
+  var ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols']=[{wch:14},{wch:26},{wch:16},{wch:5},{wch:26},{wch:10},{wch:12},{wch:12},{wch:12},{wch:14},{wch:14},{wch:14},{wch:14}];
+  var wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Refarming 2G-4G');
+  XLSX.writeFile(wb,fname+'.xlsx');
+}
+(function(){var u=document.getElementById('ideias-uf-sel');if(u)u.addEventListener('change',function(){var b=document.getElementById('refarm2-body');if(b&&b.style.display!=='none')renderRefarm2();});})();
+
 // ── Relatório para Diretoria — Ideias RF ────────────────────────────────────
 var _ideiasPrintHtml=null;
 function genIdeiasInsights(filtered,tot){
