@@ -786,6 +786,14 @@ var ND_SET={'nd':1,'n/a':1,'na':1,'':1,'null':1,'undefined':1,'-':1,'none':1,'n�
 function gv(row,col){return col?String(row[col]===undefined||row[col]===null?'':row[col]).trim():'';}
 function V(id){return document.getElementById(id).value;}
 function isND(v){return ND_SET[String(v||'').trim().toLowerCase()]===1;}
+// CI: se a coluna mapeada não trouxer um número (ex.: "OK"), usa o último trecho do CGI (MCC-MNC-LAC/TAC-CI)
+function resolveCI(ci,cgi){
+  var v=String(ci==null?'':ci).trim();
+  if(/^\d+$/.test(v))return v;
+  var parts=String(cgi==null?'':cgi).trim().split('-');
+  var last=parts.length>=4?parts[parts.length-1].trim():'';
+  return /^\d+$/.test(last)?last:v;
+}
 function normT(t){
   t=String(t).toUpperCase().trim();
   if(/5G|NR/.test(t)) return '5G';
@@ -933,7 +941,7 @@ function processData(){
     var cel=gv(row,C.cel),cgi=gv(row,C.cgi);
     var freq=gv(row,C.freq),larg=gv(row,C.larg);
     var vend=gv(row,C.vend),oper=gv(row,C.oper);
-    var tac=gv(row,C.tac),enodeb=gv(row,C.enodeb),altura=gv(row,C.altura),gnbid=gv(row,C.gnbid),ci=gv(row,C.ci);
+    var tac=gv(row,C.tac),enodeb=gv(row,C.enodeb),altura=gv(row,C.altura),gnbid=gv(row,C.gnbid),ci=resolveCI(gv(row,C.ci),cgi);
     var cell={sid:sid,tech:tech,uf:uf,city:city,reg:reg,ibge:ibge,anf:anf,
               lat:lat,lon:lon,az:az,bsc:bsc,siteName:siteName,cel:cel,cgi:cgi,
               freq:freq,larg:larg,vend:vend,oper:oper,tac:tac,enodeb:enodeb,altura:altura,gnbid:gnbid,ci:ci};
