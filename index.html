@@ -786,12 +786,12 @@ var ND_SET={'nd':1,'n/a':1,'na':1,'':1,'null':1,'undefined':1,'-':1,'none':1,'n�
 function gv(row,col){return col?String(row[col]===undefined||row[col]===null?'':row[col]).trim():'';}
 function V(id){return document.getElementById(id).value;}
 function isND(v){return ND_SET[String(v||'').trim().toLowerCase()]===1;}
-// CI: se a coluna mapeada não trouxer um número (ex.: "OK"), usa o último trecho do CGI (MCC-MNC-LAC/TAC-CI)
+// CI: se a coluna mapeada não trouxer um número (ex.: "OK", "Zero"), usa o último trecho do CGI (3G: MCC-MNC-LAC-CI | 4G/5G: MCC-MNC-ECI/NCI)
 function resolveCI(ci,cgi){
   var v=String(ci==null?'':ci).trim();
   if(/^\d+$/.test(v))return v;
   var parts=String(cgi==null?'':cgi).trim().split('-');
-  var last=parts.length>=4?parts[parts.length-1].trim():'';
+  var last=parts.length>=3?parts[parts.length-1].trim():'';
   return /^\d+$/.test(last)?last:v;
 }
 function normT(t){
