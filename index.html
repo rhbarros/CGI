@@ -412,6 +412,14 @@ body{background:var(--bg);color:var(--text);min-height:100vh;}
       <button class="rbtn" onclick="clearMapFilters()">✕ Limpar</button>
       <span id="map-count-badge" style="font-size:10px;font-family:'DM Mono',monospace;color:var(--text3);margin-left:4px;"></span>
     </div>
+    <!-- Busca por coordenadas -->
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 13px;">
+      <span style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;">📍 Coordenadas:</span>
+      <input class="finder-inp" id="map-coord-inp" placeholder="Lat, Lon  (ex: -8.0476, -34.8770)" onkeydown="if(event.key==='Enter')plotMapCoords()" autocomplete="off" style="font-size:10px;padding:5px 9px;width:280px;">
+      <button class="rbtn" onclick="plotMapCoords()" style="background:var(--c1);color:#000;font-weight:700;border-color:var(--c1);">📍 Plotar</button>
+      <button class="rbtn" onclick="clearMapCoords()">✕ Remover pontos</button>
+      <span id="map-coord-msg" style="font-size:10px;font-family:'DM Mono',monospace;color:var(--text3);"></span>
+    </div>
     <!-- Legenda de cores -->
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 13px;">
       <span style="font-size:9px;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);font-family:'DM Mono',monospace;">Legenda:</span>
@@ -1132,6 +1140,101 @@ function uniqCellValsByTech(s,field,tech){
   return out;
 }
 
+// ── Mapa: busca por coordenadas (lat/lon) ──────────────────────────────────
+var _coordLayer=null;
+function parseCoordPairs(txt){
+  var t=String(txt||'').replace(/[\u2212\u2013\u2014]/g,'-');
+  var nums=t.match(/-?\d+(?:[.,]\d+)?/g)||[];
+  var pairs=[],bad=0;
+  for(var i=0;i+1<nums.length;i+=2){
+    var a=parseFloat(nums[i].replace(',','.')),b=parseFloat(nums[i+1].replace(',','.'));
+    if(Math.abs(a)>90&&Math.abs(b)<=90){var tmp=a;a=b;b=tmp;}
+    if(isNaN(a)||isNaN(b)||Math.abs(a)>90||Math.abs(b)>180){bad++;continue;}
+    pairs.push({lat:a,lon:b});
+  }
+  return {pairs:pairs,bad:bad,odd:nums.length%2===1,total:nums.length};
+}
+function nearestSiteTo(lat,lon){
+  var best=null,bd=Infinity;
+  siteMap.forEach(function(s){
+    var la=toNum(s.lat),lo=toNum(s.lon);
+    if(isNaN(la)||isNaN(lo))return;
+    if(Math.abs(la-lat)>1||Math.abs(lo-lon)>1)return;
+    var d=haversineKm(lat,lon,la,lo);
+    if(d<bd){bd=d;best=s;}
+  });
+  return best?{site:best,km:bd}:null;
+}
+function plotMapCoords(){
+  var msg=document.getElementById('map-coord-msg');
+  var inp=document.getElementById('map-coord-inp');
+  var txt=inp.value.trim();
+  if(!txt){msg.style.color='var(--text3)';msg.textContent='';return;}
+  var r=parseCoordPairs(txt);
+  if(!r.pairs.length||r.odd){
+    msg.style.color='var(--c5)';
+    msg.textContent='❌ Informe latitude e longitude válidas (ex: -8.0476, -34.8770).';
+    return;
+  }
+  if(!_mapState.map){
+    if(typeof initMapTab==='function'&&siteMap&&siteMap.size>0)initMapTab();
+    msg.style.color='var(--text3)';msg.textContent='⏳ Carregando mapa...';
+    var tries=0,iv=setInterval(function(){
+      tries++;
+      if(_mapState.map){clearInterval(iv);plotMapCoords();}
+      else if(tries>40){clearInterval(iv);msg.style.color='var(--c5)';msg.textContent='❌ Mapa não carregou.';}
+    },250);
+    return;
+  }
+  var map=_mapState.map;
+  if(_coordLayer){map.removeLayer(_coordLayer);_coordLayer=null;}
+  _coordLayer=L.layerGroup().addTo(map);
+  var pts=[];
+  r.pairs.forEach(function(pt,i){
+    var n=i+1,near=nearestSiteTo(pt.lat,pt.lon);
+    var nearHtml='';
+    if(near){
+      var ns=near.site,dist=near.km<1?Math.round(near.km*1000)+' m':near.km.toFixed(2)+' km';
+      nearHtml='<div style="margin-top:6px;font-size:11px;">Site mais próximo: <b>'+ciHtml(ns.id)+'</b>'+
+        (getSiteNames(ns).length?' ('+ciHtml(getSiteNames(ns).join(', '))+')':'')+' — '+dist+
+        '<br><a href="#" onclick="goFinder(\''+esc(ns.id)+'\');return false;" style="color:#00d4ff;">🔍 Abrir na Busca</a></div>';
+    }
+    var icon=L.divIcon({className:'',html:'<div style="font-size:26px;line-height:26px;filter:drop-shadow(0 1px 3px rgba(0,0,0,.8));">📍</div>'+(r.pairs.length>1?'<div style="position:absolute;top:-4px;left:20px;background:#ef4444;color:#fff;font:700 10px DM Mono,monospace;border-radius:8px;padding:0 5px;">'+n+'</div>':''),iconSize:[26,26],iconAnchor:[13,26],popupAnchor:[0,-24]});
+    var m=L.marker([pt.lat,pt.lon],{icon:icon,zIndexOffset:1000});
+    m.bindPopup('<div style="font-family:DM Mono,monospace;font-size:11px;"><b>Ponto '+n+'</b><br>Lat: '+pt.lat.toFixed(6)+'<br>Lon: '+pt.lon.toFixed(6)+nearHtml+'</div>');
+    m.addTo(_coordLayer);
+    pts.push([pt.lat,pt.lon]);
+  });
+  if(pts.length===1){map.setView(pts[0],16);_coordLayer.eachLayer(function(l){l.openPopup();});}
+  else map.fitBounds(pts,{padding:[50,50],maxZoom:17});
+  msg.style.color='#10b981';
+  msg.textContent='✔ '+pts.length+' ponto(s) plotado(s)'+(r.bad?' · '+r.bad+' inválido(s) ignorado(s)':'');
+}
+function clearMapCoords(){
+  if(_coordLayer&&_mapState.map){_mapState.map.removeLayer(_coordLayer);}
+  _coordLayer=null;
+  document.getElementById('map-coord-inp').value='';
+  var msg=document.getElementById('map-coord-msg');msg.textContent='';
+}
+
+// ── Vendors por Station ID (todos os vendors das células) ─────────────────
+function siteVendList(s){
+  var seen={},out=[];
+  s.cells.forEach(function(c){var v=c.vend;if(v&&!isND(v)){var k=String(v).trim().toUpperCase();if(!seen[k]){seen[k]=1;out.push(String(v).trim());}}});
+  if(!out.length&&s.vend&&!isND(s.vend))out.push(s.vend);
+  return out;
+}
+function siteVendStr(s){var l=siteVendList(s);return l.length?l.join(' / '):'—';}
+function siteVendByTechStr(s){
+  var map={},order=[];
+  s.cells.forEach(function(c){
+    var v=c.vend;if(!v||isND(v))return;
+    var k=String(v).trim().toUpperCase();
+    if(!map[k]){map[k]={name:String(v).trim(),techs:{}};order.push(k);}
+    if(c.tech)map[k].techs[c.tech]=1;
+  });
+  return order.map(function(k){var t=Object.keys(map[k].techs).sort().join(', ');return map[k].name+(t?' ('+t+')':'');}).join(' · ');
+}
 // ── UF Tab ────────────────────────────────────────────────────────────────
 function buildUFTab(){
   var sites=mapVals(siteMap),uC={},cityMap={};
@@ -1834,7 +1937,7 @@ function runFinder(){
       '<div class="tscroll" style="max-height:480px;overflow-y:auto;"><table class="dtbl"><thead><tr><th>STATION ID</th><th>SITE</th><th>CIDADE</th><th>UF</th><th>REGIONAL</th><th>TECNO</th><th>VENDOR</th></tr></thead><tbody>'+
       results.map(function(s){
         var chips=siteTechs(s).sort().map(function(t){return '<span class="tchip '+techChipClass(t)+'">'+t+'</span>';}).join('')||'—';
-        return '<tr><td class="hi" style="cursor:pointer;color:var(--c1);" onclick="goFinder(\''+esc(s.id)+'\')">'+s.id+'</td><td>'+getSiteNames(s).join(', ')+'</td><td>'+(s.city||'—')+'</td><td>'+(s.uf||'—')+'</td><td>'+(s.reg||'—')+'</td><td>'+chips+'</td><td>'+(s.vend||'—')+'</td></tr>';
+        return '<tr><td class="hi" style="cursor:pointer;color:var(--c1);" onclick="goFinder(\''+esc(s.id)+'\')">'+s.id+'</td><td>'+getSiteNames(s).join(', ')+'</td><td>'+(s.city||'—')+'</td><td>'+(s.uf||'—')+'</td><td>'+(s.reg||'—')+'</td><td>'+chips+'</td><td>'+siteVendStr(s)+'</td></tr>';
       }).join('')+'</tbody></table></div>';
     el.classList.add('show');
   } else if(mode==='ci'){
@@ -1876,7 +1979,7 @@ function renderCityDetail(cityName,ufPart,sites){
   var N=sites.length,allTMap={};
   sites.forEach(function(s){mapKeys(s.techs).forEach(function(t){allTMap[t]=1;});});
   var chips=Object.keys(allTMap).sort().map(function(t){return '<span class="tchip '+techChipClass(t)+'">'+t+'</span>';}).join('')||'—';
-  var vendMap={};sites.forEach(function(s){if(s.vend&&!isND(s.vend))vendMap[s.vend]=1;});
+  var vendMap={};sites.forEach(function(s){siteVendList(s).forEach(function(v){vendMap[v]=1;});});
   var vendors=Object.keys(vendMap).sort();
   var ranSites=sites.filter(function(s){return isRAN(s.oper);});
   var ranOpMap={};ranSites.forEach(function(s){if(s.oper)ranOpMap[s.oper]=1;});
@@ -1896,7 +1999,7 @@ function renderCityDetail(cityName,ufPart,sites){
     return '<tr><td class="hi" style="white-space:nowrap;">'+
       '<span style="cursor:pointer;color:var(--c1);" onclick="goFinder(\''+esc(s.id)+'\')">'+s.id+'</span> '+
       '<span onclick="goMap(\'sid\',\''+esc(s.id)+'\')" title="Ver no mapa" style="cursor:pointer;font-size:11px;opacity:.7;user-select:none;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.7">🗺️</span>'+
-      '</td><td style="font-size:9px;">'+getSiteNames(s).join(', ')+'</td><td>'+schips+'</td><td>'+(s.reg||'—')+'</td><td>'+(s.vend||'—')+'</td>'+
+      '</td><td style="font-size:9px;">'+getSiteNames(s).join(', ')+'</td><td>'+schips+'</td><td>'+(s.reg||'—')+'</td><td>'+siteVendStr(s)+'</td>'+
       (s.oper&&s.oper.toUpperCase()!=='TIM'?'<td><span style="background:rgba(236,72,153,.12);color:#ec4899;padding:1px 6px;border-radius:10px;font-size:9px;font-weight:700;">'+s.oper+'</span></td>':'<td style="color:var(--text3);">TIM</td>')+
       '<td style="color:var(--text3);">'+(s.lat||'—')+'</td><td style="color:var(--text3);">'+(s.lon||'—')+'</td></tr>';
   }).join('');
@@ -1905,7 +2008,7 @@ function renderCityDetail(cityName,ufPart,sites){
 }
 function exportCityCSV(cityName,ufPart){
   var results=mapVals(siteMap).filter(function(s){return s.city&&s.city.toLowerCase()===cityName.toLowerCase()&&(!ufPart||s.uf===ufPart);});
-  dlCsv(['STATION ID,SITE,TECNOLOGIAS,REGIONAL,UF,CIDADE,VENDOR,OPERADORA,LAT,LON'].concat(results.map(function(s){return csvRow([s.id,getSiteNames(s).join('|'),siteTechsStr(s),s.reg,s.uf,s.city,s.vend,s.oper,s.lat,s.lon]);})).join('\n'),(cityName+(ufPart?'_'+ufPart:''))+'_sites.csv');
+  dlCsv(['STATION ID,SITE,TECNOLOGIAS,REGIONAL,UF,CIDADE,VENDOR,OPERADORA,LAT,LON'].concat(results.map(function(s){return csvRow([s.id,getSiteNames(s).join('|'),siteTechsStr(s),s.reg,s.uf,s.city,siteVendList(s).join('|'),s.oper,s.lat,s.lon]);})).join('\n'),(cityName+(ufPart?'_'+ufPart:''))+'_sites.csv');
 }
 // ── Busca por CI (coluna V do arquivo) ──────────────────────────────────────
 var _ciSearchData=[];
@@ -2052,7 +2155,8 @@ function renderSiteDetail(site){
   return '<div class="result-header"><div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;"><div>'+
     '<div class="result-sid">'+site.id+'</div>'+
     (siteNames?'<div style="font-size:11px;color:var(--c4);font-family:\'DM Mono\',monospace;margin-bottom:2px;">🏗️ '+siteNames+'</div>':'')+
-    '<div class="result-meta">'+([site.reg,site.uf,site.city].filter(Boolean).join(' · ')||'—')+(site.vend?' · '+site.vend:'')+'</div>'+
+    '<div class="result-meta">'+([site.reg,site.uf,site.city].filter(Boolean).join(' · ')||'—')+(siteVendList(site).length?' · '+siteVendList(site).join(' / '):'')+'</div>'+
+    (siteVendList(site).length>1?'<div style="margin-top:5px;"><span style="background:rgba(245,158,11,.12);color:#f59e0b;border:1px solid rgba(245,158,11,.3);padding:3px 10px;border-radius:12px;font-size:10px;font-weight:700;">🏭 Múltiplos vendors: '+siteVendByTechStr(site)+'</span></div>':'')+
     '<div style="margin:5px 0;">'+chips+'</div>'+
     (site.oper&&site.oper.toUpperCase()!=='TIM'?'<div style="margin-top:5px;"><span style="background:rgba(236,72,153,.12);color:#ec4899;border:1px solid rgba(236,72,153,.25);padding:3px 10px;border-radius:12px;font-size:10px;font-weight:700;">📡 RAN: '+site.oper+'</span></div>':'')+
     '<div style="font-size:10px;color:var(--text3);font-family:\'DM Mono\',monospace;margin-top:6px;">📍 '+(site.lat||'—')+' / '+(site.lon||'—')+'</div>'+
