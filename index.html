@@ -216,7 +216,7 @@ body{background:var(--bg);color:var(--text);min-height:100vh;}
         <span style="display:flex;gap:6px;"><button class="ebtn" onclick="exportRegDrillXlsx()">⬇ Excel</button><button class="ebtn" onclick="document.getElementById('reg-drill-section').style.display='none'">✕</button></span></div>
       <div id="reg-drill-note" style="font-size:9px;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:6px;"></div>
       <div class="tscroll" style="max-height:420px;overflow-y:auto;">
-        <table class="dtbl"><thead><tr><th>STATION ID</th><th>SITE</th><th>TECNOLOGIAS</th><th>UF</th><th>CIDADE</th><th>REGIONAL</th><th>VENDOR</th><th>LAT</th><th>LON</th></tr></thead><tbody id="reg-drill-tbody"></tbody></table>
+        <table class="dtbl"><thead><tr><th>STATION ID</th><th>SITE</th><th>TECNOLOGIAS</th><th>UF</th><th>CIDADE</th><th>REGIONAL</th><th>VENDOR</th><th>FREQ</th><th>LAT</th><th>LON</th></tr></thead><tbody id="reg-drill-tbody"></tbody></table>
       </div>
     </div>
     <div class="card"><div class="card-title">% Tecnologia por Regional</div><canvas id="regTechChart" height="250"></canvas></div>
@@ -1102,27 +1102,27 @@ function showRegDrill(reg){
   var LIM=2000;
   _regDrillName=reg;
   _regDrillData=mapVals(siteMap).filter(function(s){return s.reg===reg;}).map(function(s){
-    return {id:s.id,site:getSiteNames(s).join(' | '),techs:(siteTechs(s).sort().join(', ')||'—'),uf:s.uf,city:s.city,reg:s.reg,vend:s.vend,lat:s.lat,lon:s.lon};
+    return {id:s.id,site:getSiteNames(s).join(' | '),techs:(siteTechs(s).sort().join(', ')||'—'),uf:s.uf,city:s.city,reg:s.reg,vend:(siteVendList(s).join(' / ')||s.vend),freq:uniqCellVals(s,'freq').sort(function(a,b){return (parseFloat(a)||0)-(parseFloat(b)||0);}).join(', '),lat:s.lat,lon:s.lon};
   }).sort(function(a,b){return String(a.id)<String(b.id)?-1:(String(a.id)>String(b.id)?1:0);});
   document.getElementById('reg-drill-title').textContent=reg+' — '+_regDrillData.length.toLocaleString('pt-BR')+' sites';
   document.getElementById('reg-drill-note').textContent=_regDrillData.length>LIM?('Exibindo os primeiros '+LIM.toLocaleString('pt-BR')+' sites na tela — o Excel exporta todos.'):'';
   document.getElementById('reg-drill-tbody').innerHTML=_regDrillData.slice(0,LIM).map(function(d){
-    return '<tr><td class="hi" style="cursor:pointer;color:var(--c1);" onclick="goFinder(\''+esc(d.id)+'\')">'+d.id+'</td><td>'+(d.site||'—')+'</td><td style="color:var(--c1);">'+d.techs+'</td><td>'+(d.uf||'—')+'</td><td>'+(d.city||'—')+'</td><td>'+(d.reg||'—')+'</td><td style="color:var(--c1);">'+(d.vend||'—')+'</td><td style="color:var(--text3);">'+(d.lat||'—')+'</td><td style="color:var(--text3);">'+(d.lon||'—')+'</td></tr>';
+    return '<tr><td class="hi" style="cursor:pointer;color:var(--c1);" onclick="goFinder(\''+esc(d.id)+'\')">'+d.id+'</td><td>'+(d.site||'—')+'</td><td style="color:var(--c1);">'+d.techs+'</td><td>'+(d.uf||'—')+'</td><td>'+(d.city||'—')+'</td><td>'+(d.reg||'—')+'</td><td style="color:var(--c1);">'+(d.vend||'—')+'</td><td style="color:var(--c4);">'+(d.freq||'—')+'</td><td style="color:var(--text3);">'+(d.lat||'—')+'</td><td style="color:var(--text3);">'+(d.lon||'—')+'</td></tr>';
   }).join('');
   var sec=document.getElementById('reg-drill-section');
   sec.style.display='block';
   sec.scrollIntoView({behavior:'smooth',block:'start'});
 }
 function exportRegDrillXlsx(){
-  var head=['STATION ID','SITE','TECNOLOGIAS','UF','CIDADE','REGIONAL','VENDOR','LATITUDE','LONGITUDE'];
+  var head=['STATION ID','SITE','TECNOLOGIAS','UF','CIDADE','REGIONAL','VENDOR','FREQ','LATITUDE','LONGITUDE'];
   var fname='regional_'+String(_regDrillName).replace(/[^\w.-]+/g,'_')+'_sites';
   if(typeof XLSX==='undefined'){
-    dlCsv([csvRow(head)].concat(_regDrillData.map(function(d){return csvRow([d.id,d.site,d.techs,d.uf,d.city,d.reg,d.vend,d.lat,d.lon]);})).join('\n'),fname+'.csv');
+    dlCsv([csvRow(head)].concat(_regDrillData.map(function(d){return csvRow([d.id,d.site,d.techs,d.uf,d.city,d.reg,d.vend,d.freq,d.lat,d.lon]);})).join('\n'),fname+'.csv');
     return;
   }
-  var aoa=[head].concat(_regDrillData.map(function(d){return [d.id,d.site,d.techs,d.uf,d.city,d.reg,d.vend,d.lat,d.lon];}));
+  var aoa=[head].concat(_regDrillData.map(function(d){return [d.id,d.site,d.techs,d.uf,d.city,d.reg,d.vend,d.freq,d.lat,d.lon];}));
   var ws=XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols']=[{wch:14},{wch:26},{wch:16},{wch:5},{wch:26},{wch:10},{wch:10},{wch:12},{wch:12}];
+  ws['!cols']=[{wch:14},{wch:26},{wch:16},{wch:5},{wch:26},{wch:10},{wch:10},{wch:22},{wch:12},{wch:12}];
   var wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,String(_regDrillName).replace(/[\\\/?*\[\]:]/g,'_').slice(0,31)||'Regional');
   XLSX.writeFile(wb,fname+'.xlsx');
