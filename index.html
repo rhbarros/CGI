@@ -5121,6 +5121,88 @@ function authLogin(){
   setTimeout(function(){btn.disabled=false;},wait);
   document.getElementById('auth-pass').value='';
 }
+
+// ── Carregamento automático do CGI.zip (mesma pasta do index.html) ──────────
+var CGI_ZIP_NAMES=['CGI.zip','cgi.zip','Cgi.zip'];
+function autoLoadCGI(){
+  if(window._cgiAutoLoaded)return;
+  window._cgiAutoLoaded=true;
+  if(location.protocol==='file:'){
+    setStatus('ℹ️ Carregamento automático funciona pelo endereço publicado (GitHub Pages). Aqui, selecione o arquivo manualmente.','#f59e0b');
+    return;
+  }
+  if(typeof JSZip==='undefined'||typeof fetch==='undefined'){
+    setStatus('⚠️ Carregamento automático indisponível neste navegador. Selecione o arquivo manualmente.','#f59e0b');
+    return;
+  }
+  cgiFetchZip(0);
+}
+function cgiConcat(chunks,total){
+  var out=new Uint8Array(total),pos=0;
+  for(var i=0;i<chunks.length;i++){out.set(chunks[i],pos);pos+=chunks[i].length;}
+  return out;
+}
+function cgiFetchZip(i){
+  if(i>=CGI_ZIP_NAMES.length){
+    setStatus('❌ CGI.zip não encontrado ao lado do index.html. Confira o nome/pasta no GitHub ou selecione o arquivo manualmente.','#ef4444');
+    return;
+  }
+  var name=CGI_ZIP_NAMES[i];
+  setStatus('⏳ Baixando '+name+'…');
+  fetch(name+'?v='+Date.now(),{cache:'no-cache'}).then(function(r){
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    var total=parseInt(r.headers.get('Content-Length')||'0',10);
+    if(!r.body||!r.body.getReader)return r.arrayBuffer();
+    var rd=r.body.getReader(),chunks=[],got=0;
+    var pump=function(){
+      return rd.read().then(function(x){
+        if(x.done)return cgiConcat(chunks,got);
+        chunks.push(x.value);got+=x.value.length;
+        setStatus('⏳ Baixando '+name+'… '+(got/1048576).toFixed(1)+(total?' / '+(total/1048576).toFixed(1):'')+' MB');
+        return pump();
+      });
+    };
+    return pump();
+  }).then(function(buf){
+    setStatus('⏳ Descompactando '+name+'…');
+    return JSZip.loadAsync(buf);
+  }).then(function(zip){
+    var best=null;
+    zip.forEach(function(path,e){
+      if(e.dir||/(^|\/)__MACOSX\//.test(path)||/(^|\/)\._/.test(path))return;
+      if(!/\.(csv|txt|xlsx|xls)$/i.test(path))return;
+      var sz=(e._data&&e._data.uncompressedSize)||0;
+      if(!best||sz>best.sz)best={e:e,sz:sz,name:path.split('/').pop()};
+    });
+    if(!best)throw new Error('o ZIP não contém arquivo CSV/XLSX');
+    setStatus('⏳ Extraindo '+best.name+'…');
+    return best.e.async('blob').then(function(b){return new File([b],best.name);});
+  }).then(function(f){
+    cgiLoadFile(f);
+  }).catch(function(err){
+    if(/HTTP 404/.test(String(err&&err.message))){cgiFetchZip(i+1);return;}
+    setStatus('❌ Falha ao carregar '+name+': '+(err&&err.message?err.message:err)+'. Selecione o arquivo manualmente.','#ef4444');
+  });
+}
+function cgiLoadFile(f){
+  var ext=f.name.split('.').pop().toLowerCase();
+  if(ext==='xlsx'||ext==='xls'){handleFile(f);return;} // já processa automaticamente
+  setStatus('⏳ Lendo '+f.name+' ('+(f.size/1048576).toFixed(1)+' MB)…');
+  Papa.parse(f,{header:true,skipEmptyLines:true,encoding:'UTF-8',
+    complete:function(r){
+      rawRows=r.data;
+      setStatus('✅ '+rawRows.length.toLocaleString('pt-BR')+' linhas — '+f.name,'#10b981');
+      popColMap(r.meta.fields);
+      setTimeout(function(){if(document.getElementById('c-sid').value)processData();},100);
+    },
+    error:function(e){setStatus('❌ '+e.message,'#ef4444');}});
+}
+// dispara o carregamento assim que o login (ou a sessão salva) é aceito
+var _authApplyOrig=authApply;
+authApply=function(usr,hash){
+  _authApplyOrig(usr,hash);
+  try{autoLoadCGI();}catch(e){console.error('autoLoadCGI:',e);}
+};
 (function(){
   document.getElementById('auth-btn').onclick=authLogin;
   var kd=function(e){if(e.key==='Enter')authLogin();};
