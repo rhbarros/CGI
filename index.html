@@ -5238,15 +5238,13 @@ function finHistUse(i){
   runFinder();
 }
 function finHistClear(){_finHist=[];finHistSave();finHistRender();}
-// ao trocar o tipo de busca: guarda o texto do tipo anterior e devolve o último texto do novo tipo
+// ao trocar o tipo de busca: mantém o que está escrito no campo (só limpa o resultado do tipo anterior)
 clearFinder=function(){
-  var inp=document.getElementById('fin-inp'),mode=getFinMode();
-  if(_finPrevMode!==mode){_finTxt[_finPrevMode]=inp.value;}
-  _finPrevMode=mode;
+  var inp=document.getElementById('fin-inp');
+  _finPrevMode=getFinMode();
   document.getElementById('fin-sug').style.display='none';
   var el=document.getElementById('fin-result');el.innerHTML='';el.classList.remove('show');
-  inp.value=_finTxt[mode]||'';
-  if(inp.value.trim())runFinder();
+  if(inp.value.trim().length>=2){try{onFinInp();}catch(e){}}
 };
 var _runFinderHist=runFinder;
 runFinder=function(){
