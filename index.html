@@ -150,6 +150,15 @@ body.auth-locked .app-footer{display:none !important;}
 }
 .hl-sep-title{height:38px;}
 @media (max-width:640px){.hl-sep-title{display:none;}}
+
+.fin-hist{display:none;align-items:center;gap:6px;flex-wrap:wrap;margin:10px 0 2px;}
+.fin-hist .fh-t{font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;margin-right:2px;}
+.fin-hist .fh-chip{display:inline-flex;align-items:center;gap:5px;background:var(--bg4);border:1px solid var(--border2);border-radius:14px;padding:3px 10px;font-size:10px;font-family:'DM Mono',monospace;color:var(--text2);cursor:pointer;max-width:240px;}
+.fin-hist .fh-chip:hover,.fin-hist .fh-chip:focus-visible{border-color:var(--c1);color:var(--text);outline:none;}
+.fin-hist .fh-chip b{color:var(--c1);font-weight:700;}
+.fin-hist .fh-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.fin-hist .fh-clr{background:none;border:none;color:var(--text3);font-size:10px;font-family:'DM Mono',monospace;cursor:pointer;text-decoration:underline;padding:2px 4px;}
+.fin-hist .fh-clr:hover{color:var(--c5);}
 </style>
 <style id="auth-css">
 /* ── Login / controle de acesso por perfil ── */
@@ -661,6 +670,7 @@ body.role-busca #page-busca [onclick*="goMap"]{display:none!important;}
         <button class="fbtn" onclick="runFinder()">Buscar</button>
         <div class="suggestions" id="fin-sug"></div>
       </div>
+      <div id="fin-hist" class="fin-hist" aria-label="Histórico de buscas"></div>
       <div id="tf-fin"></div>
       <div class="result-box" id="fin-result"></div>
     </div>
@@ -5197,6 +5207,55 @@ function authLogin(){
   setTimeout(function(){btn.disabled=false;},wait);
   document.getElementById('auth-pass').value='';
 }
+
+
+// ── Busca: histórico de pesquisas (não apaga ao trocar o tipo de busca) ─────
+var FIN_LBL={sid:'Station ID',site:'Site',city:'Cidade',freq:'FREQ',ci:'CI'};
+var _finHist=[],_finTxt={},_finPrevMode='sid';
+(function(){try{var h=JSON.parse(localStorage.getItem('cgi_fin_hist')||'[]');if(h&&h.length)_finHist=h.filter(function(x){return x&&x.m&&x.q;}).slice(0,20);}catch(e){}})();
+function finHistSave(){try{localStorage.setItem('cgi_fin_hist',JSON.stringify(_finHist));}catch(e){}}
+function finHistRender(){
+  var el=document.getElementById('fin-hist');if(!el)return;
+  if(!_finHist.length){el.style.display='none';el.innerHTML='';return;}
+  el.style.display='flex';
+  el.innerHTML='<span class="fh-t">🕘 Pesquisas recentes:</span>'+_finHist.map(function(h,i){
+    return '<button type="button" class="fh-chip" onclick="finHistUse('+i+')" title="'+escXml((FIN_LBL[h.m]||h.m)+': '+h.q)+'"><b>'+escXml(FIN_LBL[h.m]||h.m)+'</b><span>'+escXml(h.q)+'</span></button>';
+  }).join('')+'<button type="button" class="fh-clr" onclick="finHistClear()">limpar histórico</button>';
+}
+function finHistAdd(m,q){
+  q=String(q||'').trim();if(!q)return;
+  _finHist=_finHist.filter(function(h){return !(h.m===m&&h.q.toLowerCase()===q.toLowerCase());});
+  _finHist.unshift({m:m,q:q});
+  if(_finHist.length>20)_finHist.length=20;
+  finHistSave();finHistRender();
+}
+function finHistUse(i){
+  var h=_finHist[i];if(!h)return;
+  var r=document.querySelector('input[name="fin-mode"][value="'+h.m+'"]');
+  if(r){r.checked=true;_finPrevMode=h.m;}
+  document.getElementById('fin-inp').value=h.q;
+  _finTxt[h.m]=h.q;
+  runFinder();
+}
+function finHistClear(){_finHist=[];finHistSave();finHistRender();}
+// ao trocar o tipo de busca: guarda o texto do tipo anterior e devolve o último texto do novo tipo
+clearFinder=function(){
+  var inp=document.getElementById('fin-inp'),mode=getFinMode();
+  if(_finPrevMode!==mode){_finTxt[_finPrevMode]=inp.value;}
+  _finPrevMode=mode;
+  document.getElementById('fin-sug').style.display='none';
+  var el=document.getElementById('fin-result');el.innerHTML='';el.classList.remove('show');
+  inp.value=_finTxt[mode]||'';
+  if(inp.value.trim())runFinder();
+};
+var _runFinderHist=runFinder;
+runFinder=function(){
+  _runFinderHist();
+  var inp=document.getElementById('fin-inp'),m=getFinMode();
+  _finTxt[m]=inp.value;
+  finHistAdd(m,inp.value);
+};
+finHistRender();
 
 // ── Carregamento automático do CGI.zip (mesma pasta do index.html) ──────────
 var CGI_ZIP_NAMES=['CGI.zip','cgi.zip','Cgi.zip'];
