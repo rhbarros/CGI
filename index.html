@@ -159,6 +159,10 @@ body.auth-locked .app-footer{display:none !important;}
 .fin-hist .fh-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .fin-hist .fh-clr{background:none;border:none;color:var(--text3);font-size:10px;font-family:'DM Mono',monospace;cursor:pointer;text-decoration:underline;padding:2px 4px;}
 .fin-hist .fh-clr:hover{color:var(--c5);}
+
+.fin-hint{font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;margin:8px 0 0;line-height:1.7;}
+.fin-hint code{background:var(--bg4);border:1px solid var(--border2);border-radius:5px;padding:1px 6px;color:var(--c1);cursor:pointer;}
+.fin-hint code:hover{border-color:var(--c1);}
 </style>
 <style id="auth-css">
 /* ── Login / controle de acesso por perfil ── */
@@ -670,6 +674,7 @@ body.role-busca #page-busca [onclick*="goMap"]{display:none!important;}
         <button class="fbtn" onclick="runFinder()">Buscar</button>
         <div class="suggestions" id="fin-sug"></div>
       </div>
+      <div id="fin-hint" class="fin-hint" style="display:none;"></div>
       <div id="fin-hist" class="fin-hist" aria-label="Histórico de buscas"></div>
       <div id="tf-fin"></div>
       <div class="result-box" id="fin-result"></div>
@@ -2183,6 +2188,7 @@ function runFinder(){
     if(!ciMatches.length){el.innerHTML=notFoundHTML(q);el.classList.add('show');return;}
     el.innerHTML=renderCiResults(q,ciMatches,ciPartial);el.classList.add('show');
   } else if(mode==='freq'){
+    if(q.indexOf(':')>=0){finFreqCombo(q,el);return;}
     var qlow=q.toLowerCase();
     var matches=[];
     mapVals(siteMap).forEach(function(s){
@@ -5254,6 +5260,97 @@ runFinder=function(){
   finHistAdd(m,inp.value);
 };
 finHistRender();
+
+
+// ── Busca FREQ por combinação: ex. 4G:2600|700|5G:3500 ──────────────────────
+var _freqComboData=[],_freqComboQ='';
+function finParseCombo(q){
+  var parts=String(q).split(/[|;,]/),cur=null,conds=[],err='';
+  parts.forEach(function(raw){
+    var tk=raw.trim();if(!tk)return;
+    var tech=cur,fr=tk,m=tk.indexOf(':');
+    if(m>=0){
+      var tt=tk.slice(0,m).trim(),t2=tt?normT(tt):null;
+      if(!t2||!/^[2-5]G$/.test(t2)){err='Tecnologia inválida em "'+tk+'". Use 2G, 3G, 4G ou 5G.';return;}
+      tech=t2;cur=t2;fr=tk.slice(m+1).trim();
+    } else if(/^[2-5]G$/i.test(tk)||/^(LTE|NR)$/i.test(tk)){cur=normT(tk);return;}
+    var n=toNum(fr);
+    if(isNaN(n)){err='Frequência inválida em "'+tk+'".';return;}
+    var dup=conds.some(function(c){return c.tech===tech&&c.f===n;});
+    if(!dup)conds.push({tech:tech,f:n,label:(tech?tech+' ':'')+n});
+  });
+  return {conds:conds,err:err};
+}
+function finCellFreqOk(c,cond){
+  if(cond.tech&&c.tech!==cond.tech)return false;
+  var v=toNum(c.freq);
+  return !isNaN(v)&&Math.abs(v-cond.f)<0.001;
+}
+function finFreqCombo(q,el){
+  var pr=finParseCombo(q);
+  var erro=function(msg){el.innerHTML='<div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:7px;padding:10px 13px;font-size:11px;color:var(--c5);font-family:\'DM Mono\',monospace;">❌ '+ciHtml(msg)+' Exemplo: <b>4G:2600|700|5G:3500</b></div>';el.classList.add('show');_freqComboData=[];};
+  if(pr.err){erro(pr.err);return;}
+  if(!pr.conds.length){erro('Informe ao menos uma frequência.');return;}
+  var conds=pr.conds,perCond=conds.map(function(){return 0;}),matches=[];
+  mapVals(siteMap).forEach(function(s){
+    var ok=true,cnt=[];
+    conds.forEach(function(cd,i){
+      var n=0;s.cells.forEach(function(c){if(finCellFreqOk(c,cd))n++;});
+      cnt.push(n);if(n>0)perCond[i]++;else ok=false;
+    });
+    if(ok)matches.push({site:s,cnt:cnt});
+  });
+  matches.sort(function(a,b){return String(a.site.id)<String(b.site.id)?-1:(String(a.site.id)>String(b.site.id)?1:0);});
+  _freqComboData=matches;_freqComboQ=q;
+  var combo=conds.map(function(c){return '<b style="color:var(--c1);">'+ciHtml(c.label)+'</b>';}).join(' <span style="color:var(--text3);">+</span> ');
+  var info='<div class="info-banner">📊 Combinação (todas no mesmo site): '+combo+' — <b>'+matches.length.toLocaleString('pt-BR')+'</b> site(s) com todas as condições</div>'+
+    '<div style="font-size:10px;font-family:\'DM Mono\',monospace;color:var(--text3);margin:6px 0 10px;line-height:1.8;">Sites com cada condição isolada: '+
+    conds.map(function(c,i){return ciHtml(c.label)+' → '+perCond[i].toLocaleString('pt-BR');}).join(' · ')+'</div>';
+  if(!matches.length){el.innerHTML=info+notFoundHTML(q);el.classList.add('show');return;}
+  var vendMap={};
+  matches.forEach(function(m){var v=siteVendList(m.site).join(' / ')||'N/D';vendMap[v]=(vendMap[v]||0)+1;});
+  var vendors=Object.keys(vendMap).sort(function(a,b){return vendMap[b]-vendMap[a];});
+  var kpis=vendors.map(function(v,i){return '<div class="kpi" style="--kc:'+PAL[i%PAL.length]+'"><div class="kpi-label">'+ciHtml(v)+'</div><div class="kpi-val" style="color:'+PAL[i%PAL.length]+'">'+vendMap[v].toLocaleString('pt-BR')+'</div><div class="kpi-sub">'+pct(vendMap[v],matches.length)+'</div></div>';}).join('');
+  var LIM=2000;
+  var head='<tr><th>STATION ID</th><th>SITE</th><th>TECNOLOGIAS</th><th>UF</th><th>CIDADE</th><th>REGIONAL</th><th>VENDOR</th>'+conds.map(function(c){return '<th>CÉLULAS '+ciHtml(c.label)+'</th>';}).join('')+'</tr>';
+  var rows=matches.slice(0,LIM).map(function(m){
+    var s=m.site;
+    return '<tr><td class="hi" style="white-space:nowrap;"><span style="cursor:pointer;color:var(--c1);" onclick="goFinderSid(\''+esc(s.id)+'\')">'+ciHtml(s.id)+'</span> '+
+      '<span onclick="goMap(\'sid\',\''+esc(s.id)+'\')" title="Ver no mapa" style="cursor:pointer;font-size:11px;opacity:.7;">🗺️</span></td>'+
+      '<td>'+ciHtml(getSiteNames(s).join(', ')||'—')+'</td><td>'+ciHtml(siteTechs(s).sort().join(', ')||'—')+'</td>'+
+      '<td>'+ciHtml(s.uf||'—')+'</td><td>'+ciHtml(s.city||'—')+'</td><td>'+ciHtml(s.reg||'—')+'</td><td>'+ciHtml(siteVendList(s).join(' / ')||s.vend||'—')+'</td>'+
+      m.cnt.map(function(n){return '<td style="text-align:center;color:var(--c3);font-weight:700;">'+n+'</td>';}).join('')+'</tr>';
+  }).join('');
+  var more=matches.length>LIM?'<div style="font-size:10px;color:var(--text3);font-family:\'DM Mono\',monospace;margin-top:6px;">Exibindo os primeiros '+LIM.toLocaleString('pt-BR')+' sites — o CSV exporta todos.</div>':'';
+  el.innerHTML=info+'<div class="kpi-grid" style="margin-top:6px;margin-bottom:0;">'+kpis+'</div>'+
+    '<div class="tscroll" style="max-height:420px;overflow-y:auto;margin-top:12px;"><table class="dtbl"><thead>'+head+'</thead><tbody>'+rows+'</tbody></table></div>'+more+
+    '<div style="margin-top:12px;"><button class="ebtn" onclick="exportFreqComboCSV()">⬇ CSV (Station IDs)</button></div>';
+  el.classList.add('show');
+}
+function exportFreqComboCSV(){
+  if(!_freqComboData.length)return;
+  var pr=finParseCombo(_freqComboQ);
+  dlCsv(['STATION ID,SITE,TECNOLOGIAS,UF,CIDADE,REGIONAL,VENDOR'+pr.conds.map(function(c){return ',CELULAS '+c.label;}).join('')].concat(_freqComboData.map(function(m){
+    var s=m.site;
+    return csvRow([s.id,getSiteNames(s).join('|'),siteTechs(s).sort().join('+'),s.uf,s.city,s.reg,siteVendList(s).join(' / ')||s.vend].concat(m.cnt));
+  })).join('\n'),'freq_combinacao.csv');
+}
+// dica de uso no modo FREQ
+function finHintUpdate(){
+  var h=document.getElementById('fin-hint'),inp=document.getElementById('fin-inp');if(!h||!inp)return;
+  if(getFinMode()==='freq'){
+    inp.placeholder='Ex.: 1800  ou combinação  4G:2600|700|5G:3500';
+    h.innerHTML='💡 Combinação de frequências no mesmo site: use <code onclick="finHintUse(this)">4G:2600|700|5G:3500</code> — o <b>TECNOLOGIA:</b> vale para as frequências seguintes até aparecer outra tecnologia; o site precisa ter <b>todas</b>.';
+    h.style.display='block';
+  }else{
+    inp.placeholder='Digite para buscar...';
+    h.style.display='none';h.innerHTML='';
+  }
+}
+function finHintUse(el){document.getElementById('fin-inp').value=el.textContent;document.getElementById('fin-inp').focus();}
+var _clearFinderHint=clearFinder;
+clearFinder=function(){_clearFinderHint();finHintUpdate();};
+finHintUpdate();
 
 // ── Carregamento automático do CGI.zip (mesma pasta do index.html) ──────────
 var CGI_ZIP_NAMES=['CGI.zip','cgi.zip','Cgi.zip'];
