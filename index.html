@@ -2188,7 +2188,7 @@ function runFinder(){
     if(!ciMatches.length){el.innerHTML=notFoundHTML(q);el.classList.add('show');return;}
     el.innerHTML=renderCiResults(q,ciMatches,ciPartial);el.classList.add('show');
   } else if(mode==='freq'){
-    if(q.indexOf(':')>=0){finFreqCombo(q,el);return;}
+    if(q.indexOf(':')>=0||q.indexOf('|')>=0){finFreqCombo(q,el);return;}
     var qlow=q.toLowerCase();
     var matches=[];
     mapVals(siteMap).forEach(function(s){
@@ -5262,85 +5262,167 @@ runFinder=function(){
 finHistRender();
 
 
-// ── Busca FREQ por combinação: ex. 4G:2600|700|5G:3500 ──────────────────────
+// ── Busca FREQ por combinação: ex. TNE|4G:2600|700|5G:3500 ──────────────────
 var _freqComboData=[],_freqComboQ='';
 function finParseCombo(q){
-  var parts=String(q).split(/[|;,]/),cur=null,conds=[],err='';
+  var parts=String(q).split(/[|;,]/),cur=null,conds=[],scope=[],err='';
   parts.forEach(function(raw){
-    var tk=raw.trim();if(!tk)return;
+    var tk=raw.trim();if(!tk||err)return;
     var tech=cur,fr=tk,m=tk.indexOf(':');
     if(m>=0){
       var tt=tk.slice(0,m).trim(),t2=tt?normT(tt):null;
       if(!t2||!/^[2-5]G$/.test(t2)){err='Tecnologia inválida em "'+tk+'". Use 2G, 3G, 4G ou 5G.';return;}
       tech=t2;cur=t2;fr=tk.slice(m+1).trim();
     } else if(/^[2-5]G$/i.test(tk)||/^(LTE|NR)$/i.test(tk)){cur=normT(tk);return;}
+    else if(isNaN(toNum(tk))){scope.push(tk.toUpperCase());return;} // Regional ou UF
     var n=toNum(fr);
     if(isNaN(n)){err='Frequência inválida em "'+tk+'".';return;}
     var dup=conds.some(function(c){return c.tech===tech&&c.f===n;});
     if(!dup)conds.push({tech:tech,f:n,label:(tech?tech+' ':'')+n});
   });
-  return {conds:conds,err:err};
+  return {conds:conds,scope:scope,err:err};
 }
 function finCellFreqOk(c,cond){
   if(cond.tech&&c.tech!==cond.tech)return false;
   var v=toNum(c.freq);
   return !isNaN(v)&&Math.abs(v-cond.f)<0.001;
 }
+// vendors de um site para uma tecnologia (por célula; usa o vendor do site se a célula não tiver)
+function finTechVend(s,t){
+  var seen={},out=[];
+  s.cells.forEach(function(c){
+    if(c.tech!==t)return;
+    var v=(c.vend&&!isND(c.vend))?String(c.vend).trim():((s.vend&&!isND(s.vend))?String(s.vend).trim():'');
+    if(!v)return;var k=v.toUpperCase();
+    if(!seen[k]){seen[k]=1;out.push(v);}
+  });
+  return out;
+}
+function finSep(v2,v3){
+  if(!v2.length&&!v3.length)return 'SEM 2G/3G';
+  if(!v2.length)return 'SÓ 3G';
+  if(!v3.length)return 'SÓ 2G';
+  var u2=v2.map(function(x){return x.toUpperCase();}),u3=v3.map(function(x){return x.toUpperCase();});
+  var inter=u2.filter(function(x){return u3.indexOf(x)>=0;});
+  if(!inter.length)return 'SEPARADOS';
+  if(inter.length===u2.length&&inter.length===u3.length)return 'MESMO VENDOR';
+  return 'MISTO';
+}
 function finFreqCombo(q,el){
   var pr=finParseCombo(q);
-  var erro=function(msg){el.innerHTML='<div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:7px;padding:10px 13px;font-size:11px;color:var(--c5);font-family:\'DM Mono\',monospace;">❌ '+ciHtml(msg)+' Exemplo: <b>4G:2600|700|5G:3500</b></div>';el.classList.add('show');_freqComboData=[];};
+  var erro=function(msg){el.innerHTML='<div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:7px;padding:10px 13px;font-size:11px;color:var(--c5);font-family:\'DM Mono\',monospace;">❌ '+ciHtml(msg)+' Exemplo: <b>TNE|4G:2600|700|5G:3500</b></div>';el.classList.add('show');_freqComboData=[];};
   if(pr.err){erro(pr.err);return;}
   if(!pr.conds.length){erro('Informe ao menos uma frequência.');return;}
+  var all=mapVals(siteMap),regSet={},ufSet={};
+  all.forEach(function(s){if(s.reg&&!isND(s.reg))regSet[String(s.reg).toUpperCase()]=s.reg;if(s.uf&&!isND(s.uf))ufSet[String(s.uf).toUpperCase()]=s.uf;});
+  var regs=[],ufs=[];
+  for(var i=0;i<pr.scope.length;i++){
+    var t=pr.scope[i];
+    if(regSet[t])regs.push(t);else if(ufSet[t])ufs.push(t);
+    else{erro('"'+t+'" não é uma Regional nem UF da base ('+Object.keys(regSet).sort().slice(0,12).join(', ')+').');return;}
+  }
+  var universe=all.filter(function(s){
+    if(regs.length&&regs.indexOf(String(s.reg||'').toUpperCase())<0)return false;
+    if(ufs.length&&ufs.indexOf(String(s.uf||'').toUpperCase())<0)return false;
+    return true;
+  });
   var conds=pr.conds,perCond=conds.map(function(){return 0;}),matches=[];
-  mapVals(siteMap).forEach(function(s){
+  universe.forEach(function(s){
     var ok=true,cnt=[];
-    conds.forEach(function(cd,i){
+    conds.forEach(function(cd,k){
       var n=0;s.cells.forEach(function(c){if(finCellFreqOk(c,cd))n++;});
-      cnt.push(n);if(n>0)perCond[i]++;else ok=false;
+      cnt.push(n);if(n>0)perCond[k]++;else ok=false;
     });
-    if(ok)matches.push({site:s,cnt:cnt});
+    if(ok){
+      var v2=finTechVend(s,'2G'),v3=finTechVend(s,'3G');
+      matches.push({site:s,cnt:cnt,v2:v2,v3:v3,sep:finSep(v2,v3)});
+    }
   });
   matches.sort(function(a,b){return String(a.site.id)<String(b.site.id)?-1:(String(a.site.id)>String(b.site.id)?1:0);});
   _freqComboData=matches;_freqComboQ=q;
+  var scopeTxt=(regs.length?'Regional: <b style="color:var(--c4);">'+ciHtml(regs.join(', '))+'</b>':'')+(regs.length&&ufs.length?' · ':'')+(ufs.length?'UF: <b style="color:var(--c4);">'+ciHtml(ufs.join(', '))+'</b>':'');
   var combo=conds.map(function(c){return '<b style="color:var(--c1);">'+ciHtml(c.label)+'</b>';}).join(' <span style="color:var(--text3);">+</span> ');
-  var info='<div class="info-banner">📊 Combinação (todas no mesmo site): '+combo+' — <b>'+matches.length.toLocaleString('pt-BR')+'</b> site(s) com todas as condições</div>'+
-    '<div style="font-size:10px;font-family:\'DM Mono\',monospace;color:var(--text3);margin:6px 0 10px;line-height:1.8;">Sites com cada condição isolada: '+
-    conds.map(function(c,i){return ciHtml(c.label)+' → '+perCond[i].toLocaleString('pt-BR');}).join(' · ')+'</div>';
+  var info='<div class="info-banner">📊 '+(scopeTxt?scopeTxt+' · ':'')+'Combinação (todas no mesmo site): '+combo+' — <b>'+matches.length.toLocaleString('pt-BR')+'</b> site(s) com todas as condições</div>'+
+    '<div style="font-size:10px;font-family:\'DM Mono\',monospace;color:var(--text3);margin:6px 0 10px;line-height:1.8;">'+(scopeTxt?'Sites no escopo: '+universe.length.toLocaleString('pt-BR')+' · ':'')+'Sites com cada condição isolada: '+
+    conds.map(function(c,k){return ciHtml(c.label)+' → '+perCond[k].toLocaleString('pt-BR');}).join(' · ')+'</div>';
   if(!matches.length){el.innerHTML=info+notFoundHTML(q);el.classList.add('show');return;}
+  // vendors
   var vendMap={};
   matches.forEach(function(m){var v=siteVendList(m.site).join(' / ')||'N/D';vendMap[v]=(vendMap[v]||0)+1;});
   var vendors=Object.keys(vendMap).sort(function(a,b){return vendMap[b]-vendMap[a];});
   var kpis=vendors.map(function(v,i){return '<div class="kpi" style="--kc:'+PAL[i%PAL.length]+'"><div class="kpi-label">'+ciHtml(v)+'</div><div class="kpi-val" style="color:'+PAL[i%PAL.length]+'">'+vendMap[v].toLocaleString('pt-BR')+'</div><div class="kpi-sub">'+pct(vendMap[v],matches.length)+'</div></div>';}).join('');
+  // separação 2G x 3G
+  var sepCnt={},pairCnt={};
+  matches.forEach(function(m){
+    sepCnt[m.sep]=(sepCnt[m.sep]||0)+1;
+    if(m.v2.length&&m.v3.length){var k=m.v2.join(' / ')+'||'+m.v3.join(' / ');pairCnt[k]=(pairCnt[k]||0)+1;}
+  });
+  var NE='NOKIA||ERICSSON',neKey=null;
+  Object.keys(pairCnt).forEach(function(k){if(k.toUpperCase()===NE)neKey=k;});
+  var neN=neKey?pairCnt[neKey]:0;
+  var pairKeys=Object.keys(pairCnt).sort(function(a,b){return pairCnt[b]-pairCnt[a];});
+  var sepOrder=['SEPARADOS','MESMO VENDOR','MISTO','SÓ 2G','SÓ 3G','SEM 2G/3G'];
+  var sepColor={'SEPARADOS':'#f59e0b','MESMO VENDOR':'#10b981','MISTO':'#a78bfa','SÓ 2G':'#9090a8','SÓ 3G':'#9090a8','SEM 2G/3G':'#5a5a70'};
+  var sepChips=sepOrder.filter(function(k){return sepCnt[k];}).map(function(k){
+    return '<button type="button" class="fh-chip" onclick="finSepFilter(\'sep\',\''+k+'\')" title="Filtrar a tabela"><b style="color:'+sepColor[k]+';">'+k+'</b><span>'+sepCnt[k].toLocaleString('pt-BR')+'</span></button>';
+  }).join('');
+  var pairChips=pairKeys.slice(0,12).map(function(k){
+    var pr2=k.split('||'),isNE=k.toUpperCase()===NE;
+    return '<button type="button" class="fh-chip" style="'+(isNE?'border-color:#f59e0b;background:rgba(245,158,11,.1);':'')+'" onclick="finSepFilter(\'pair\',\''+esc(pr2[0])+'\',\''+esc(pr2[1])+'\')" title="Filtrar a tabela"><b>2G '+ciHtml(pr2[0])+' · 3G '+ciHtml(pr2[1])+'</b><span>'+pairCnt[k].toLocaleString('pt-BR')+'</span></button>';
+  }).join('');
+  var neBox='<div style="background:'+(neN?'rgba(245,158,11,.08)':'var(--bg3)')+';border:1px solid '+(neN?'rgba(245,158,11,.35)':'var(--border2)')+';border-radius:9px;padding:10px 13px;margin-top:12px;">'+
+    '<div style="font-size:12px;font-weight:700;margin-bottom:6px;">🔀 2G × 3G nesta combinação — <span style="color:#f59e0b;">2G Nokia + 3G Ericsson: '+neN.toLocaleString('pt-BR')+' site(s)</span></div>'+
+    '<div class="fin-hist" style="display:flex;margin:0 0 6px;"><span class="fh-t">Situação:</span>'+sepChips+'</div>'+
+    (pairChips?'<div class="fin-hist" style="display:flex;margin:0;"><span class="fh-t">Pares 2G · 3G:</span>'+pairChips+'</div>':'')+
+    '<div style="font-size:9px;color:var(--text3);font-family:\'DM Mono\',monospace;margin-top:6px;">Separados = o vendor do 2G é diferente do vendor do 3G no mesmo site. Clique num item para filtrar a tabela.</div></div>';
   var LIM=2000;
-  var head='<tr><th>STATION ID</th><th>SITE</th><th>TECNOLOGIAS</th><th>UF</th><th>CIDADE</th><th>REGIONAL</th><th>VENDOR</th>'+conds.map(function(c){return '<th>CÉLULAS '+ciHtml(c.label)+'</th>';}).join('')+'</tr>';
+  var head='<tr><th>STATION ID</th><th>SITE</th><th>TECNOLOGIAS</th><th>UF</th><th>CIDADE</th><th>REGIONAL</th><th>VENDOR</th><th>VENDOR 2G</th><th>VENDOR 3G</th><th>2G × 3G</th>'+conds.map(function(c){return '<th>CÉLULAS '+ciHtml(c.label)+'</th>';}).join('')+'</tr>';
   var rows=matches.slice(0,LIM).map(function(m){
     var s=m.site;
     return '<tr><td class="hi" style="white-space:nowrap;"><span style="cursor:pointer;color:var(--c1);" onclick="goFinderSid(\''+esc(s.id)+'\')">'+ciHtml(s.id)+'</span> '+
       '<span onclick="goMap(\'sid\',\''+esc(s.id)+'\')" title="Ver no mapa" style="cursor:pointer;font-size:11px;opacity:.7;">🗺️</span></td>'+
       '<td>'+ciHtml(getSiteNames(s).join(', ')||'—')+'</td><td>'+ciHtml(siteTechs(s).sort().join(', ')||'—')+'</td>'+
       '<td>'+ciHtml(s.uf||'—')+'</td><td>'+ciHtml(s.city||'—')+'</td><td>'+ciHtml(s.reg||'—')+'</td><td>'+ciHtml(siteVendList(s).join(' / ')||s.vend||'—')+'</td>'+
+      '<td>'+ciHtml(m.v2.join(' / ')||'—')+'</td><td>'+ciHtml(m.v3.join(' / ')||'—')+'</td>'+
+      '<td style="font-weight:700;color:'+(sepColor[m.sep]||'var(--text2)')+';">'+m.sep+'</td>'+
       m.cnt.map(function(n){return '<td style="text-align:center;color:var(--c3);font-weight:700;">'+n+'</td>';}).join('')+'</tr>';
   }).join('');
   var more=matches.length>LIM?'<div style="font-size:10px;color:var(--text3);font-family:\'DM Mono\',monospace;margin-top:6px;">Exibindo os primeiros '+LIM.toLocaleString('pt-BR')+' sites — o CSV exporta todos.</div>':'';
-  el.innerHTML=info+'<div class="kpi-grid" style="margin-top:6px;margin-bottom:0;">'+kpis+'</div>'+
-    '<div class="tscroll" style="max-height:420px;overflow-y:auto;margin-top:12px;"><table class="dtbl"><thead>'+head+'</thead><tbody>'+rows+'</tbody></table></div>'+more+
+  el.innerHTML=info+'<div class="kpi-grid" style="margin-top:6px;margin-bottom:0;">'+kpis+'</div>'+neBox+
+    '<div class="tscroll" id="fin-combo-tbl" style="max-height:420px;overflow-y:auto;margin-top:12px;"><table class="dtbl"><thead>'+head+'</thead><tbody>'+rows+'</tbody></table></div>'+more+
     '<div style="margin-top:12px;"><button class="ebtn" onclick="exportFreqComboCSV()">⬇ CSV (Station IDs)</button></div>';
   el.classList.add('show');
+}
+// filtra a tabela (pelos filtros do cabeçalho) ao clicar nos chips de separação 2G × 3G
+function finSepFilter(kind,a,b){
+  var t=document.querySelector('#fin-combo-tbl table');if(!t||!t.tHead)return;
+  var hdr=hfHdrRow(t),fr=t.tHead.querySelector('tr.hf-row');
+  if(!hdr||!fr){return;}
+  var idx=function(name){for(var i=0;i<hdr.cells.length;i++){if(tfNorm(hdr.cells[i].textContent)===name)return i;}return -1;};
+  var setSel=function(name,val){
+    var i=idx(name),c=fr.querySelector('[data-i="'+i+'"]');if(!c)return;
+    if(c.tagName==='SELECT'){var ok=false;for(var k=0;k<c.options.length;k++){if(c.options[k].value===val){ok=true;break;}}c.value=ok?val:'';}
+    else c.value=val;
+  };
+  var clr=fr.querySelectorAll('[data-i]');for(var j=0;j<clr.length;j++)clr[j].value='';
+  if(kind==='sep')setSel('2G × 3G',a);
+  else{setSel('VENDOR 2G',a);setSel('VENDOR 3G',b);}
+  hfApply('fin');
 }
 function exportFreqComboCSV(){
   if(!_freqComboData.length)return;
   var pr=finParseCombo(_freqComboQ);
-  dlCsv(['STATION ID,SITE,TECNOLOGIAS,UF,CIDADE,REGIONAL,VENDOR'+pr.conds.map(function(c){return ',CELULAS '+c.label;}).join('')].concat(_freqComboData.map(function(m){
+  dlCsv(['STATION ID,SITE,TECNOLOGIAS,UF,CIDADE,REGIONAL,VENDOR,VENDOR 2G,VENDOR 3G,2G X 3G'+pr.conds.map(function(c){return ',CELULAS '+c.label;}).join('')].concat(_freqComboData.map(function(m){
     var s=m.site;
-    return csvRow([s.id,getSiteNames(s).join('|'),siteTechs(s).sort().join('+'),s.uf,s.city,s.reg,siteVendList(s).join(' / ')||s.vend].concat(m.cnt));
+    return csvRow([s.id,getSiteNames(s).join('|'),siteTechs(s).sort().join('+'),s.uf,s.city,s.reg,siteVendList(s).join(' / ')||s.vend,m.v2.join(' / '),m.v3.join(' / '),m.sep].concat(m.cnt));
   })).join('\n'),'freq_combinacao.csv');
 }
 // dica de uso no modo FREQ
 function finHintUpdate(){
   var h=document.getElementById('fin-hint'),inp=document.getElementById('fin-inp');if(!h||!inp)return;
   if(getFinMode()==='freq'){
-    inp.placeholder='Ex.: 1800  ou combinação  4G:2600|700|5G:3500';
-    h.innerHTML='💡 Combinação de frequências no mesmo site: use <code onclick="finHintUse(this)">4G:2600|700|5G:3500</code> — o <b>TECNOLOGIA:</b> vale para as frequências seguintes até aparecer outra tecnologia; o site precisa ter <b>todas</b>.';
+    inp.placeholder='Ex.: 1800  ou  TNE|4G:2600|700|5G:3500';
+    h.innerHTML='💡 Combinação no mesmo site: <code onclick="finHintUse(this)">TNE|4G:2600|700|5G:3500</code> — <b>TNE</b> (opcional) limita a Regional ou UF; <b>4G:</b> vale para as frequências seguintes até outra tecnologia; o site precisa ter <b>todas</b>. O resultado mostra se o 2G e o 3G estão em vendors separados.';
     h.style.display='block';
   }else{
     inp.placeholder='Digite para buscar...';
