@@ -1355,15 +1355,24 @@ function plotMapCoords(){
   var map=_mapState.map;
   if(_coordLayer){map.removeLayer(_coordLayer);_coordLayer=null;}
   _coordLayer=L.layerGroup().addTo(map);
-  var pts=[];
+  var pts=[],_coordNew=0;
   r.pairs.forEach(function(pt,i){
     var n=i+1,near=nearestSiteTo(pt.lat,pt.lon);
-    var nearHtml='';
-    if(near){
-      var ns=near.site,dist=near.km<1?Math.round(near.km*1000)+' m':near.km.toFixed(2)+' km';
-      nearHtml='<div style="margin-top:6px;font-size:11px;">Site mais próximo: <b>'+ciHtml(ns.id)+'</b>'+
-        (getSiteNames(ns).length?' ('+ciHtml(getSiteNames(ns).join(', '))+')':'')+' — '+dist+
-        '<br><a href="#" onclick="goFinder(\''+esc(ns.id)+'\');return false;" style="color:#00d4ff;">🔍 Abrir na Busca</a></div>';
+    var nearHtml='',COORD_SAME_KM=0.05; // até 50 m = mesmo local de um site existente
+    if(near&&near.km<=COORD_SAME_KM){
+      var es=near.site;
+      nearHtml='<div style="margin-top:6px;font-size:11px;"><span style="color:#f59e0b;font-weight:700;">📡 Site existente neste local:</span> <b>'+ciHtml(es.id)+'</b>'+
+        (getSiteNames(es).length?' ('+ciHtml(getSiteNames(es).join(', '))+')':'')+' — '+Math.round(near.km*1000)+' m'+
+        '<br><a href="#" onclick="goFinder(\''+esc(es.id)+'\');return false;" style="color:#00d4ff;">🔍 Abrir na Busca</a></div>';
+    } else {
+      _coordNew++;
+      nearHtml='<div style="margin-top:6px;font-size:11px;"><span style="color:#10b981;font-weight:700;">🆕 Site novo — não há site existente neste local</span></div>';
+      if(near){
+        var ns=near.site,dist=near.km<1?Math.round(near.km*1000)+' m':near.km.toFixed(2)+' km';
+        nearHtml+='<div style="margin-top:6px;font-size:10px;color:#9090a8;">Referência — site existente mais próximo: <b>'+ciHtml(ns.id)+'</b>'+
+          (getSiteNames(ns).length?' ('+ciHtml(getSiteNames(ns).join(', '))+')':'')+' a '+dist+
+          '<br><a href="#" onclick="goFinder(\''+esc(ns.id)+'\');return false;" style="color:#00d4ff;">🔍 Ver na Busca</a></div>';
+      }
     }
     var icon=L.divIcon({className:'',html:'<div style="font-size:26px;line-height:26px;filter:drop-shadow(0 1px 3px rgba(0,0,0,.8));">📍</div>'+(r.pairs.length>1?'<div style="position:absolute;top:-4px;left:20px;background:#ef4444;color:#fff;font:700 10px DM Mono,monospace;border-radius:8px;padding:0 5px;">'+n+'</div>':''),iconSize:[26,26],iconAnchor:[13,26],popupAnchor:[0,-24]});
     var m=L.marker([pt.lat,pt.lon],{icon:icon,zIndexOffset:1000});
@@ -1374,7 +1383,7 @@ function plotMapCoords(){
   if(pts.length===1){map.setView(pts[0],16);_coordLayer.eachLayer(function(l){l.openPopup();});}
   else map.fitBounds(pts,{padding:[50,50],maxZoom:17});
   msg.style.color='#10b981';
-  msg.textContent='✔ '+pts.length+' ponto(s) plotado(s)'+(r.bad?' · '+r.bad+' inválido(s) ignorado(s)':'');
+  msg.textContent='✔ '+pts.length+' ponto(s) plotado(s)'+(_coordNew?' · '+_coordNew+' site(s) novo(s)':'')+(r.bad?' · '+r.bad+' inválido(s) ignorado(s)':'');
 }
 function clearMapCoords(){
   if(_coordLayer&&_mapState.map){_mapState.map.removeLayer(_coordLayer);}
