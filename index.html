@@ -5783,12 +5783,12 @@ function cmbHook(t){
   var ci=-1;
   for(var i=0;i<hdr.cells.length;i++){if(tfNorm(hdr.cells[i].textContent).toUpperCase()==='TECNOLOGIAS'){ci=i;break;}}
   if(ci<0||!hf.cells[ci])return;
-  var g=_cmbCtx.groups,keys=Object.keys(g).sort(function(a,b){return g[b].length-g[a].length||a.localeCompare(b);});
+  var g=_cmbCtx.groups,keys=Object.keys(g).sort(function(a,b){return a.localeCompare(b,'pt-BR',{numeric:true});});
   var sel=document.createElement('select');
   sel.className='f-select';
   sel.title='Combinações de tecnologia';
   var o=new Option('Todas','ALL');sel.appendChild(o);
-  keys.forEach(function(k){sel.appendChild(new Option(k+' ('+nfmt(g[k].length)+')',k));});
+  keys.forEach(function(k){sel.appendChild(new Option(k,k));});
   var cur=_cmbCtx.sel.filter(function(k){return !!g[k];});
   if(cur.length===keys.length)sel.value='ALL';
   else if(cur.length){sel.value=cur[0];if(cur.length>1)sel.setAttribute('data-msinit',JSON.stringify(cur));}
