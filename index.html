@@ -1263,7 +1263,7 @@ function showRegDrill(reg){
   _regDrillView=_regDrillData;
   regDrillRender();
   dtHdrInit('reg','dt-reg','reg-drill-tbody',[
-    function(d){return [d.id];},function(d){return [d.site];},function(d){return dtTok(d.techs);},
+    function(d){return [d.id];},function(d){return [d.site];},function(d){return techCombo(d.techs);},
     function(d){return [d.uf];},function(d){return [d.city];},function(d){return [d.reg];},function(d){return dtTok(d.vend);}
   ].concat(dtFqLgCols(function(d){return d;}),[function(d){return [d.lat];},function(d){return [d.lon];}]),
   _regDrillData,function(v){_regDrillView=v;regDrillRender();},2000);
@@ -1631,7 +1631,7 @@ function buildRANTable(filt){
   var _fl={};
   var flOf=function(s){return _fl[s.id]||(_fl[s.id]=siteFqLg(s));};
   dtHdrInit('rant','dt-rant','ran-tbody',[
-    function(s){return [s.id];},function(s){return [s.oper];},function(s){return siteTechs(s);},
+    function(s){return [s.id];},function(s){return [s.oper];},function(s){return techCombo(siteTechs(s).join(', '));},
     function(s){return [s.reg];},function(s){return [s.uf];},function(s){return [s.city];},function(s){return siteVendList(s);}
   ].concat(dtFqLgCols(flOf),[function(s){return [s.lat];},function(s){return [s.lon];}]),
   filt,function(v){ranTableRender(v);},500);
@@ -1661,7 +1661,7 @@ function showRANRegDrill(reg){
   _ranRegDrillReg=reg;_ranRegDrillOp=opF;_ranRegDrillView=_ranRegDrillData;
   ranRegDrillRender();
   dtHdrInit('ranreg','dt-ranreg','ranreg-drill-tbody',[
-    function(d){return [d.id];},function(d){return [d.site];},function(d){return [d.oper];},function(d){return dtTok(d.techs);},
+    function(d){return [d.id];},function(d){return [d.site];},function(d){return [d.oper];},function(d){return techCombo(d.techs);},
     function(d){return [d.uf];},function(d){return [d.city];},function(d){return [d.reg];},function(d){return dtTok(d.vend);}
   ].concat(dtFqLgCols(function(d){return d;}),[function(d){return [d.lat];},function(d){return [d.lon];}]),
   _ranRegDrillData,function(v){_ranRegDrillView=v;ranRegDrillRender();},2000);
@@ -4204,10 +4204,18 @@ function dtHdrCount(key){
 var TFG={};
 var TF_COLS={'UF':'uf','CIDADE':'city','REGIONAL':'reg','VENDOR':'vend','OPERADORA':'oper','TECNOLOGIAS':'tech','TECNOLOGIA':'tech','TECNO':'tech','TECH':'tech'};
 var TF_LBL={uf:'UF',city:'Cidade',reg:'Regional',vend:'Vendor',oper:'Operadora',tech:'Tecnologia'};
+// Combinação de tecnologias de uma célula/site, ordenada (ex.: "2G, 3G, 4G" ou "2G+3G+4G")
+function techCombo(txt){
+  txt=String(txt||'');
+  var m=txt.match(/[2-5]G/g);if(!m)return [];
+  var u=[];for(var i=0;i<m.length;i++){if(u.indexOf(m[i])<0)u.push(m[i]);}
+  u.sort();
+  return [u.join(txt.indexOf('+')>=0?'+':', ')];
+}
 function tfCellVals(key,txt){
   txt=String(txt||'').replace(/\s+/g,' ').trim();
   if(!txt||txt==='—'||isND(txt))return [];
-  if(key==='tech')return txt.match(/[2-5]G/g)||[];
+  if(key==='tech')return techCombo(txt);
   if(key==='vend')return txt.split(/\s*[\/,|·]\s*/).map(function(x){return x.replace(/\s*\(.*\)\s*$/,'').trim();}).filter(function(x){return x&&x!=='—';});
   return [txt];
 }
@@ -5749,6 +5757,54 @@ function msOk(){
   msApply(sel,pk);
 }
 
+// ── Visão Geral: clique no gráfico de combinações ───────────────────────────
+// Mostra a combinação clicada e, no campo TECNOLOGIAS, lista TODAS as
+// combinações (com nº de sites) para marcar outras e somar ao detalhamento.
+var _cmbCtx=null,_cmbInternal=false;
+(function(){
+  var oCD=showComboDrill;
+  showComboDrill=function(combo,ids){
+    if(!_cmbInternal){
+      var groups={};
+      mapVals(siteMap).forEach(function(s){
+        if(typeof pfPass==='function'&&!pfPass('ov',s))return;
+        var k=siteTechsStr(s)||'(sem tech)';
+        (groups[k]||(groups[k]=[])).push(s.id);
+      });
+      if(!groups[combo])groups[combo]=ids.slice();
+      _cmbCtx={groups:groups,sel:[combo]};
+    }
+    return oCD.apply(this,arguments);
+  };
+})();
+function cmbHook(t){
+  if(!_cmbCtx||!t||!t.tBodies[0]||t.tBodies[0].id!=='drill-tbody')return;
+  var hf=t.tHead.querySelector('tr.hf-row'),hdr=hfHdrRow(t);if(!hf||!hdr)return;
+  var ci=-1;
+  for(var i=0;i<hdr.cells.length;i++){if(tfNorm(hdr.cells[i].textContent).toUpperCase()==='TECNOLOGIAS'){ci=i;break;}}
+  if(ci<0||!hf.cells[ci])return;
+  var g=_cmbCtx.groups,keys=Object.keys(g).sort(function(a,b){return g[b].length-g[a].length||a.localeCompare(b);});
+  var sel=document.createElement('select');
+  sel.className='f-select';
+  sel.title='Combinações de tecnologia';
+  var o=new Option('Todas','ALL');sel.appendChild(o);
+  keys.forEach(function(k){sel.appendChild(new Option(k+' ('+nfmt(g[k].length)+')',k));});
+  var cur=_cmbCtx.sel.filter(function(k){return !!g[k];});
+  if(cur.length===keys.length)sel.value='ALL';
+  else if(cur.length){sel.value=cur[0];if(cur.length>1)sel.setAttribute('data-msinit',JSON.stringify(cur));}
+  var cell=hf.cells[ci];cell.innerHTML='';cell.appendChild(sel);
+  sel.addEventListener('change',function(e){
+    e.stopPropagation();
+    var v=msGet(sel),list=v==='ALL'?keys.slice():(msIsArr(v)?v:[v]);
+    _cmbCtx.sel=list;
+    var ids=[];list.forEach(function(k){ids=ids.concat(g[k]||[]);});
+    var title=list.length===1?list[0]:(list.length===keys.length?'Todas as combinações':list.length+' combinações');
+    _cmbInternal=true;
+    try{showComboDrill(title,ids);}finally{_cmbInternal=false;}
+  });
+  msEnhance(sel);
+}
+
 // ── Liga a seleção múltipla nos filtros existentes (sem alterar a lógica deles) ──
 (function(){
   var oFb=fbBuild;
@@ -5757,6 +5813,7 @@ function msOk(){
   hfBuild=function(id,tables){
     var r=oHf.apply(this,arguments);
     (tables||[]).forEach(function(t){if(t&&t.tHead)msEnhanceIn(t.tHead.querySelector('tr.hf-row'));});
+    (tables||[]).forEach(function(t){try{cmbHook(t);}catch(e){console.error('cmbHook:',e);}});
     return r;
   };
   var oDh=dtHdrInit;
