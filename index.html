@@ -1264,7 +1264,7 @@ function showRegDrill(reg){
   regDrillRender();
   dtHdrInit('reg','dt-reg','reg-drill-tbody',[
     function(d){return [d.id];},function(d){return [d.site];},function(d){return techCombo(d.techs);},
-    function(d){return [d.uf];},function(d){return [d.city];},function(d){return [d.reg];},function(d){return dtTok(d.vend);}
+    function(d){return [d.uf];},function(d){return [d.city];},function(d){return [d.reg];},function(d){return vendCombo(d.vend);}
   ].concat(dtFqLgCols(function(d){return d;}),[function(d){return [d.lat];},function(d){return [d.lon];}]),
   _regDrillData,function(v){_regDrillView=v;regDrillRender();},2000);
   var sec=document.getElementById('reg-drill-section');
@@ -1632,7 +1632,7 @@ function buildRANTable(filt){
   var flOf=function(s){return _fl[s.id]||(_fl[s.id]=siteFqLg(s));};
   dtHdrInit('rant','dt-rant','ran-tbody',[
     function(s){return [s.id];},function(s){return [s.oper];},function(s){return techCombo(siteTechs(s).join(', '));},
-    function(s){return [s.reg];},function(s){return [s.uf];},function(s){return [s.city];},function(s){return siteVendList(s);}
+    function(s){return [s.reg];},function(s){return [s.uf];},function(s){return [s.city];},function(s){return vendCombo(siteVendList(s).join(' / '));}
   ].concat(dtFqLgCols(flOf),[function(s){return [s.lat];},function(s){return [s.lon];}]),
   filt,function(v){ranTableRender(v);},500);
 }
@@ -1662,7 +1662,7 @@ function showRANRegDrill(reg){
   ranRegDrillRender();
   dtHdrInit('ranreg','dt-ranreg','ranreg-drill-tbody',[
     function(d){return [d.id];},function(d){return [d.site];},function(d){return [d.oper];},function(d){return techCombo(d.techs);},
-    function(d){return [d.uf];},function(d){return [d.city];},function(d){return [d.reg];},function(d){return dtTok(d.vend);}
+    function(d){return [d.uf];},function(d){return [d.city];},function(d){return [d.reg];},function(d){return vendCombo(d.vend);}
   ].concat(dtFqLgCols(function(d){return d;}),[function(d){return [d.lat];},function(d){return [d.lon];}]),
   _ranRegDrillData,function(v){_ranRegDrillView=v;ranRegDrillRender();},2000);
   var sec=document.getElementById('ranreg-drill-section');
@@ -4119,7 +4119,7 @@ function dtTok(v){
 function dtFqLgCols(src){
   var out=[];
   ['fq','lg'].forEach(function(kind){
-    REG_TECHS.forEach(function(t){out.push(function(r){var o=src(r);return dtTok(o[kind]&&o[kind][t]);});});
+    REG_TECHS.forEach(function(t){out.push(function(r){var o=src(r);return dtCombo(o[kind]&&o[kind][t]);});});
   });
   return out;
 }
@@ -4212,11 +4212,30 @@ function techCombo(txt){
   u.sort();
   return [u.join(txt.indexOf('+')>=0?'+':', ')];
 }
+// Combinação de vendors de uma célula/site, ordenada (ex.: "ERICSSON / HUAWEI")
+function vendCombo(txt){
+  txt=String(txt===undefined||txt===null?'':txt).replace(/\s+/g,' ').trim();
+  if(!txt||txt==='—'||isND(txt))return [];
+  var u=[];
+  txt.split(/\s*[\/,|·]\s*/).forEach(function(x){x=x.replace(/\s*\(.*\)\s*$/,'').trim();if(x&&x!=='—'&&!isND(x)&&u.indexOf(x)<0)u.push(x);});
+  if(!u.length)return [];
+  u.sort();
+  var sep=txt.indexOf(' / ')>=0?' / ':(txt.indexOf('/')>=0?'/':', ');
+  return [u.join(sep)];
+}
+// Combinação de valores (FREQ / LARGURA) de uma célula, ordenada numericamente (ex.: "700, 1800")
+function dtCombo(v){
+  var t=dtTok(v),u=[];
+  for(var i=0;i<t.length;i++){if(u.indexOf(t[i])<0)u.push(t[i]);}
+  if(!u.length)return [];
+  u.sort(function(a,b){return a.localeCompare(b,'pt-BR',{numeric:true});});
+  return [u.join(', ')];
+}
 function tfCellVals(key,txt){
   txt=String(txt||'').replace(/\s+/g,' ').trim();
   if(!txt||txt==='—'||isND(txt))return [];
   if(key==='tech')return techCombo(txt);
-  if(key==='vend')return txt.split(/\s*[\/,|·]\s*/).map(function(x){return x.replace(/\s*\(.*\)\s*$/,'').trim();}).filter(function(x){return x&&x!=='—';});
+  if(key==='vend')return vendCombo(txt);
   return [txt];
 }
 function hfHdrRow(t){
