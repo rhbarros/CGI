@@ -698,40 +698,52 @@ get ENodeBFunction=1 eNBId</pre>
     return out;
   }
 
-  // ---------- ENG-SI ----------
-  function parseEngsi(sheets) {
-    // sheets: { name: aoa }
+  // ---------- ENG-SI (uma linha por site; um arquivo pode trazer vários sites) ----------
+  function parseEngsiAll(sheets) {
     const names = Object.keys(sheets);
     const pick = (re) => names.find((n) => re.test(norm(n)));
-    const out = { warnings: [] };
+    const out = { sites: [], warnings: [] };
     const la = pick(/^PROJETOLOGICOAUTOMATICO$/) || pick(/PROJETOLOGICO/);
     if (!la) { out.warnings.push('ENG-SI sem a aba PROJETO LÓGICO AUTOMÁTICO.'); return out; }
     const aoa = sheets[la];
     const hr = findHeader(aoa, ['SITEID']);
     const H = hr >= 0 ? aoa[hr] : [];
-    const iIp = colIndex(H, ['Ip Service S1X2 Tim'], 11);
-    const row = (aoa.slice(hr + 1).find((r) => r && str(r[0]))) || [];
-    out.sheet = la;
-    out.siteId = str(row[colIndex(H, ['Site Id'], 0)]);
-    out.ipS1X2 = str(row[iIp]);
-    out.redeS1X2 = str(row[colIndex(H, ['Rede S1X2 Tim'], 12)]);
-    out.mascara = str(row[colIndex(H, ['Máscara Serviço'], 13)]);
-    out.ipOam = str(row[colIndex(H, ['Ip OAM'], 14)]);
-    out.regional = str(row[colIndex(H, ['Regional'], 4)]);
+    const ci = {
+      site: colIndex(H, ['Site Id'], 0), ip: colIndex(H, ['Ip Service S1X2 Tim'], 11), rede: colIndex(H, ['Rede S1X2 Tim'], 12),
+      mask: colIndex(H, ['Máscara Serviço'], 13), oam: colIndex(H, ['Ip OAM'], 14), reg: colIndex(H, ['Regional'], 4),
+    };
+    // PROJETO FISICO indexado por Site ID
+    const fis = {};
     const pf = pick(/^PROJETOFISICO$/);
     if (pf) {
       const a = sheets[pf]; const h = findHeader(a, ['SITEID', 'REGIONAL', 'UF']);
       if (h >= 0) {
-        const HH = a[h]; const r = (a.slice(h + 1).find((x) => x && str(x[0]))) || [];
-        out.uf = str(r[colIndex(HH, ['UF'], 5)]);
-        out.localidade = str(r[colIndex(HH, ['LOCALIDADE'], 3)]);
-        out.enderecoId = str(r[colIndex(HH, ['ENDEREÇO ID', 'ENDERECO ID'], 2)]);
-        out.regional = out.regional || str(r[colIndex(HH, ['REGIONAL'], 4)]);
+        const HH = a[h];
+        const fi = { site: colIndex(HH, ['SITE ID'], 0), uf: colIndex(HH, ['UF'], 5), loc: colIndex(HH, ['LOCALIDADE'], 3),
+          end: colIndex(HH, ['ENDEREÇO ID', 'ENDERECO ID'], 2), reg: colIndex(HH, ['REGIONAL'], 4) };
+        a.slice(h + 1).forEach((r) => {
+          const id = str(r && r[fi.site]); if (!id) return;
+          fis[bareSite(id)] = { uf: str(r[fi.uf]), localidade: str(r[fi.loc]), enderecoId: str(r[fi.end]), regional: str(r[fi.reg]) };
+        });
       }
     }
-    if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(out.ipS1X2)) out.warnings.push(`ENG-SI ${out.siteId || ''}: Ip Service S1X2 Tim inválido ou vazio ("${out.ipS1X2}").`);
+    aoa.slice(hr + 1).forEach((row) => {
+      const siteId = str(row && row[ci.site]);
+      if (!siteId || !/^(\dG-)?[A-Z0-9_]+$/i.test(siteId)) return;
+      const f = fis[bareSite(siteId)] || {};
+      const g = {
+        sheet: la, siteId, ipS1X2: str(row[ci.ip]), redeS1X2: str(row[ci.rede]), mascara: str(row[ci.mask]), ipOam: str(row[ci.oam]),
+        regional: str(row[ci.reg]) || f.regional || '', uf: f.uf || '', localidade: f.localidade || '', enderecoId: f.enderecoId || '', warnings: [],
+      };
+      if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(g.ipS1X2)) g.warnings.push(`ENG-SI ${siteId}: Ip Service S1X2 Tim inválido ou vazio ("${g.ipS1X2}").`);
+      if (!fis[bareSite(siteId)]) g.warnings.push(`ENG-SI ${siteId}: não está na aba PROJETO FISICO (UF/localidade vazios).`);
+      out.sites.push(g);
+    });
+    if (!out.sites.length) out.warnings.push('ENG-SI sem linhas de site na aba ' + la + '.');
     return out;
   }
+  // compatibilidade: primeiro site
+  function parseEngsi(sheets) { const a = parseEngsiAll(sheets); const g = a.sites[0] || { warnings: [] }; g.warnings = [...a.warnings, ...(g.warnings || [])]; return g; }
 
   // ---------- edição de .mos ----------
   function editBlock(text, mo, edits) {
@@ -881,7 +893,7 @@ get ENodeBFunction=1 eNBId</pre>
     return L.join('\r\n') + '\r\n';
   }
 
-  const api = { parseEpd, parseEngsi, generate, summary, validate, editBlock, nci, bareSite, TEMPLATE_FILES, SYSFUNC, SECTORS };
+  const api = { parseEpd, parseEngsi, parseEngsiAll, generate, summary, validate, editBlock, nci, bareSite, TEMPLATE_FILES, SYSFUNC, SECTORS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Core5G = api;
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -1189,10 +1201,13 @@ $("f5Eng").onchange = async (e) => {
     try {
       const wb = XLSX.read(await f.arrayBuffer(), { type: "array" });
       const sheets = {}; wb.SheetNames.forEach((n) => sheets[n] = aoaOf(wb, n));
-      const g = Core5G.parseEngsi(sheets); g.file = f.name;
-      if (!g.siteId) { msgs.push(`${f.name}: Site Id não encontrado.`); continue; }
-      S5.engs = S5.engs.filter((x) => Core5G.bareSite(x.siteId) !== Core5G.bareSite(g.siteId)); S5.engs.push(g);
-      g.warnings.forEach((w) => msgs.push(w));
+      const all = Core5G.parseEngsiAll(sheets);
+      all.warnings.forEach((w) => msgs.push(`${f.name}: ${w}`));
+      all.sites.forEach((g) => {
+        g.file = f.name;
+        S5.engs = S5.engs.filter((x) => Core5G.bareSite(x.siteId) !== Core5G.bareSite(g.siteId)); S5.engs.push(g);
+        g.warnings.forEach((w) => msgs.push(w));
+      });
     } catch (err) { msgs.push(`${f.name}: ${err.message || err}`); }
   }
   e.target.value = "";
