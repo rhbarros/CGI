@@ -305,7 +305,7 @@ get ENodeBFunction=1 eNBId</pre>
 
     <section class="panel">
       <div class="ph"><span class="step">2</span><h2>Sites encontrados</h2>
-        <p>PCI, CellId e EARFCN são aplicados pelo nome da célula (-MA/-MB/-MC), não pela ordem das linhas. IP e userLabel podem ser ajustados aqui antes de gerar.</p></div>
+        <p>PCI, CellId e EARFCN são aplicados pelo nome da célula (-MA/-MB/-MC), não pela ordem das linhas. Sites com 1 ou 2 setores saem sem os blocos e o AIR do setor ausente. IP e userLabel podem ser ajustados aqui antes de gerar.</p></div>
       <div class="stats" id="s5Kpi"></div>
       <div class="tablebox"><table id="s5Tbl"></table></div>
       <div id="s5Warn"></div>
@@ -640,6 +640,26 @@ get ENodeBFunction=1 eNBId</pre>
     '1-TX_5G.mos', '1.1-RiPort.mos', '2-add_gps.mos', '2-AIR-9.mos', '3-AIR-11.mos', '4-AIR-13.mos',
     '5-GNBDUFunction=1.mos', '6-GNBCUCPFunction=1.mos', '7-GNBCUUPFunction=1-.mos', '12-FEATURE.mos',
   ];
+  const AIR_OF = { MA: '2-AIR-9.mos', MB: '3-AIR-11.mos', MC: '4-AIR-13.mos' };
+
+  // Remove todos os comandos cujo MO pertence à célula do setor (crn…end e linhas ld/lset/set/...).
+  function removeSector(text, cell) {
+    const L = text.split('\n'); const out = []; let removed = 0;
+    const re = new RegExp('=' + cell.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?=[,\\s$]|$)');
+    for (let i = 0; i < L.length; i++) {
+      const raw = L[i].replace(/\r$/, '');
+      const m = raw.match(/^(crn|ld|lset|set|lcc|del|rdel|bl|deb|acc|lbl|ldeb)\s+(\S+)/);
+      if (m && re.test(m[2])) {
+        removed++;
+        if (m[1] === 'crn') { while (i < L.length && L[i].replace(/\r$/, '').trim() !== 'end') i++; }
+        continue;
+      }
+      out.push(L[i]);
+    }
+    const left = out.filter((l) => l.includes(cell)).length;
+    return { text: out.join('\n'), removed, left };
+  }
+
   const SYSFUNC = { CVO: '15-SystemFunctions_1_CVO_R68D37.mos', CVOB: '15-SystemFunctions_6630_CVOB.mos' };
 
   const norm = (s) => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9()]/g, '');
@@ -789,9 +809,12 @@ get ENodeBFunction=1 eNBId</pre>
       if (c.pci === '' || !Number.isInteger(p) || p < 0 || p > 1007) e.push(`${c.name}: NRPCI inválido ("${c.pci}").`);
       if (c.cellId === '') e.push(`${c.name}: CellID vazio.`);
     });
-    SECTORS.forEach((s) => { if (!bySec[s]) e.push(`Falta a célula do setor ${s}.`); });
+    const present = SECTORS.filter((s) => bySec[s]);
+    const absent = SECTORS.filter((s) => !bySec[s]);
     const extra = site.cells.filter((c) => c.sector && !SECTORS.includes(c.sector));
-    if (extra.length) w.push(`Setores fora do modelo (${extra.map((c) => c.sector).join(', ')}) foram ignorados: os modelos têm só MA/MB/MC.`);
+    if (extra.length) e.push(`Setor(es) ${[...new Set(extra.map((c) => c.sector))].join(', ')} não cabem no kit: o modelo tem 3 AIR (MA → AIR-9, MB → AIR-11, MC → AIR-13), usando as 6 portas RI A–F do Baseband.`);
+    if (!present.length) e.push('Nenhuma célula -MA/-MB/-MC no site.');
+    else if (absent.length) w.push(`Site com ${present.length} setor(es) (${present.join(', ')}). Removidos os blocos de ${absent.join(', ')} nos scripts 5 e 6 e o(s) script(s) ${absent.map((x) => AIR_OF[x]).join(', ')}.`);
     const pcis = site.cells.map((c) => c.pci).filter((x) => x !== '');
     const dup = pcis.filter((x, i) => pcis.indexOf(x) !== i);
     if (dup.length) e.push(`PCI repetido no site: ${[...new Set(dup)].join(', ')}.`);
@@ -811,7 +834,7 @@ get ENodeBFunction=1 eNBId</pre>
     }
     if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(str(opts.ip))) e.push('IP S1X2 vazio ou inválido.');
     if (!str(opts.label)) w.push('userLabel do gNB vazio.');
-    return { errors: e, warnings: w, bySec };
+    return { errors: e, warnings: w, bySec, present, absent };
   }
 
   // ---------- geração ----------
@@ -829,7 +852,16 @@ get ENodeBFunction=1 eNBId</pre>
       if (!r.found || r.missing.length) notes.push('1-TX_5G: bloco AddressIPv4=1 da InterfaceIPv4=2 não encontrado.');
       files.push({ name: '1-TX_5G.mos', text: r.text });
     }
-    ['1.1-RiPort.mos', '2-add_gps.mos', '2-AIR-9.mos', '3-AIR-11.mos', '4-AIR-13.mos', '12-FEATURE.mos'].forEach((n) => { const x = need(n); if (x) files.push({ name: n, text: x }); });
+    const skipAir = (v.absent || []).map((x) => AIR_OF[x]);
+    ['1.1-RiPort.mos', '2-add_gps.mos', '2-AIR-9.mos', '3-AIR-11.mos', '4-AIR-13.mos', '12-FEATURE.mos'].filter((n) => !skipAir.includes(n)).forEach((n) => { const x = need(n); if (x) files.push({ name: n, text: x }); });
+    const dropAbsent = (txt, label) => {
+      (v.absent || []).forEach((sx) => {
+        if (!(v.present || []).length) return;
+        const r = removeSector(txt, cellName(sx)); txt = r.text;
+        if (r.left) notes.push(`${label}: ainda há ${r.left} referência(s) a ${cellName(sx)} depois da remoção. Confira.`);
+      });
+      return txt;
+    };
 
     // 5-DU
     t = need('5-GNBDUFunction=1.mos');
@@ -847,7 +879,7 @@ get ENodeBFunction=1 eNBId</pre>
         if (c.bw) { sc.bSChannelBwDL = c.bw; sc.bSChannelBwUL = c.bw; }
         if (Object.keys(sc).length) { r = editBlock(t, `GNBDUFunction=1,NRSectorCarrier=${cellName(s)}`, sc); t = r.text; }
       });
-      files.push({ name: '5-GNBDUFunction=1.mos', text: t });
+      files.push({ name: '5-GNBDUFunction=1.mos', text: dropAbsent(t, '5-GNBDU') });
     }
     // 6-CUCP
     t = need('6-GNBCUCPFunction=1.mos');
@@ -859,7 +891,7 @@ get ENodeBFunction=1 eNBId</pre>
         const c = v.bySec[s]; if (!c) return;
         r = editBlock(t, `GNBCUCPFunction=1,NRCellCU=${cellName(s)}`, { cellLocalId: c.cellId }); t = r.text;
       });
-      files.push({ name: '6-GNBCUCPFunction=1.mos', text: t });
+      files.push({ name: '6-GNBCUCPFunction=1.mos', text: dropAbsent(t, '6-GNBCUCP') });
     }
     // 7-CUUP
     t = need('7-GNBCUUPFunction=1-.mos');
@@ -893,7 +925,7 @@ get ENodeBFunction=1 eNBId</pre>
     return L.join('\r\n') + '\r\n';
   }
 
-  const api = { parseEpd, parseEngsi, parseEngsiAll, generate, summary, validate, editBlock, nci, bareSite, TEMPLATE_FILES, SYSFUNC, SECTORS };
+  const api = { removeSector, AIR_OF, parseEpd, parseEngsi, parseEngsiAll, generate, summary, validate, editBlock, nci, bareSite, TEMPLATE_FILES, SYSFUNC, SECTORS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Core5G = api;
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -1244,7 +1276,7 @@ function render(){
     sites.map((s) => {
       const { o, r } = S5.results[s.shortid];
       const st = r.errors.length ? `<span class="pill bad">${r.errors.length} erro(s)</span>` : r.warnings.length ? `<span class="pill warn">${r.warnings.length} aviso(s)</span>` : `<span class="pill ok">pronto</span>`;
-      const cells = Core5G.SECTORS.map((k) => { const c = r.bySec[k]; return c ? `<span><span class="t4g">${k}</span> · ${escH(c.pci)} · ${escH(c.cellId)}</span>` : `<span style="color:var(--c5)">${k} · falta</span>`; }).join("");
+      const cells = Core5G.SECTORS.map((k) => { const c = r.bySec[k]; return c ? `<span><span class="t4g">${k}</span> · ${escH(c.pci)} · ${escH(c.cellId)}</span>` : `<span style="color:var(--text3)">${k} · sem setor</span>`; }).join("") + `<span class="note">${(r.present || []).length} setor(es)</span>`;
       const ipBad = !/^\d{1,3}(\.\d{1,3}){3}$/.test(o.ip);
       return `<tr><td class="hi">5G-${escH(s.shortid)}<br><span class="note">${escH(s.enderecoId)}</span></td><td>${st}</td><td>${escH(s.gnbId)}</td><td>${escH(s.tac)}</td><td><div class="cells">${cells}</div></td>
         <td><input id="s5ip-${escH(s.shortid)}" data-site="${escH(s.shortid)}" data-k="ip" value="${escH(o.ip)}" placeholder="0.0.0.0" class="${ipBad ? "bad" : ""}" aria-label="IP S1X2 ${escH(s.shortid)}"></td>
