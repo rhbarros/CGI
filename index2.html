@@ -344,7 +344,7 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
   <div id="p-xml" style="display:none;flex-direction:column;gap:13px">
     <section class="panel">
       <div class="ph"><span class="step">1</span><h2>Arquivos de entrada</h2>
-        <p>ENG-SI (aba PROJETO LÓGICO) ou o TX.xlsx consolidado pela macro. Kits de XML por versão de SW: R68D37 / R3D35 e R82E29.</p></div>
+        <p>ENG-SI (aba PROJETO LÓGICO) ou o TX.xlsx consolidado pela macro. Kits de XML por versão de SW: R68D37 / R3D35 e R82E29, lidos do repositório quando a página está no GitHub; o botão do kit substitui nesta sessão.</p></div>
       <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr))">
         <fieldset><legend>ENG-SI / TX.xlsx</legend>
           <div class="row"><button class="btn primary" id="xEng">Adicionar ENG-SI (.xlsx)</button><input type="file" id="fxEng" accept=".xlsx,.xlsm,.xls" multiple hidden><button class="btn" id="xEngClr">Limpar</button></div>
@@ -1714,8 +1714,25 @@ const KITS_EMB = {};
 const KLS = LSK + ":xmlkits";
 (function loadKits(){
   ["R68","R82"].forEach((v) => { if (KITS_EMB[v] && Object.keys(KITS_EMB[v]).length) { XS.kits[v] = Object.assign({}, KITS_EMB[v]); XS.kitSrc[v] = "incorporado"; } });
-  try { const st = JSON.parse(localStorage.getItem(KLS) || "{}"); ["R68","R82"].forEach((v) => { if (st[v] && Object.keys(st[v]).length) { XS.kits[v] = st[v]; XS.kitSrc[v] = "salvo neste navegador"; } }); } catch(e){}
+  try { const st = JSON.parse(localStorage.getItem(KLS) || "{}"); ["R68","R82"].forEach((v) => { if (!XS.kitSrc[v] && st[v] && Object.keys(st[v]).length) { XS.kits[v] = st[v]; XS.kitSrc[v] = "salvo neste navegador"; } }); } catch(e){}
 })();
+// Kits publicados ao lado da página no GitHub (mesma pasta do index2.html): têm prioridade sobre a cópia salva no navegador.
+const REPO_KITS = { R68: "RBSSummary_r68d37%26r.zip", R82: "XML_R82E29.zip" };
+async function loadRepoKits(){
+  if (!/^https?:$/.test(location.protocol)) return;
+  for (const v of ["R68","R82"]) {
+    if (XS.kitSrc[v] === "incorporado") continue;
+    try {
+      const r = await fetch(REPO_KITS[v], { cache: "no-cache" });
+      if (!r.ok) continue;
+      const z = await JSZip.loadAsync(await r.arrayBuffer());
+      const got = {};
+      for (const p of Object.keys(z.files)) { const b = p.split("/").pop(); if (!z.files[p].dir && CoreXML.VERSIONS[v].files.includes(b)) got[b] = await z.files[p].async("string"); }
+      if (Object.keys(got).length === 3) { XS.kits[v] = got; XS.kitSrc[v] = "do repositório: " + decodeURIComponent(REPO_KITS[v]); }
+    } catch (e) { /* sem acesso: segue com a cópia do navegador ou o upload */ }
+  }
+  render();
+}
 const domParse = (s) => { const d = new DOMParser().parseFromString(s, "application/xml"); const pe = d.getElementsByTagName("parsererror")[0]; return pe ? (pe.textContent || "erro de sintaxe").replace(/\s+/g, " ").slice(0, 140) : null; };
 
 function kitStatus(){
@@ -1843,7 +1860,7 @@ $("xGen").onclick = async () => {
   const skipped = XS.engs.length - ready.length;
   await offer([{ name, data: await z.generateAsync({ type: "blob", compression: "DEFLATE" }) }], $("xGenMsg"), skipped ? `${skipped} site(s) com erro ficaram de fora.` : "");
 };
-engStatus(); render();
+engStatus(); render(); loadRepoKits();
 })();
 
 </script>
