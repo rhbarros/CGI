@@ -13,6 +13,7 @@
   color-scheme:dark;
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--text);font:13px/1.5 var(--f-ui);min-height:100%}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:300;background:var(--bg2)}
 ::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
@@ -165,7 +166,9 @@ pre.s5pv .gap{color:var(--text3)}
       <pre class="cmd" id="cmds">hget field productdata
 hget ,EUtranCellFDD ^cellId|^physicalLayerCellId$|^tac$|earfcndl|^dlChannelBandwidth$
 <span class="c"># opcional — preenche o eNodeB ID do CDD automaticamente:</span>
-get ENodeBFunction=1 eNBId</pre>
+get ENodeBFunction=1 eNBId
+<span class="c"># site 5G — células NR do CDD (aba Cell Info 5G NR):</span>
+hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFrequency$|ssbSubCarrierSpacing|rachRootSequence</pre>
       <div class="row"><button class="btn" id="bCopy">Copiar comandos</button><span class="note" id="copyMsg"></span></div>
       <textarea id="raw" spellcheck="false" placeholder="Cole aqui o retorno completo dos comandos…"></textarea>
       <div class="row">
@@ -182,6 +185,7 @@ get ENodeBFunction=1 eNBId</pre>
       <div class="stats" id="stats"></div>
       <div class="tablebox"><table id="tFru"></table></div>
       <div class="tablebox"><table id="tCell"></table></div>
+      <div class="tablebox" id="tNrBox" hidden><table id="tNr"></table></div>
     </section>
 
     <section class="panel">
@@ -243,6 +247,14 @@ get ENodeBFunction=1 eNBId</pre>
             <label class="f">LAC<input id="d-lac" placeholder=""></label>
           </div>
         </fieldset>
+        <fieldset id="fs5g" hidden><legend>Células 5G (CDD · Cell Info 5G NR)</legend>
+          <div class="grid">
+            <label class="f">gNodeB ID<input id="d-gnbId" placeholder="" inputmode="numeric"><span class="h" id="gnbHint">Vazio = ePD ou derivado do nCI</span></label>
+            <label class="f">PRACH<select id="d-prach5"><option value="">= PCI (padrão do CDD)</option><option value="rach">= rachRootSequence</option></select></label>
+          </div>
+          <div class="row" style="margin-top:10px"><button class="btn" id="bEpd5">Carregar ePD (.xlsx)</button><span class="note" id="epd5St"></span></div>
+          <p class="note" style="margin:8px 0 0">Do nó: CellName, NR Cell ID, PCI, TAC. Da ePD (pelo nome da célula): 5G NR ARFCN DL, BW, gNodeB ID e Site Code. A mesma ePD vale para a aba Scripts 5G.</p>
+        </fieldset>
       </div>
     </section>
 
@@ -264,8 +276,10 @@ get ENodeBFunction=1 eNBId</pre>
       <div class="tablebox"><table id="pSite"></table></div>
       <h3 class="sub">BULKLOAD · TPT-HARDWARE</h3>
       <div class="tablebox"><table id="pHw"></table></div>
-      <h3 class="sub">CDD · Cell Info LTE</h3>
-      <div class="tablebox"><table id="pCdd"></table></div>
+      <h3 class="sub" id="pCddH">CDD · Cell Info LTE</h3>
+      <div class="tablebox" id="pCddBox"><table id="pCdd"></table></div>
+      <h3 class="sub" id="pCdd5H" hidden>CDD · Cell Info 5G NR</h3>
+      <div class="tablebox" id="pCdd5Box" hidden><table id="pCdd5"></table></div>
     </section>
 
     <section class="panel">
@@ -399,6 +413,17 @@ get ENodeBFunction=1 eNBId</pre>
         rows.forEach((l) => { const f = parseFruLine(l, cols); if (f) out.frus.push(f); });
       } else if (names.includes('cellId')) {
         rows.forEach((l) => { const c = parseCellLine(l, cols); if (c) out.cells.push(c); });
+      } else if (names.includes('nRPCI') || names.includes('cellLocalId')) {
+        out.nrCells = out.nrCells || [];
+        rows.forEach((l) => { const c = parseNrLine(l, cols); if (c) out.nrCells.push(c); });
+      } else if (names.includes('arfcnDL') || names.includes('bSChannelBwDL')) {
+        out.nrCarriers = out.nrCarriers || [];
+        rows.forEach((l) => {
+          const t = l.trim().split(/\s+/);
+          const val = t.length === names.length ? (n) => { const k = names.indexOf(n); return k < 0 ? '' : t[k]; } : (n) => { const k = names.indexOf(n); return k < 0 ? '' : slice(l, cols, k); };
+          const mm = val('MO').match(/NRSectorCarrier=(.+)$/);
+          if (mm) out.nrCarriers.push({ name: mm[1], arfcnDL: val('arfcnDL'), bw: val('bSChannelBwDL') });
+        });
       } else if (names.some((n) => /^eNBId$/i.test(n))) {
         rows.forEach((l) => {
           const t = l.trim().split(/\s+/);
@@ -420,7 +445,7 @@ get ENodeBFunction=1 eNBId</pre>
       if (m) out.node = m[1];
     }
     if (!out.frus.length) out.warnings.push('Nenhuma linha de hget field productdata encontrada (BULKLOAD > Hardware ficará vazio).');
-    if (!out.cells.length) out.warnings.push('Nenhuma célula EUtranCellFDD/TDD encontrada (CDD ficará vazio).');
+    if (!out.cells.length && !(out.nrCells && out.nrCells.length)) out.warnings.push('Nenhuma célula EUtranCellFDD/TDD ou NRCellDU encontrada (CDD ficará vazio).');
     out.frus.forEach((f) => { if (!f.serialNumber) out.warnings.push(`FRU ${f.position}: sem serialNumber.`); });
     return out;
   }
@@ -470,6 +495,60 @@ get ENodeBFunction=1 eNBId</pre>
       mo, type: mm[1], name: mm[2], cellId: val('cellId'), pci: val('physicalLayerCellId'),
       tac: val('tac'), earfcn, bw,
     };
+  }
+
+  function parseNrLine(line, cols) {
+    const names = cols.map((c) => c.name);
+    // "2 (ACTIVE)" vira um token só, para a colagem com espaços colapsados
+    const t = line.trim().split(/\s+/).reduce((a, x) => { if (/^\(.*\)$/.test(x) && a.length) a[a.length - 1] += ' ' + x; else a.push(x); return a; }, []);
+    const val = t.length === names.length ? (n) => { const k = names.indexOf(n); return k < 0 ? '' : t[k]; } : (n) => { const k = names.indexOf(n); return k < 0 ? '' : slice(line, cols, k); };
+    const mo = val('MO');
+    const mm = mo.match(/NRCellDU=(.+)$/);
+    if (!mm) return null;
+    return {
+      mo, name: mm[1], cellLocalId: val('cellLocalId'), pci: val('nRPCI'), tac: val('nRTAC'), nci: val('nCI'),
+      rach: val('rachRootSequence'), ssb: val('ssbFrequency'), scs: val('ssbSubCarrierSpacing'), state: val('cellState'), secondaryOnly: val('secondaryCellOnly'),
+    };
+  }
+
+  // ---------- Bandas NR (NR-ARFCN DL) ----------
+  const NR_BANDS = [
+    { b: 78, lo: 620000, hi: 653333, f: '3500', d: 'TDD' },
+    { b: 77, lo: 653334, hi: 680000, f: '3700', d: 'TDD' },
+    { b: 28, lo: 151600, hi: 160600, f: '700', d: 'FDD' },
+    { b: 5, lo: 173800, hi: 178800, f: '850', d: 'FDD' },
+    { b: 8, lo: 185000, hi: 192000, f: '900', d: 'FDD' },
+    { b: 3, lo: 361000, hi: 376000, f: '1800', d: 'FDD' },
+    { b: 1, lo: 422000, hi: 434000, f: '2100', d: 'FDD' },
+    { b: 7, lo: 524000, hi: 538000, f: '2600', d: 'FDD' },
+    { b: 41, lo: 499200, hi: 523999, f: '2500', d: 'TDD' },
+  ];
+  function nrBandOf(arfcn) { const e = Number(arfcn); return NR_BANDS.find((x) => e >= x.lo && e <= x.hi) || null; }
+
+  // gNB ID a partir do nCI (gNBIdLength 28 → 8 bits de célula), quando consistente entre as células.
+  function gnbFromNci(cells) {
+    const ids = [...new Set(cells.map((c) => { const n = Number(c.nci), l = Number(c.cellLocalId); return (isFinite(n) && isFinite(l) && (n - l) % 256 === 0) ? String((n - l) / 256) : ''; }))];
+    return ids.length === 1 ? ids[0] : '';
+  }
+
+  // extra: { gnbId, siteCode, cells: { [nome]: { arfcn, bw } } } vindo da ePD (opcional)
+  function cdd5Rows(site, doc, extra) {
+    extra = extra || {};
+    const ex = extra.cells || {};
+    const car = {}; (site.nrCarriers || []).forEach((c) => { car[c.name] = c; });
+    const gnb = doc.gnbId || extra.gnbId || gnbFromNci(site.nrCells || []);
+    return (site.nrCells || []).map((c) => {
+      const e = ex[c.name] || {}; const k = car[c.name] || {};
+      const arfcn = e.arfcn || k.arfcnDL || '';
+      const bwRaw = e.bw || (k.bw ? String(Number(k.bw) >= 1000 ? Number(k.bw) / 1000 : Number(k.bw)) : '');
+      const b = nrBandOf(arfcn);
+      const tilt = (doc.tilts && doc.tilts[c.name] != null && doc.tilts[c.name] !== '') ? doc.tilts[c.name] : doc.tilt;
+      return {
+        A: site.node, B: c.name, C: num(c.cellLocalId), D: num(gnb), E: b && bwRaw ? `${b.f} ${b.d} - ${bwRaw}MHz` : '', F: num(tilt),
+        G: b ? b.b : '', H: num(doc.prach5 === 'rach' ? c.rach : c.pci), I: num(c.pci), J: num(doc.mcc), K: num(doc.mnc),
+        L: num(arfcn), M: num(bwRaw), N: num(c.tac), O: doc.enderecoId || extra.siteCode || '',
+      };
+    });
   }
 
   // ---------- Linhas das planilhas ----------
@@ -616,17 +695,21 @@ get ENodeBFunction=1 eNBId</pre>
     return zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
   }
 
-  async function fillCdd(JSZip, templateBuf, site, doc) {
+  async function fillCdd(JSZip, templateBuf, site, doc, extra5g) {
     const zip = await JSZip.loadAsync(templateBuf);
     const rows = cddRows(site, doc);
     const p = await sheetFile(zip, 'Cell Info LTE');
     zip.file(p, patchSheet(await zip.file(p).async('string'), { startRow: 2, rows, lastCol: 24 }));
+    if (site.nrCells && site.nrCells.length) {
+      const p5 = await sheetFile(zip, 'Cell Info 5G NR');
+      zip.file(p5, patchSheet(await zip.file(p5).async('string'), { startRow: 2, rows: cdd5Rows(site, doc, extra5g), lastCol: 15 }));
+    }
     await dropCalcChain(zip);
     await forceRecalc(zip);
     return zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
   }
 
-  const api = { parseHget, bandOf, bwLabel, bulkloadRows, cddRows, patchSheet, fillBulkload, fillCdd };
+  const api = { parseHget, bandOf, bwLabel, bulkloadRows, cddRows, cdd5Rows, nrBandOf, gnbFromNci, patchSheet, fillBulkload, fillCdd };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Core = api;
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -935,8 +1018,20 @@ const TPL_B64 = { bulk: "UEsDBBQABgAIAAAAIQCkPNvQSAIAAA4RAAATAAgCW0NvbnRlbnRfVHl
 const SAMPLE = {"raw": "4G-ERCE91> hget field productdata\n \n261110-19:19:21-0300 10.238.206.57 24.0f MSRBS_NODE_MODEL_24.Q3_198663.171.71_edc6 stopfile=/tmp/31972\n.\n=================================================================================================================\nMO                         productName   productNumber productRevision productionDate serialNumber\n=================================================================================================================\nFieldReplaceableUnit=1     Baseband 6630 KDU137848/11  R2B             20180711       TD3B062928  \nFieldReplaceableUnit=RRU-1 Radio 2219 B3 KRC 161 619/1 R2C             20191203       CA74383991  \nFieldReplaceableUnit=RRU-3 Radio 2219 B3 KRC 161 619/1 R2C             20191203       CA74383993  \n=================================================================================================================\nTotal: 3 MOs\n\n4G-ERCE91> hget ,EUtranCellFDD ^cellId|^physicalLayerCellId$|^tac$|earfcndl|^dlChannelBandwidth$\n \n261110-19:17:19-0300 10.238.206.57 24.0f MSRBS_NODE_MODEL_24.Q3_198663.171.71_edc6 stopfile=/tmp/31972\n..\n=================================================================================================================\nMO                           cellId dlChannelBandwidth earfcndl physicalLayerCellId tac  \n=================================================================================================================\nEUtranCellFDD=4G-ERCE91-18-A 9      15000              1425     0                   33188\nEUtranCellFDD=4G-ERCE91-18-B 10     15000              1425     8                   33188\n=================================================================================================================\nTotal: 2 MOs\n\n4G-ERCE91> get  ENodeBFunction=1 enbid\n \n261110-19:18:43-0300 10.238.206.57 24.0f MSRBS_NODE_MODEL_24.Q3_198663.171.71_edc6 stopfile=/tmp/31972\n=================================================================================================================\nMO                                                      Attribute         Value\n=================================================================================================================\nENodeBFunction=1                                        eNBId             203520\n=================================================================================================================\nTotal: 1 MOs\n", "doc": {"enderecoId": "MGEES_0483", "oc": "1401939", "enbId": "203520", "tilt": "10", "uf": "TLE", "cidade": "Esmeraldas", "anf": "31"}};
 const PROVISION = ["","Not Specified","In Service","Planned","Implementation","Installed","Pending Delete","Planned Modify","Planned Remove","Pending Modify","Recovered","Deactivated","Discovered","Active Experimental","Active Funcional","Active Preliminar","Cancelled","Reused","Not Installed","Pending Inventory"];
 const DEFAULTS = { rede:"", fabricante:"ERICSSON", mcc:"724", mnc:"2", operador:"TIM", reference:"0", project:"0" };
-const FIELDS = ["enderecoId","oc","rede","modelo","fabricante","provisionStatus","bscRnc","impactoNe","elementoCritico","activationDate","notaFiscal","dataGarantia","po","enbId","mcc","mnc","operador","tilt","uf","cidade","anf","planningDate","reference","project","cositeUmts","lac"];
+const FIELDS = ["enderecoId","oc","rede","modelo","fabricante","provisionStatus","bscRnc","impactoNe","elementoCritico","activationDate","notaFiscal","dataGarantia","po","enbId","mcc","mnc","operador","tilt","uf","cidade","anf","planningDate","reference","project","cositeUmts","lac","gnbId","prach5"];
 const REQ = ["enderecoId","oc","rede","fabricante","enbId","mcc","mnc"];
+// eNodeB ID só é obrigatório quando há células LTE (site 5G puro não tem).
+const reqFor = (p) => (p && !p.cells.length && (p.nrCells || []).length) ? REQ.filter((k) => k !== "enbId") : REQ;
+const nrOf = (p) => (p && p.nrCells) || [];
+// Dados 5G da ePD (carregada aqui ou na aba Scripts 5G), casados pelo nome do site/célula.
+function epd5(){
+  const S = window.S5get && window.S5get(); if (!S || !S.epd || !cur) return null;
+  const sid = cur.node.toUpperCase().replace(/^5G-/, "");
+  const site = S.epd.sites.find((x) => x.shortid.toUpperCase() === sid); if (!site) return { miss: true, src: S.epdName };
+  const cells = {}; site.cells.forEach((c) => { cells[c.name] = { arfcn: c.earfcnDl, bw: c.bw, pci: c.pci, cellId: c.cellId }; });
+  return { gnbId: site.gnbId, siteCode: site.enderecoId, tac: site.tac, cells, src: S.epdName };
+}
+window.onEpdChange = () => { if (cur && $("p-doc").style.display !== "none") renderDoc(); };
 const LSK = "ericsson-ran-doc-v1";
 const $ = (id) => document.getElementById(id);
 const escH = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -963,7 +1058,7 @@ function showTab(t){
 
 // ---------- entrada ----------
 $("bCopy").onclick = async () => {
-  const t = "hget field productdata\nhget ,EUtranCellFDD ^cellId|^physicalLayerCellId$|^tac$|earfcndl|^dlChannelBandwidth$\nget ENodeBFunction=1 eNBId";
+  const t = "hget field productdata\nhget ,EUtranCellFDD ^cellId|^physicalLayerCellId$|^tac$|earfcndl|^dlChannelBandwidth$\nget ENodeBFunction=1 eNBId\nhget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFrequency$|ssbSubCarrierSpacing|rachRootSequence";
   try { await navigator.clipboard.writeText(t); $("copyMsg").textContent = "Copiado."; }
   catch(e){ const r = document.createRange(); r.selectNodeContents($("cmds")); const s = getSelection(); s.removeAllRanges(); s.addRange(r); $("copyMsg").textContent = "Selecionado — use Ctrl+C."; }
 };
@@ -986,7 +1081,7 @@ function process(isExample){
   cur = { node: parsed.node, raw, parsed, doc, savedAt: new Date().toISOString(), example: !!isExample };
   upsert();
   const w = parsed.warnings.map((x) => `<div class="msg warn">${escH(x)}</div>`).join("");
-  $("procMsg").innerHTML = `<div class="msg ok">${escH(parsed.node)} carregado: ${parsed.frus.length} FRUs, ${parsed.cells.length} células${parsed.enbId ? ", eNodeB ID " + escH(parsed.enbId) : ""}. Salvo no histórico.</div>` + w;
+  $("procMsg").innerHTML = `<div class="msg ok">${escH(parsed.node)} carregado: ${parsed.frus.length} FRUs, ${parsed.cells.length} células LTE${nrOf(parsed).length ? ", " + nrOf(parsed).length + " células 5G NR" : ""}${parsed.enbId ? ", eNodeB ID " + escH(parsed.enbId) : ""}. Salvo no histórico.</div>` + w;
   renderRead(); renderHist(); renderChip();
 }
 function upsert(){
@@ -1006,7 +1101,7 @@ function renderRead(){
   const p = cur && cur.parsed;
   if (!p) {
     $("stats").innerHTML = `<div class="info-banner">Nenhum dado carregado. Cole os retornos acima e clique em Processar e carregar.</div>`;
-    $("tFru").innerHTML = ""; $("tCell").innerHTML = ""; return;
+    $("tFru").innerHTML = ""; $("tCell").innerHTML = ""; $("tCell").parentElement.hidden = false; $("tNrBox").hidden = true; return;
   }
   const bands = [...new Set(p.cells.map((c) => { const b = Core.bandOf(c.earfcn); return b ? "B" + b.b + " (" + b.f + ")" : "EARFCN " + c.earfcn + "?"; }))];
   const kpi = (label, val, sub, kc) => `<div class="kpi" style="--kc:${kc}"><div class="kpi-label">${label}</div><div class="kpi-val">${val}</div><div class="kpi-sub">${sub}</div></div>`;
@@ -1015,8 +1110,16 @@ function renderRead(){
     kpi("Nó", `<span style="color:var(--c1)">${escH(p.node)}</span>`, bb ? escH(bb.productName) : "sem Baseband", "var(--c1)"),
     kpi("FRUs", p.frus.length, "hget field productdata", "var(--c2)"),
     kpi("Células LTE", p.cells.length, escH(bands.join(" · ") || "—"), "var(--c3)"),
-    kpi("eNodeB ID", p.enbId ? escH(p.enbId) : "—", p.enbId ? "lido do ENodeBFunction" : "digite na Documentação", p.enbId ? "var(--c4)" : "var(--c5)")
+    ...(nrOf(p).length ? [kpi("Células 5G NR", nrOf(p).length, "hget ^NRCellDU", "var(--c6)")] : []),
+    (nrOf(p).length && !p.cells.length)
+      ? kpi("gNodeB ID", escH(Core.gnbFromNci(nrOf(p)) || "—"), "derivado do nCI (gNBIdLength 28)", "var(--c4)")
+      : kpi("eNodeB ID", p.enbId ? escH(p.enbId) : "—", p.enbId ? "lido do ENodeBFunction" : "digite na Documentação", p.enbId ? "var(--c4)" : "var(--c5)")
   ].join("");
+  const nr = nrOf(p);
+  $("tCell").parentElement.hidden = !p.cells.length && nr.length > 0;
+  $("tNrBox").hidden = !nr.length;
+  $("tNr").innerHTML = nr.length ? `<thead><tr><th>Célula NR</th><th>cellLocalId</th><th>PCI</th><th>TAC</th><th>nCI</th><th>rachRootSeq</th><th>ssbFrequency</th><th>Estado</th></tr></thead><tbody>` +
+    nr.map((c) => `<tr><td class="hi">${escH(c.name)}</td><td class="mono">${escH(c.cellLocalId)}</td><td class="mono">${escH(c.pci)}</td><td class="mono">${escH(c.tac)}</td><td class="mono">${escH(c.nci)}</td><td class="mono">${escH(c.rach)}</td><td class="mono">${escH(c.ssb)}</td><td>${/ACTIVE/i.test(c.state) ? `<span class="pill ok">${escH(c.state)}</span>` : `<span class="pill warn">${escH(c.state || "—")}</span>`}</td></tr>`).join("") + `</tbody>` : "";
   $("tFru").innerHTML = `<thead><tr><th>FRU (Position)</th><th>productName</th><th>productNumber</th><th>Revision</th><th>Data prod.</th><th>serialNumber</th></tr></thead><tbody>` +
     (p.frus.map((f) => `<tr><td class="hi">${escH(f.position)}</td><td>${escH(f.productName)}</td><td class="mono">${escH(f.productNumber)}</td><td class="mono">${escH(f.productRevision)}</td><td class="mono">${escH(f.productionDate)}</td><td class="mono">${escH(f.serialNumber)}</td></tr>`).join("") || `<tr><td colspan="6" class="note">Nenhuma FRU lida.</td></tr>`) + `</tbody>`;
   $("tCell").innerHTML = `<thead><tr><th>Célula</th><th>cellId</th><th>PCI</th><th>TAC</th><th>earfcndl</th><th>BW</th><th>Banda</th></tr></thead><tbody>` +
@@ -1031,7 +1134,7 @@ function renderHist(){
     const when = isNaN(d) ? "" : d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
     const p = h.parsed || { frus: [], cells: [] };
     return `<div class="it ${cur && cur.node === h.node ? "cur" : ""}"><span class="nm">${escH(h.node)}</span>
-      <span class="meta">${p.frus.length} FRUs · ${p.cells.length} células · ${escH(h.doc.enderecoId || "sem EnderecoID")} · ${when}${h.example ? " · exemplo" : ""}</span>
+      <span class="meta">${p.frus.length} FRUs · ${p.cells.length + nrOf(p).length} células · ${escH(h.doc.enderecoId || "sem EnderecoID")} · ${when}${h.example ? " · exemplo" : ""}</span>
       <button class="btn" data-open="${i}">Abrir</button><button class="btn danger" data-del="${i}">Remover</button></div>`;
   }).join("");
 }
@@ -1067,21 +1170,30 @@ function renderDoc(){
   $("d-node").value = has ? cur.node : "";
   $("enbHint").textContent = has && cur.parsed.enbId ? "Lido do ENodeBFunction" : "Ou rode get ENodeBFunction=1 eNBId";
   ["gBoth","gB","gC"].forEach((id) => $(id).disabled = !has);
+  const nr = has ? nrOf(cur.parsed) : [];
+  $("fs5g").hidden = !nr.length;
+  $("d-enbId").closest("label").classList.toggle("req", !(has && !cur.parsed.cells.length && nr.length));
+  if (nr.length) {
+    const ex = epd5(); const der = Core.gnbFromNci(nr);
+    $("d-gnbId").placeholder = (ex && ex.gnbId) || der || "";
+    $("gnbHint").textContent = ex && ex.gnbId ? "Da ePD" : der ? "Derivado do nCI (gNBIdLength 28)" : "Informe o gNodeB ID";
+    $("epd5St").innerHTML = !ex ? "Nenhuma ePD carregada: ARFCN, BW e Site Code ficam vazios." : ex.miss ? `<span style="color:var(--c4)">${escH(ex.src)} não tem o site ${escH(cur.node)}.</span>` : `<span style="color:var(--c3)">${escH(ex.src)}</span>`;
+  }
   renderPreview();
 }
 
 function renderPreview(){
   if (!cur) {
     $("pending").innerHTML = `<div class="msg warn">Nenhum site carregado. Processe uma coleta na aba Entrada &amp; histórico ou abra um site do histórico.</div>`;
-    ["pSite","pHw","pCdd"].forEach((id) => $(id).innerHTML = ""); return;
+    ["pSite","pHw","pCdd","pCdd5"].forEach((id) => $(id).innerHTML = ""); $("pCdd5H").hidden = $("pCdd5Box").hidden = true; return;
   }
   const doc = cur.doc;
   $("d-provisionStatus").classList.toggle("empty", !doc.provisionStatus);
-  const miss = REQ.filter((k) => !String(doc[k] ?? "").trim());
-  const noTilt = cur.parsed.cells.filter((c) => !String((doc.tilts && doc.tilts[c.name]) || doc.tilt || "").trim()).length;
+  const miss = reqFor(cur.parsed).filter((k) => !String(doc[k] ?? "").trim());
+  const noTilt = [...cur.parsed.cells, ...nrOf(cur.parsed)].filter((c) => !String((doc.tilts && doc.tilts[c.name]) || doc.tilt || "").trim()).length;
   const lbl = { enderecoId:"EnderecoID", oc:"OC", rede:"Rede", fabricante:"Fabricante", enbId:"eNodeB ID", mcc:"MCC", mnc:"MNC" };
   $("pending").innerHTML = (miss.length ? `<div class="msg warn">Pendentes: ${miss.map((k) => lbl[k]).join(", ")}.</div>` : `<div class="msg ok">Campos obrigatórios preenchidos.</div>`) +
-    (noTilt ? `<div class="msg warn">${noTilt} célula(s) sem Tilt.</div>` : "");
+    (noTilt ? `<div class="msg warn">${noTilt} célula(s) sem Tilt.</div>` : "") + pending5();
 
   const { siteid, hw, modelo } = Core.bulkloadRows(cur.parsed, doc);
   $("d-modelo").placeholder = modelo || "lido do Baseband";
@@ -1099,7 +1211,46 @@ function renderPreview(){
       ? `<td><input id="tilt-${i}" data-cell="${escH(cell.name)}" value="${escH((doc.tilts && doc.tilts[cell.name]) ?? "")}" placeholder="${escH(doc.tilt || "")}" aria-label="Tilt ${escH(cell.name)}"></td>`
       : `<td class="mono">${fmtCell(r[c])}</td>`).join("")}</tr>`;
   }).join("") + `</tbody>`;
+  const only5 = !cur.parsed.cells.length && nrOf(cur.parsed).length;
+  $("pCddH").hidden = $("pCddBox").hidden = !!only5;
+  renderCdd5();
 }
+function pending5(){
+  const nr = nrOf(cur.parsed); if (!nr.length) return "";
+  const ex = epd5(); const out = [];
+  if (!ex) out.push("5G: carregue a ePD para preencher ARFCN DL, BW e Site Code.");
+  else if (ex.miss) out.push(`5G: a ePD ${ex.src} não tem o site ${cur.node}.`);
+  else nr.forEach((c) => {
+    const e = ex.cells[c.name];
+    if (!e) { out.push(`5G: ${c.name} não está na ePD.`); return; }
+    if (e.pci && String(e.pci) !== String(c.pci)) out.push(`5G: ${c.name} PCI no nó ${c.pci}, na ePD ${e.pci}. O CDD usa o do nó.`);
+    if (e.cellId && String(e.cellId) !== String(c.cellLocalId)) out.push(`5G: ${c.name} cellLocalId no nó ${c.cellLocalId}, na ePD ${e.cellId}. O CDD usa o do nó.`);
+  });
+  if (ex && !ex.miss && ex.tac && nr[0] && String(ex.tac) !== String(nr[0].tac)) out.push(`5G: TAC no nó ${nr[0].tac}, na ePD ${ex.tac}. O CDD usa o do nó.`);
+  return out.map((x) => `<div class="msg warn">${escH(x)}</div>`).join("");
+}
+function renderCdd5(){
+  const nr = nrOf(cur.parsed);
+  $("pCdd5H").hidden = $("pCdd5Box").hidden = !nr.length;
+  if (!nr.length) { $("pCdd5").innerHTML = ""; return; }
+  const doc = cur.doc; const ex = epd5();
+  const rows = Core.cdd5Rows(cur.parsed, doc, ex && !ex.miss ? ex : null);
+  const head = ["EnodeBName","CellName","NR Cell ID","gNodebID","Freq Band","Tilt","Band Number","PRACH","PCI","MCC","MNC","5G NR ARFCN DL","BW (MHz)","TAC","Site Code"];
+  const cols = "ABCDEFGHIJKLMNO".split("");
+  $("pCdd5").innerHTML = `<thead><tr>${head.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>` + rows.map((r, i) => {
+    const cell = nr[i];
+    return `<tr>${cols.map((c) => c === "F"
+      ? `<td><input id="tilt5-${i}" data-cell="${escH(cell.name)}" value="${escH((doc.tilts && doc.tilts[cell.name]) ?? "")}" placeholder="${escH(doc.tilt || "")}" aria-label="Tilt ${escH(cell.name)}"></td>`
+      : `<td class="mono">${fmtCell(r[c])}</td>`).join("")}</tr>`;
+  }).join("") + `</tbody>`;
+}
+$("pCdd5").addEventListener("input", (e) => {
+  const t = e.target.closest("input[data-cell]"); if (!t || !cur) return;
+  cur.doc.tilts = cur.doc.tilts || {};
+  cur.doc.tilts[t.dataset.cell] = t.value.trim();
+  upsert();
+});
+$("bEpd5").onclick = () => $("f5Epd").click();
 $("pCdd").addEventListener("input", (e) => {
   const t = e.target.closest("input[data-cell]"); if (!t || !cur) return;
   cur.doc.tilts = cur.doc.tilts || {};
@@ -1126,12 +1277,12 @@ const bulkExt = () => (/\.xlsx$/i.test(tpl.bulk ? tpl.bulkName : "") ? "xlsx" : 
 async function gen(which){
   if (!cur) return;
   const msg = $("genMsg");
-  const miss = REQ.filter((k) => !String(cur.doc[k] ?? "").trim());
+  const miss = reqFor(cur.parsed).filter((k) => !String(cur.doc[k] ?? "").trim());
   msg.innerHTML = `<div class="msg">Gerando…</div>`;
   try {
     const files = [];
     if (which !== "cdd") files.push({ name: `${cur.node}_BULKLOADv12.${bulkExt()}`, data: await Core.fillBulkload(JSZip, bulkTpl(), cur.parsed, cur.doc) });
-    if (which !== "bulk") files.push({ name: `CDD_${cur.node}.xlsx`, data: await Core.fillCdd(JSZip, cddTpl(), cur.parsed, cur.doc) });
+    if (which !== "bulk") files.push({ name: `CDD_${cur.node}.xlsx`, data: await Core.fillCdd(JSZip, cddTpl(), cur.parsed, cur.doc, (() => { const ex = epd5(); return ex && !ex.miss ? ex : null; })()) });
     await offer(files, msg, miss.length ? `Atenção: gerado com pendências (${miss.length} campo(s) obrigatório(s) vazio(s)).` : "");
   } catch(err) { msg.innerHTML = `<div class="msg bad">Não consegui gerar: ${escH(err.message || err)}. Confira se o modelo selecionado tem as abas TPT-SITEID, TPT-HARDWARE e Cell Info LTE.</div>`; }
 }
@@ -1221,6 +1372,7 @@ $("f5Epd").onchange = async (e) => {
     S5.epd = best.p; S5.epdName = `${f.name} · aba ${best.n}`; S5.edits = {};
     $("s5EpdSt").innerHTML = `<span style="color:var(--c3)">${escH(S5.epdName)}</span> · ${best.p.sites.length} site(s), ${best.p.sites.reduce((a, s) => a + s.cells.length, 0)} célula(s).`;
     $("s5Msg").innerHTML = "";
+    if (window.onEpdChange) window.onEpdChange();
   } catch (err) { $("s5Msg").innerHTML = `<div class="msg bad">Não consegui ler ${escH(f.name)}: ${escH(err.message || err)}.</div>`; }
   e.target.value = ""; render();
 };
@@ -1347,6 +1499,7 @@ $("s5Gen").onclick = async () => {
 };
 
 window.S5render = render;
+window.S5get = () => S5;
 kitStatus(); render();
 })();
 
