@@ -209,7 +209,7 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
       <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr))">
         <fieldset><legend>Site (BULKLOAD · TPT-SITEID)</legend>
           <div class="grid">
-            <label class="f req"><span>EnderecoID <span class="req-mark">*</span></span><input id="d-enderecoId" placeholder="ex.: MGEES_0483"><span class="h">Também vai em Site Code no CDD</span></label>
+            <label class="f req"><span>EnderecoID <span class="req-mark">*</span></span><input id="d-enderecoId" placeholder="ex.: MGEES_0483"><span class="h">Também vai em Site Code no CDD (4G e 5G)</span></label>
             <label class="f req"><span>OC <span class="req-mark">*</span></span><input id="d-oc" placeholder="ex.: 1401939" inputmode="numeric"></label>
             <label class="f">SiteID / Node<input id="d-node" readonly placeholder="lido do prompt"></label>
             <label class="f req"><span>Rede <span class="req-mark">*</span></span><input id="d-rede" placeholder="4G"></label>
@@ -253,7 +253,7 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
             <label class="f">PRACH<select id="d-prach5"><option value="">= PCI (padrão do CDD)</option><option value="rach">= rachRootSequence</option></select></label>
           </div>
           <div class="row" style="margin-top:10px"><button class="btn" id="bEpd5">Carregar ePD (.xlsx)</button><span class="note" id="epd5St"></span></div>
-          <p class="note" style="margin:8px 0 0">Do nó: CellName, NR Cell ID, PCI, TAC. Da ePD (pelo nome da célula): 5G NR ARFCN DL, BW, gNodeB ID e Site Code. A mesma ePD vale para a aba Scripts 5G.</p>
+          <p class="note" style="margin:8px 0 0">Do nó: CellName, NR Cell ID, PCI, TAC. Fixos: Tilt 5, Freq Band 3500 TDD - 100MHz, Band 78, ARFCN DL 636666, BW 100. Site Code = EnderecoID acima. A ePD é opcional: confere PCI/TAC e dá o gNodeB ID.</p>
         </fieldset>
       </div>
     </section>
@@ -531,24 +531,17 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
     return ids.length === 1 ? ids[0] : '';
   }
 
-  // extra: { gnbId, siteCode, cells: { [nome]: { arfcn, bw } } } vindo da ePD (opcional)
+  // CDD 5G (padrão TIM n78): Tilt 5, ARFCN DL 636666, BW 100, Freq Band "3500 TDD - 100MHz", Band 78 fixos.
+  // Site Code = EnderecoID da Documentação lógica. extra (ePD, opcional) só complementa o gNodeB ID.
+  const NR_FIXED = { tilt: 5, arfcn: 636666, bw: 100, freqBand: '3500 TDD - 100MHz', band: 78 };
   function cdd5Rows(site, doc, extra) {
     extra = extra || {};
-    const ex = extra.cells || {};
-    const car = {}; (site.nrCarriers || []).forEach((c) => { car[c.name] = c; });
     const gnb = doc.gnbId || extra.gnbId || gnbFromNci(site.nrCells || []);
-    return (site.nrCells || []).map((c) => {
-      const e = ex[c.name] || {}; const k = car[c.name] || {};
-      const arfcn = e.arfcn || k.arfcnDL || '';
-      const bwRaw = e.bw || (k.bw ? String(Number(k.bw) >= 1000 ? Number(k.bw) / 1000 : Number(k.bw)) : '');
-      const b = nrBandOf(arfcn);
-      const tilt = (doc.tilts && doc.tilts[c.name] != null && doc.tilts[c.name] !== '') ? doc.tilts[c.name] : doc.tilt;
-      return {
-        A: site.node, B: c.name, C: num(c.cellLocalId), D: num(gnb), E: b && bwRaw ? `${b.f} ${b.d} - ${bwRaw}MHz` : '', F: num(tilt),
-        G: b ? b.b : '', H: num(doc.prach5 === 'rach' ? c.rach : c.pci), I: num(c.pci), J: num(doc.mcc), K: num(doc.mnc),
-        L: num(arfcn), M: num(bwRaw), N: num(c.tac), O: doc.enderecoId || extra.siteCode || '',
-      };
-    });
+    return (site.nrCells || []).map((c) => ({
+      A: site.node, B: c.name, C: num(c.cellLocalId), D: num(gnb), E: NR_FIXED.freqBand, F: NR_FIXED.tilt,
+      G: NR_FIXED.band, H: num(doc.prach5 === 'rach' ? c.rach : c.pci), I: num(c.pci), J: num(doc.mcc), K: num(doc.mnc),
+      L: NR_FIXED.arfcn, M: NR_FIXED.bw, N: num(c.tac), O: doc.enderecoId || '',
+    }));
   }
 
   // ---------- Linhas das planilhas ----------
@@ -709,7 +702,7 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
     return zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
   }
 
-  const api = { parseHget, bandOf, bwLabel, bulkloadRows, cddRows, cdd5Rows, nrBandOf, gnbFromNci, patchSheet, fillBulkload, fillCdd };
+  const api = { parseHget, bandOf, bwLabel, bulkloadRows, cddRows, cdd5Rows, nrBandOf, gnbFromNci, NR_FIXED, patchSheet, fillBulkload, fillCdd };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Core = api;
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -1177,7 +1170,7 @@ function renderDoc(){
     const ex = epd5(); const der = Core.gnbFromNci(nr);
     $("d-gnbId").placeholder = (ex && ex.gnbId) || der || "";
     $("gnbHint").textContent = ex && ex.gnbId ? "Da ePD" : der ? "Derivado do nCI (gNBIdLength 28)" : "Informe o gNodeB ID";
-    $("epd5St").innerHTML = !ex ? "Nenhuma ePD carregada: ARFCN, BW e Site Code ficam vazios." : ex.miss ? `<span style="color:var(--c4)">${escH(ex.src)} não tem o site ${escH(cur.node)}.</span>` : `<span style="color:var(--c3)">${escH(ex.src)}</span>`;
+    $("epd5St").innerHTML = !ex ? "Nenhuma ePD carregada (opcional)." : ex.miss ? `<span style="color:var(--c4)">${escH(ex.src)} não tem o site ${escH(cur.node)}.</span>` : `<span style="color:var(--c3)">${escH(ex.src)}</span>`;
   }
   renderPreview();
 }
@@ -1190,7 +1183,7 @@ function renderPreview(){
   const doc = cur.doc;
   $("d-provisionStatus").classList.toggle("empty", !doc.provisionStatus);
   const miss = reqFor(cur.parsed).filter((k) => !String(doc[k] ?? "").trim());
-  const noTilt = [...cur.parsed.cells, ...nrOf(cur.parsed)].filter((c) => !String((doc.tilts && doc.tilts[c.name]) || doc.tilt || "").trim()).length;
+  const noTilt = cur.parsed.cells.filter((c) => !String((doc.tilts && doc.tilts[c.name]) || doc.tilt || "").trim()).length;
   const lbl = { enderecoId:"EnderecoID", oc:"OC", rede:"Rede", fabricante:"Fabricante", enbId:"eNodeB ID", mcc:"MCC", mnc:"MNC" };
   $("pending").innerHTML = (miss.length ? `<div class="msg warn">Pendentes: ${miss.map((k) => lbl[k]).join(", ")}.</div>` : `<div class="msg ok">Campos obrigatórios preenchidos.</div>`) +
     (noTilt ? `<div class="msg warn">${noTilt} célula(s) sem Tilt.</div>` : "") + pending5();
@@ -1218,7 +1211,8 @@ function renderPreview(){
 function pending5(){
   const nr = nrOf(cur.parsed); if (!nr.length) return "";
   const ex = epd5(); const out = [];
-  if (!ex) out.push("5G: carregue a ePD para preencher ARFCN DL, BW e Site Code.");
+  if (!String(cur.doc.enderecoId || "").trim()) out.push("5G: preencha o EnderecoID; ele vai no Site Code da Cell Info 5G NR.");
+  if (!ex) { /* ePD opcional: só confere PCI/cellLocalId/TAC e dá o gNodeB ID */ }
   else if (ex.miss) out.push(`5G: a ePD ${ex.src} não tem o site ${cur.node}.`);
   else nr.forEach((c) => {
     const e = ex.cells[c.name];
@@ -1239,9 +1233,7 @@ function renderCdd5(){
   const cols = "ABCDEFGHIJKLMNO".split("");
   $("pCdd5").innerHTML = `<thead><tr>${head.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>` + rows.map((r, i) => {
     const cell = nr[i];
-    return `<tr>${cols.map((c) => c === "F"
-      ? `<td><input id="tilt5-${i}" data-cell="${escH(cell.name)}" value="${escH((doc.tilts && doc.tilts[cell.name]) ?? "")}" placeholder="${escH(doc.tilt || "")}" aria-label="Tilt ${escH(cell.name)}"></td>`
-      : `<td class="mono">${fmtCell(r[c])}</td>`).join("")}</tr>`;
+    return `<tr>${cols.map((c) => `<td class="mono">${fmtCell(r[c])}</td>`).join("")}</tr>`;
   }).join("") + `</tbody>`;
 }
 $("pCdd5").addEventListener("input", (e) => {
