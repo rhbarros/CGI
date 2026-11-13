@@ -1573,7 +1573,7 @@ function renderRead(){
 }
 
 // ---------- histórico compartilhado (Planilha Google via Apps Script: Historico_Ericsson.gs) ----------
-const HIST_URL_DEFAULT = "";
+const HIST_URL_DEFAULT = "https://script.google.com/macros/s/AKfycbxRFQPbbW-DmtsKsB_ApNINyMW7G_H4Qpy4mcq5D1yV72mt7pipLHVjTMIDzZudoqifxA/exec";
 const HS = { remote: [], del: {}, loaded: false, busy: 0, err: "", last: 0, pend: {}, timers: {}, chain: Promise.resolve(), confirm: null };
 const userName = () => { try { return localStorage.getItem(LSK + ":user") || ""; } catch(e){ return ""; } };
 const hsUrl = () => { try { return (localStorage.getItem(LSK + ":histurl") || HIST_URL_DEFAULT).trim(); } catch(e){ return HIST_URL_DEFAULT; } };
