@@ -1772,6 +1772,7 @@ const labelOf = (reg, uf, city) => [reg, uf, city].map((x) => fold(x).trim().toU
 function kitStatus(){
   const have = Core5G.TEMPLATE_FILES.filter((f) => S5.tpls[f]);
   const sf = Core5G.SYSFUNC[$("s5Enm").value];
+  $("s5Kit").textContent = (have.length === Core5G.TEMPLATE_FILES.length && S5.tpls[sf]) ? "Substituir kit (.zip ou .mos)" : "Carregar kit (.zip ou .mos)";
   $("s5KitSt").innerHTML = `${have.length}/${Core5G.TEMPLATE_FILES.length} modelos (${escH(S5.tplSrc)}). ` +
     (S5.tpls[sf] ? `<span style="color:var(--c3)">${escH(sf)} carregado.</span>` : `<span style="color:var(--c4)">${escH(sf)} não carregado: o script 15 só entra se você carregar o kit, porque ele contém senhas e não fica salvo na página.</span>`);
 }
@@ -1927,9 +1928,19 @@ $("s5Gen").onclick = async () => {
   await offer([{ name, data: blob }], $("s5GenMsg"), skipped ? `${skipped} site(s) com erro ficaram de fora.` : "");
 };
 
+// Kit publicado ao lado da página no GitHub (KIT_5G.zip): tem prioridade sobre os modelos incorporados.
+async function loadRepoKit5(){
+  if (!/^https?:$/.test(location.protocol)) return;
+  try {
+    const r = await fetch("KIT_5G.zip", { cache: "no-cache" }); if (!r.ok) return;
+    const z = await JSZip.loadAsync(await r.arrayBuffer()); let n = 0;
+    for (const p of Object.keys(z.files)) { const b = p.split("/").pop(); if (!z.files[p].dir && /\.mos$/i.test(b)) { S5.tpls[b] = await z.files[p].async("string"); n++; } }
+    if (n) { S5.tplSrc = "do repositório: KIT_5G.zip"; render(); }
+  } catch (e) { /* sem acesso: segue com os incorporados */ }
+}
 window.S5render = render;
 window.S5get = () => S5;
-kitStatus(); render();
+kitStatus(); render(); loadRepoKit5();
 })();
 
 // ================= XML_ERICSSON =================
