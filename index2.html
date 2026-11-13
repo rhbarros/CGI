@@ -344,7 +344,7 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
   <div id="p-xml" style="display:none;flex-direction:column;gap:13px">
     <section class="panel">
       <div class="ph"><span class="step">1</span><h2>Arquivos de entrada</h2>
-        <p>ENG-SI (aba PROJETO LÓGICO) ou o TX.xlsx consolidado pela macro. Kits de XML por versão de SW: R68D37 / R3D35 e R82E29, lidos do repositório quando a página está no GitHub; o botão do kit substitui nesta sessão.</p></div>
+        <p>ENG-SI (aba PROJETO LÓGICO) ou o TX.xlsx consolidado pela macro. Kits de XML por versão de SW: R68D37 / R3D35, R82E29 e Satélite R68D37 / R3D35, lidos do repositório quando a página está no GitHub; o botão do kit substitui nesta sessão.</p></div>
       <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr))">
         <fieldset><legend>ENG-SI / TX.xlsx</legend>
           <div class="row"><button class="btn primary" id="xEng">Adicionar ENG-SI (.xlsx)</button><input type="file" id="fxEng" accept=".xlsx,.xlsm,.xls" multiple hidden><button class="btn" id="xEngClr">Limpar</button></div>
@@ -358,9 +358,13 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
           <div class="row"><button class="btn" id="xKitR82">Carregar XML_R82E29.zip</button><input type="file" id="fxKitR82" accept=".zip,.xml" multiple hidden></div>
           <p class="note" id="xKitR82St" style="margin:8px 0 0"></p>
         </fieldset>
+        <fieldset><legend>Kit Satélite R68D37 / R3D35</legend>
+          <div class="row"><button class="btn" id="xKitSAT">Carregar XML_SATELITE_R68D37_R3D35.zip</button><input type="file" id="fxKitSAT" accept=".zip,.xml" multiple hidden></div>
+          <p class="note" id="xKitSATSt" style="margin:8px 0 0"></p>
+        </fieldset>
       </div>
       <div class="row">
-        <label class="f" style="flex-direction:row;align-items:center;gap:6px">Versão padrão<select id="xVer" style="width:auto"><option value="R68">R68D37 / R3D35</option><option value="R82">R82E29</option></select></label>
+        <label class="f" style="flex-direction:row;align-items:center;gap:6px">Versão padrão<select id="xVer" style="width:auto"><option value="R68">R68D37 / R3D35</option><option value="R82">R82E29</option><option value="SAT">Satélite R68D37 / R3D35</option></select></label>
         <label class="f" style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="xFix" checked style="width:auto"> corrigir defeitos conhecidos dos modelos</label>
       </div>
       <div id="xMsg"></div>
@@ -1063,6 +1067,7 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
   const VERSIONS = {
     R68: { label: 'R68D37 / R3D35', files: ['RBSSummary.xml', 'SiteBasic.xml', 'SiteEquipment.xml'] },
     R82: { label: 'R82E29', files: ['RBSSummary.xml', 'SiteBasic.xml', 'SiteEquipment.xml'] },
+    SAT: { label: 'Satélite R68D37 / R3D35', files: ['RBSSummary.xml', 'SiteBasic.xml', 'SiteEquipment.xml'] },
   };
   const norm = (s) => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9&]/g, '');
   const str = (v) => (v == null ? '' : String(v).trim());
@@ -1709,18 +1714,18 @@ kitStatus(); render();
 
 // ================= XML_ERICSSON =================
 (function(){
-const XS = { engs: [], kits: { R68: {}, R82: {} }, kitSrc: { R68: "", R82: "" }, ver: {}, results: {} };
+const XS = { engs: [], kits: { R68: {}, R82: {}, SAT: {} }, kitSrc: { R68: "", R82: "", SAT: "" }, ver: {}, results: {} };
 const KITS_EMB = {};
 const KLS = LSK + ":xmlkits";
 (function loadKits(){
-  ["R68","R82"].forEach((v) => { if (KITS_EMB[v] && Object.keys(KITS_EMB[v]).length) { XS.kits[v] = Object.assign({}, KITS_EMB[v]); XS.kitSrc[v] = "incorporado"; } });
-  try { const st = JSON.parse(localStorage.getItem(KLS) || "{}"); ["R68","R82"].forEach((v) => { if (!XS.kitSrc[v] && st[v] && Object.keys(st[v]).length) { XS.kits[v] = st[v]; XS.kitSrc[v] = "salvo neste navegador"; } }); } catch(e){}
+  ["R68","R82","SAT"].forEach((v) => { if (KITS_EMB[v] && Object.keys(KITS_EMB[v]).length) { XS.kits[v] = Object.assign({}, KITS_EMB[v]); XS.kitSrc[v] = "incorporado"; } });
+  try { const st = JSON.parse(localStorage.getItem(KLS) || "{}"); ["R68","R82","SAT"].forEach((v) => { if (!XS.kitSrc[v] && st[v] && Object.keys(st[v]).length) { XS.kits[v] = st[v]; XS.kitSrc[v] = "salvo neste navegador"; } }); } catch(e){}
 })();
 // Kits publicados ao lado da página no GitHub (mesma pasta do index2.html): têm prioridade sobre a cópia salva no navegador.
-const REPO_KITS = { R68: "RBSSummary_r68d37%26r.zip", R82: "XML_R82E29.zip" };
+const REPO_KITS = { R68: "RBSSummary_r68d37%26r.zip", R82: "XML_R82E29.zip", SAT: "XML_SATELITE_R68D37_R3D35.zip" };
 async function loadRepoKits(){
   if (!/^https?:$/.test(location.protocol)) return;
-  for (const v of ["R68","R82"]) {
+  for (const v of ["R68","R82","SAT"]) {
     if (XS.kitSrc[v] === "incorporado") continue;
     try {
       const r = await fetch(REPO_KITS[v], { cache: "no-cache" });
@@ -1736,7 +1741,7 @@ async function loadRepoKits(){
 const domParse = (s) => { const d = new DOMParser().parseFromString(s, "application/xml"); const pe = d.getElementsByTagName("parsererror")[0]; return pe ? (pe.textContent || "erro de sintaxe").replace(/\s+/g, " ").slice(0, 140) : null; };
 
 function kitStatus(){
-  ["R68","R82"].forEach((v) => {
+  ["R68","R82","SAT"].forEach((v) => {
     const have = CoreXML.VERSIONS[v].files.filter((f) => XS.kits[v][f]);
     const pkg = ((XS.kits[v]["RBSSummary.xml"] || "").match(/upgradePackageFilePath="([^"]+)"/) || [])[1];
     $("xKit" + v + "St").innerHTML = have.length === 3
@@ -1754,7 +1759,7 @@ async function loadKit(v, files){
   }
   if (!Object.keys(got).length) { $("xMsg").innerHTML = `<div class="msg bad">Nenhum RBSSummary.xml, SiteBasic.xml ou SiteEquipment.xml no arquivo selecionado.</div>`; return; }
   const pkg = ((got["RBSSummary.xml"] || "").match(/upgradePackageFilePath="([^"]+)"/) || [])[1] || "";
-  const other = v === "R68" ? /R82E29/i : /R68D37|R3D35/i;
+  const other = v === "R82" ? /R68D37|R3D35/i : /R82E29/i;
   XS.kits[v] = Object.assign({}, XS.kits[v], got); XS.kitSrc[v] = "carregado e salvo neste navegador";
   try { const st = JSON.parse(localStorage.getItem(KLS) || "{}"); st[v] = XS.kits[v]; localStorage.setItem(KLS, JSON.stringify(st)); } catch(e){}
   $("xMsg").innerHTML = other.test(pkg) ? `<div class="msg warn">O RBSSummary carregado no kit ${escH(CoreXML.VERSIONS[v].label)} aponta para ${escH(pkg)}. Confira se é o kit certo.</div>` : "";
@@ -1764,6 +1769,8 @@ $("xKitR68").onclick = () => $("fxKitR68").click();
 $("xKitR82").onclick = () => $("fxKitR82").click();
 $("fxKitR68").onchange = async (e) => { await loadKit("R68", [...e.target.files]); e.target.value = ""; };
 $("fxKitR82").onchange = async (e) => { await loadKit("R82", [...e.target.files]); e.target.value = ""; };
+$("xKitSAT").onclick = () => $("fxKitSAT").click();
+$("fxKitSAT").onchange = async (e) => { await loadKit("SAT", [...e.target.files]); e.target.value = ""; };
 
 $("xEng").onclick = () => $("fxEng").click();
 $("xEngClr").onclick = () => { XS.engs = []; XS.ver = {}; engStatus(); render(); };
@@ -1786,7 +1793,7 @@ function engStatus(){
   $("xEngSt").innerHTML = XS.engs.length ? `${XS.engs.length} site(s): ` + XS.engs.map((s) => `<span class="pill cy">${escH(s.site)}</span>`).join(" ") : "Nenhuma ENG-SI carregada. Pode selecionar várias de uma vez.";
 }
 $("xVer").onchange = () => { try { localStorage.setItem(LSK + ":xmlver", $("xVer").value); } catch(e){} render(); };
-try { const v = localStorage.getItem(LSK + ":xmlver"); if (v === "R68" || v === "R82") $("xVer").value = v; } catch(e){}
+try { const v = localStorage.getItem(LSK + ":xmlver"); if (v === "R68" || v === "R82" || v === "SAT") $("xVer").value = v; } catch(e){}
 $("xFix").onchange = render;
 
 function verOf(s){ return XS.ver[s.site] || $("xVer").value; }
@@ -1797,11 +1804,13 @@ function render(){
   const ok = XS.engs.filter((s) => !XS.results[s.site].errors.length && XS.results[s.site].files.length === 3).length;
   const kpi = (l, v, sub, kc) => `<div class="kpi" style="--kc:${kc}"><div class="kpi-label">${l}</div><div class="kpi-val">${v}</div><div class="kpi-sub">${sub}</div></div>`;
   const nR68 = XS.engs.filter((s) => verOf(s) === "R68").length;
+  const nSAT = XS.engs.filter((s) => verOf(s) === "SAT").length;
   $("xKpi").innerHTML = XS.engs.length ? [
     kpi("Sites", XS.engs.length, "lidos da ENG-SI", "var(--c1)"),
     kpi("Prontos", ok, "entram no .zip", "var(--c3)"),
     kpi("R68D37 / R3D35", nR68, "kit RBSSummary_r68d37r", "var(--c2)"),
-    kpi("R82E29", XS.engs.length - nR68, "kit XML_R82E29", "var(--c4)"),
+    kpi("R82E29", XS.engs.length - nR68 - nSAT, "kit XML_R82E29", "var(--c4)"),
+    kpi("Satélite", nSAT, "kit XML_SATELITE (TN_C · 1G)", "var(--c6)"),
   ].join("") : `<div class="info-banner">Carregue a ENG-SI (ou o TX.xlsx da macro) para listar os sites.</div>`;
   $("xTbl").innerHTML = XS.engs.length ? `<thead><tr><th>Site</th><th>Status</th><th>Versão SW</th><th>VLAN</th><th>OAM <small>loopback</small></th><th>INFRA</th><th>NextHop</th><th>Origem</th></tr></thead><tbody>` +
     XS.engs.map((s) => {
@@ -1809,7 +1818,7 @@ function render(){
       const st = r.errors.length ? `<span class="pill bad">${r.errors.length} erro(s)</span>` : r.files.length < 3 ? `<span class="pill bad">kit incompleto</span>` : r.warnings.length ? `<span class="pill warn">${r.warnings.length} aviso(s)</span>` : `<span class="pill ok">pronto</span>`;
       const v = verOf(s);
       return `<tr><td class="hi">${escH(s.site)}</td><td>${st}</td>
-        <td><select id="xv-${escH(s.site)}" data-site="${escH(s.site)}" style="font:10.5px var(--f-mono);background:var(--bg);color:var(--text);border:1px solid var(--border2);border-radius:5px;padding:3px 6px"><option value="R68"${v === "R68" ? " selected" : ""}>R68D37 / R3D35</option><option value="R82"${v === "R82" ? " selected" : ""}>R82E29</option></select></td>
+        <td><select id="xv-${escH(s.site)}" data-site="${escH(s.site)}" style="font:10.5px var(--f-mono);background:var(--bg);color:var(--text);border:1px solid var(--border2);border-radius:5px;padding:3px 6px"><option value="R68"${v === "R68" ? " selected" : ""}>R68D37 / R3D35</option><option value="R82"${v === "R82" ? " selected" : ""}>R82E29</option><option value="SAT"${v === "SAT" ? " selected" : ""}>Satélite R68D37 / R3D35</option></select></td>
         <td>${escH(s.vlan)}</td><td>${escH(s.oamIp)}/32</td><td>${escH(s.infraIp)}${escH(s.infraMask || "/29")}</td><td>${escH(s.gw)}</td><td><span class="note">${escH(s.file)} · linha ${s.row}</span></td></tr>`;
     }).join("") + `</tbody>` : "";
   $("xWarn").innerHTML = XS.engs.map((s) => {
