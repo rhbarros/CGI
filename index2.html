@@ -2117,9 +2117,14 @@ $("f4Kit").onchange = async (e) => {
   G4.kitSrc = `${n} arquivo(s) carregados nesta sessão`;
   e.target.value = ""; render();
 };
+// Kit publicado ao lado da página no GitHub: tem prioridade sobre o incorporado (atualizar o .zip no repositório basta).
 async function loadRepoKit(){
-  if (!/^https?:$/.test(location.protocol) || G4.kit[Core4G.SYSF]) return;
-  try { const r = await fetch(REPO_KIT4G, { cache: "no-cache" }); if (!r.ok) return; const got = await readKitZip(await r.arrayBuffer()); if (Object.keys(got).length) { Object.assign(G4.kit, got); G4.kitSrc = "do repositório: " + REPO_KIT4G; render(); } } catch (e) {}
+  if (!/^https?:$/.test(location.protocol)) return;
+  try {
+    const r = await fetch(REPO_KIT4G, { cache: "no-cache" }); if (!r.ok) return;
+    const got = await readKitZip(await r.arrayBuffer());
+    if (Object.keys(got).length) { Object.assign(G4.kit, got); G4.kitSrc = "do repositório: " + REPO_KIT4G; render(); }
+  } catch (e) { /* sem acesso: segue com o kit incorporado */ }
 }
 
 $("g4Epd").onclick = () => $("f4Epd").click();
