@@ -2103,7 +2103,8 @@ async function readKitZip(buf){ const z = await JSZip.loadAsync(buf); const got 
 
 function kitStatus(){
   const have = ALL4G.filter((f) => G4.kit[f]).length;
-  $("g4KitSt").innerHTML = `${have}/${ALL4G.length} modelos${G4.kitSrc ? " (" + escH(G4.kitSrc) + ")" : ""}. ` +
+  $("g4Kit").textContent = have === ALL4G.length ? "Substituir kit (.zip ou .mos)" : "Carregar kit (.zip ou .mos)";
+  $("g4KitSt").innerHTML = `${have}/${ALL4G.length} modelos${G4.kitSrc ? " (" + escH(G4.kitSrc) + ")" : ""}${have === ALL4G.length ? ", pronto para usar" : ""}. ` +
     (G4.kit[Core4G.SYSF] ? `<span style="color:var(--c3)">${escH(Core4G.SYSF)} carregado.</span>` : `<span style="color:var(--c4)">${escH(Core4G.SYSF)} não carregado: contém senhas e só entra se você carregar o kit.</span>`);
 }
 $("g4Kit").onclick = () => $("f4Kit").click();
