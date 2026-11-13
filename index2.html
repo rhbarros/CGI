@@ -127,6 +127,13 @@ label.f.req input:placeholder-shown{border-color:rgba(245,158,11,.55);background
 .af-dev{font-size:12px;color:var(--text2)}
 .af-dev b{color:var(--text);font-weight:700}
 .af-meta{font:10px var(--f-mono);color:var(--text3)}
+/* Histórico compartilhado */
+.share{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.6fr) auto;gap:10px;align-items:end}
+@media (max-width:760px){.share{grid-template-columns:1fr}}
+.share-act{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.gh-st{font:10.5px var(--f-mono)}
+.gh-st.ok{color:var(--c3)} .gh-st.busy{color:var(--c1)} .gh-st.err{color:var(--c5)} .gh-st.off{color:var(--text3)} .gh-st.warn{color:var(--c4)}
+.hist .it .by{color:var(--text2)}
 /* Scripts 5G */
 #s5Tbl td input{width:118px}
 #s5Tbl td input.lbl{width:220px}
@@ -195,7 +202,12 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
 
     <section class="panel">
       <div class="ph"><span class="step">HISTÓRICO</span><h2>Sites coletados</h2>
-        <p>Cada site processado fica salvo neste navegador, junto com os campos da Documentação lógica. Use Exportar para guardar um backup (.json) ou levar para outro computador.</p></div>
+        <p>Cada site processado fica salvo neste navegador, com os campos da Documentação lógica, e também no histórico compartilhado (Planilha Google): aparece em qualquer computador, com quem fez e quando. A planilha tem ainda uma aba "log" com cada gravação e exclusão.</p></div>
+      <div class="share">
+        <label class="f">Seu nome<input id="hUser" placeholder="ex.: Renato Barros" autocomplete="name"><span class="h">Gravado em cada site como "quem fez"</span></label>
+        <label class="f">URL do App da Web (Planilha Google)<input id="hUrl" placeholder="https://script.google.com/macros/s/…/exec" spellcheck="false"><span class="h">Fica salva neste navegador</span></label>
+        <div class="share-act"><button class="btn" id="hSync">Sincronizar agora</button><span id="hStatus" class="gh-st off"></span></div>
+      </div>
       <div class="row">
         <button class="btn" id="bExp">Exportar histórico (.json)</button>
         <button class="btn" id="bImp">Importar (.json)</button>
@@ -1517,9 +1529,13 @@ function process(isExample){
 function upsert(){
   if (!cur) return;
   cur.savedAt = new Date().toISOString();
+  cur.updated = Date.now();
+  cur.by = userName();
+  if (!cur.createdBy) { cur.createdBy = cur.by; cur.createdAt = cur.updated; }
   const i = hist.findIndex((h) => h.node === cur.node);
   if (i >= 0) hist[i] = cur; else hist.unshift(cur);
   saveHist();
+  hsQueue(cur.node);
 }
 
 function renderChip(){
@@ -1556,25 +1572,134 @@ function renderRead(){
     (p.cells.map((c) => { const b = Core.bandOf(c.earfcn); return `<tr><td class="hi">${escH(c.name)}</td><td class="mono">${escH(c.cellId)}</td><td class="mono">${escH(c.pci)}</td><td class="mono">${escH(c.tac)}</td><td class="mono">${escH(c.earfcn)}</td><td class="mono">${escH(Core.bwLabel(c.bw))} MHz</td><td>${b ? `<span class="t4g">B${b.b}</span> · ${b.f} ${b.d}` : `<span class="pill bad">fora das bandas</span>`}</td></tr>`; }).join("") || `<tr><td colspan="7" class="note">Nenhuma célula lida.</td></tr>`) + `</tbody>`;
 }
 
-// ---------- histórico ----------
-function renderHist(){
-  if (!hist.length) { $("hist").innerHTML = `<p class="note" style="margin:0">Nenhum site salvo ainda.</p>`; return; }
-  $("hist").innerHTML = hist.map((h, i) => {
-    const d = new Date(h.savedAt);
-    const when = isNaN(d) ? "" : d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
-    const p = h.parsed || { frus: [], cells: [] };
-    return `<div class="it ${cur && cur.node === h.node ? "cur" : ""}"><span class="nm">${escH(h.node)}</span>
-      <span class="meta">${p.frus.length} FRUs · ${p.cells.length + nrOf(p).length} células · ${escH(h.doc.enderecoId || "sem EnderecoID")} · ${when}${h.example ? " · exemplo" : ""}</span>
-      <button class="btn" data-open="${i}">Abrir</button><button class="btn danger" data-del="${i}">Remover</button></div>`;
-  }).join("");
+// ---------- histórico compartilhado (Planilha Google via Apps Script: Historico_Ericsson.gs) ----------
+const HIST_URL_DEFAULT = "";
+const HS = { remote: [], del: {}, loaded: false, busy: 0, err: "", last: 0, pend: {}, timers: {}, chain: Promise.resolve(), confirm: null };
+const userName = () => { try { return localStorage.getItem(LSK + ":user") || ""; } catch(e){ return ""; } };
+const hsUrl = () => { try { return (localStorage.getItem(LSK + ":histurl") || HIST_URL_DEFAULT).trim(); } catch(e){ return HIST_URL_DEFAULT; } };
+const hsOn = () => /^https:\/\/script\.google(usercontent)?\.com\/.+\/exec$/.test(hsUrl());
+const updOf = (h) => h.updated || Date.parse(h.savedAt) || 0;
+function hsCall(get, body){
+  const url = hsUrl() + (get ? "?" + get + "&t=" + Date.now() : "");
+  const opt = body ? { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(body) } : { cache: "no-store" };
+  return fetch(url, opt).then((r) => { if (!r.ok) throw new Error("Google " + r.status); return r.json(); })
+    .then((d) => { if (!d || !d.ok) throw new Error((d && d.erro) || "resposta inválida do Google"); return d; },
+          (err) => { throw new Error(/Google|resposta/.test(err.message) ? err.message : "sem conexão com o Google (" + err.message + ")"); });
 }
+function hsResumo(h){
+  const p = h.parsed || { frus: [], cells: [] };
+  return { id: h.node, node: h.node, updated: updOf(h), by: h.by || "", createdBy: h.createdBy || "", createdAt: h.createdAt || 0,
+    enderecoId: (h.doc && h.doc.enderecoId) || "", frus: p.frus.length, cells: p.cells.length + nrOf(p).length };
+}
+function hsApply(ix){ HS.remote = (ix && ix.sites) || []; HS.del = (ix && ix.deleted) || {}; HS.loaded = true; }
+function hsRun(task){
+  HS.busy++; hsStatus();
+  HS.chain = HS.chain.then(task).then(() => { HS.err = ""; HS.last = Date.now(); }, (err) => { HS.err = err && err.message ? err.message : String(err); })
+    .then(() => { HS.busy--; hsStatus(); renderHist(); });
+  return HS.chain;
+}
+function hsPush(node){
+  return hsRun(async () => {
+    delete HS.pend[node];
+    const h = hist.find((x) => x.node === node);
+    if (!h || h.example) return;
+    const r = HS.remote.find((x) => x.node === node);
+    if (r && (r.updated || 0) >= updOf(h)) return;
+    const d = await hsCall(null, { a: "put", site: Object.assign({}, h, { updated: updOf(h) }), resumo: hsResumo(h) });
+    hsApply(d.index);
+  });
+}
+function hsQueue(node, delay){
+  if (!hsOn()) return;
+  const h = hist.find((x) => x.node === node); if (!h || h.example) return;
+  HS.pend[node] = 1; hsStatus();
+  clearTimeout(HS.timers[node]);
+  HS.timers[node] = setTimeout(() => { delete HS.timers[node]; hsPush(node); }, delay == null ? 2500 : delay);
+}
+function hsPull(){
+  if (!hsOn()) { hsStatus(); renderHist(); return Promise.resolve(); }
+  return hsRun(async () => {
+    const d = await hsCall("a=index"); hsApply(d.index);
+    let changed = false;
+    hist = hist.filter((h) => { const del = HS.del[h.node]; if (del && updOf(h) <= del && !h.example) { changed = true; if (cur && cur.node === h.node) cur = null; return false; } return true; });
+    if (changed) saveHist();
+    hist.forEach((h) => { if (h.example || HS.del[h.node] > updOf(h)) return; const r = HS.remote.find((x) => x.node === h.node); if (!r || updOf(h) > (r.updated || 0)) HS.pend[h.node] = 1; });
+  }).then(() => { Object.keys(HS.pend).forEach((n) => { if (!HS.timers[n]) hsQueue(n, 0); }); renderRead(); renderChip(); });
+}
+function hsStatus(){
+  const el = $("hStatus"); if (!el) return;
+  const n = Object.keys(HS.pend).length; let t, c;
+  if (!hsOn()) { t = hsUrl() ? "URL inválida: use o endereço do App da Web que termina em /exec." : "Desligado: informe a URL do App da Web. Por enquanto, só neste navegador."; c = hsUrl() ? "err" : "off"; }
+  else if (HS.busy) { t = "Sincronizando com a Planilha Google…"; c = "busy"; }
+  else if (HS.err) { t = "Erro: " + HS.err + ". Os sites continuam salvos aqui e serão enviados depois."; c = "err"; }
+  else if (n) { t = n + " site(s) aguardando envio…"; c = "busy"; }
+  else if (HS.loaded) { t = "Sincronizado" + (HS.last ? " às " + new Date(HS.last).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "") + " · " + HS.remote.length + " site(s) na planilha" + (userName() ? "" : " · informe seu nome"); c = userName() ? "ok" : "warn"; }
+  else { t = "Conectando…"; c = "busy"; }
+  el.textContent = t; el.className = "gh-st " + c;
+}
+try { $("hUser").value = userName(); $("hUrl").value = hsUrl(); } catch(e){}
+$("hUser").addEventListener("change", () => { try { localStorage.setItem(LSK + ":user", $("hUser").value.trim()); } catch(e){} hsStatus(); });
+$("hUrl").addEventListener("change", () => { try { localStorage.setItem(LSK + ":histurl", $("hUrl").value.trim()); } catch(e){} HS.loaded = false; HS.remote = []; HS.err = ""; hsPull(); });
+$("hSync").onclick = () => { Object.keys(HS.timers).forEach((n) => { clearTimeout(HS.timers[n]); delete HS.timers[n]; }); hsPull(); };
+
+// ---------- histórico ----------
+function allHist(){
+  const m = new Map(); hist.forEach((h) => m.set(h.node, h));
+  if (hsOn()) HS.remote.forEach((r) => { const l = m.get(r.node); if (!l || (r.updated || 0) > updOf(l)) m.set(r.node, Object.assign({ remoteOnly: true }, r)); });
+  return [...m.values()].sort((a, b) => updOf(b) - updOf(a));
+}
+function whereTag(h){
+  if (!hsOn() || h.example) return "";
+  if (h.remoteOnly) return `<span class="pill cy">☁ na planilha</span>`;
+  if (HS.pend[h.node]) return `<span class="pill">⏳ enviando</span>`;
+  const r = HS.remote.find((x) => x.node === h.node);
+  return r && (r.updated || 0) >= updOf(h) ? `<span class="pill cy">☁ compartilhado</span>` : `<span class="pill">só neste PC</span>`;
+}
+function renderHist(){
+  const list = allHist();
+  if (!list.length) { $("hist").innerHTML = `<p class="note" style="margin:0">Nenhum site salvo ainda.</p>`; hsStatus(); return; }
+  $("hist").innerHTML = list.map((h) => {
+    const d = new Date(updOf(h));
+    const when = isNaN(d) || !updOf(h) ? "" : d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+    let fr, ce, end;
+    if (h.remoteOnly) { fr = h.frus; ce = h.cells; end = h.enderecoId; }
+    else { const p = h.parsed || { frus: [], cells: [] }; fr = p.frus.length; ce = p.cells.length + nrOf(p).length; end = h.doc && h.doc.enderecoId; }
+    const by = h.by ? ` · <span class="by">por ${escH(h.by)}</span>` : "";
+    const id = escH(h.node);
+    const act = HS.confirm === h.node
+      ? `<span class="confirm">Remover ${id} deste navegador e da planilha (some para todos)? <button class="btn danger" data-delok="${id}">Remover</button><button class="btn" data-delno="1">Cancelar</button></span>`
+      : `<button class="btn" data-open="${id}">${h.remoteOnly ? "Baixar e abrir" : "Abrir"}</button><button class="btn danger" data-del="${id}">Remover</button>`;
+    return `<div class="it ${cur && cur.node === h.node ? "cur" : ""}"><span class="nm">${id}</span>
+      <span class="meta">${fr} FRUs · ${ce} células · ${escH(end || "sem EnderecoID")} · ${when}${by}${h.example ? " · exemplo" : ""} ${whereTag(h)}</span>${act}</div>`;
+  }).join("");
+  hsStatus();
+}
+function openHist(h){ cur = h; $("raw").value = cur.raw || ""; $("procMsg").innerHTML = `<div class="msg ok">${escH(cur.node)} reaberto do histórico${h.by ? " (última edição por " + escH(h.by) + ")" : ""}.</div>`; renderRead(); renderHist(); renderChip(); }
+function removeLocal(node){ const i = hist.findIndex((x) => x.node === node); if (i >= 0) hist.splice(i, 1); if (cur && cur.node === node) cur = null; saveHist(); }
 $("hist").addEventListener("click", (e) => {
-  const o = e.target.closest("[data-open]"), d = e.target.closest("[data-del]");
-  if (o) { cur = hist[+o.dataset.open]; $("raw").value = cur.raw || ""; $("procMsg").innerHTML = `<div class="msg ok">${escH(cur.node)} reaberto do histórico.</div>`; renderRead(); renderHist(); renderChip(); }
-  if (d) { const h = hist[+d.dataset.del]; hist.splice(+d.dataset.del, 1); if (cur && h && cur.node === h.node) cur = null; saveHist(); renderHist(); renderRead(); renderChip(); }
+  const o = e.target.closest("[data-open]"), d = e.target.closest("[data-del]"), ok = e.target.closest("[data-delok]"), no = e.target.closest("[data-delno]");
+  if (o) {
+    const node = o.dataset.open; const l = hist.find((x) => x.node === node); const r = HS.remote.find((x) => x.node === node);
+    if (r && hsOn() && (!l || (r.updated || 0) > updOf(l))) {
+      $("procMsg").innerHTML = `<div class="msg">Baixando ${escH(node)} da planilha…</div>`;
+      hsCall("a=get&id=" + encodeURIComponent(node)).then((res) => {
+        const h = res.site; const i = hist.findIndex((x) => x.node === node);
+        if (i >= 0) hist[i] = h; else hist.unshift(h);
+        saveHist(); openHist(h);
+      }).catch((err) => { $("procMsg").innerHTML = `<div class="msg bad">Não consegui baixar ${escH(node)}: ${escH(err.message || err)}.</div>`; });
+    } else if (l) openHist(l);
+  }
+  if (d) {
+    const node = d.dataset.del;
+    const shared = hsOn() && HS.remote.some((x) => x.node === node);
+    if (shared) { HS.confirm = node; renderHist(); return; }
+    removeLocal(node); renderHist(); renderRead(); renderChip();
+  }
+  if (ok) { const node = ok.dataset.delok; HS.confirm = null; removeLocal(node); renderRead(); renderChip(); hsRun(async () => { const res = await hsCall(null, { a: "del", id: node, by: userName() }); hsApply(res.index); }); }
+  if (no) { HS.confirm = null; renderHist(); }
 });
 function resetClr(){ $("clrWrap").innerHTML = `<button class="btn danger" id="bClr">Apagar tudo</button>`; bindClr(); }
-function bindClr(){ $("bClr").onclick = () => { $("clrWrap").innerHTML = `<span class="confirm">Apagar todos os ${hist.length} sites? <button class="btn danger" id="clrYes">Apagar</button><button class="btn" id="clrNo">Cancelar</button></span>`; $("clrYes").onclick = () => { hist = []; cur = null; saveHist(); resetClr(); renderHist(); renderRead(); renderChip(); }; $("clrNo").onclick = resetClr; }; }
+function bindClr(){ $("bClr").onclick = () => { $("clrWrap").innerHTML = `<span class="confirm">Apagar os ${hist.length} sites deste navegador? A planilha não é alterada. <button class="btn danger" id="clrYes">Apagar</button><button class="btn" id="clrNo">Cancelar</button></span>`; $("clrYes").onclick = () => { hist = []; cur = null; saveHist(); resetClr(); renderHist(); renderRead(); renderChip(); }; $("clrNo").onclick = resetClr; }; }
 $("bExp").onclick = () => offer([{ name: `historico_ericsson_ran_${new Date().toISOString().slice(0,10)}.json`, data: JSON.stringify(hist, null, 1) }], $("procMsg"));
 $("bImp").onclick = () => $("fImp").click();
 $("fImp").onchange = async (e) => {
@@ -1755,7 +1880,7 @@ async function offer(files, msgEl, extra){
 bindClr();
 if (hist.length) { cur = hist[0]; $("raw").value = cur.raw || ""; }
 else { $("raw").value = SAMPLE.raw; process(true); $("procMsg").innerHTML = `<div class="msg ok">Exemplo ERCE91 carregado para mostrar o fluxo. Clique em “Começar nova apuração” para colar um site real.</div>`; }
-renderRead(); renderHist(); renderChip();
+renderRead(); renderHist(); renderChip(); hsPull();
 let startTab = "in"; try { startTab = localStorage.getItem(LSK + ":tab") || "in"; } catch(e){}
 showTab(["doc","s5g","xml","s4g"].includes(startTab) ? startTab : "in");
 
