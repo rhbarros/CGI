@@ -669,7 +669,7 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
       :is(#p-oss,#p-bk) .oss-dot{width:10px;height:10px;border-radius:50%;background:var(--text3);display:inline-block}
       :is(#p-oss,#p-bk) .oss-dot.on{background:var(--c3);box-shadow:0 0 8px var(--c3)} :is(#p-oss,#p-bk) .oss-dot.off{background:var(--c5)}
       :is(#p-oss,#p-bk) .oss-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:10px}
-      :is(#p-oss,#p-bk) .oss-srv{display:grid;grid-template-columns:90px minmax(0,1fr) 80px;gap:6px;align-items:center}
+      :is(#p-oss,#p-bk) .oss-srv{display:grid;grid-template-columns:100px minmax(0,1fr) 64px minmax(0,130px);gap:6px;align-items:center}
       :is(#p-oss,#p-bk) input[type=text],:is(#p-oss,#p-bk) input[type=password],:is(#p-oss,#p-bk) input[type=number],:is(#p-oss,#p-bk) select,:is(#p-oss,#p-bk) textarea{font:12px var(--f-mono);background:var(--bg4);border:1px solid var(--border2);color:var(--text);border-radius:7px;padding:8px 10px;min-width:0;width:100%}
       :is(#p-oss,#p-bk) textarea{min-height:120px}
       :is(#p-oss,#p-bk) .oss-log{background:var(--bg);border:1px solid var(--border2);border-radius:8px;padding:9px 12px;font:11.5px/1.5 var(--f-mono);max-height:220px;overflow:auto;white-space:pre-wrap;color:var(--text2)}
@@ -705,6 +705,7 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
         <div style="display:flex;flex-direction:column;gap:8px">
           <label class="note" style="margin:0">Servidor das ações <select id="ossSrv"></select></label>
           <div class="oss-grid" style="grid-template-columns:1fr 1fr"><input type="text" id="ossUser" placeholder="Usuário (ex.: T1234567)" autocomplete="username"><input type="password" id="ossPwd" placeholder="Senha" autocomplete="current-password"></div>
+          <div id="ossOwnPw" style="display:flex;flex-direction:column;gap:6px"></div>
           <div class="row" style="margin:0"><button class="btn primary" id="ossLoginAll">Conectar todos</button><button class="btn" id="ossLogin">Conectar só este</button><button class="btn" id="ossLogout">Sair deste</button><button class="btn" id="ossLogoutAll">Sair de todos</button></div>
           <div id="ossSrvState" style="display:flex;flex-direction:column;gap:4px"></div>
           <span class="note" id="ossWho" style="margin:0"></span>
@@ -4520,10 +4521,21 @@ const load = () => { try { return JSON.parse(localStorage.getItem(OSK) || "{}");
 const save = (o) => { try { localStorage.setItem(OSK, JSON.stringify({ ...load(), ...o })); } catch (e) {} };
 const cfg = load();
 const servers = cfg.servers || [{ name: "CVOA", host: "", port: 5022 }, { name: "CVOB", host: "", port: 5022 }, { name: "CVO", host: "", port: 5022 }];
+// servidor do 2G Ericsson (porta 22, com usuário próprio): entra uma vez na lista; o IP e o usuário são preenchidos pelo usuário
+if (!cfg.added2g) { if (!servers.some((s) => /2G/i.test(s.name))) servers.push({ name: "2G", host: "", port: 22, user: "" }); save({ servers, added2g: true }); }
+const is2g = (s) => /2G/i.test((s && s.name) || "");
 function drawServers(){
-  $("ossSrvList").innerHTML = `<span class="note" style="margin:0">Endereços dos servidores (preencha uma vez)</span>` + servers.map((s, i) => `<div class="oss-srv"><input type="text" data-sv="${i}" data-k="name" value="${escH(s.name)}" aria-label="Nome"><input type="text" data-sv="${i}" data-k="host" value="${escH(s.host)}" placeholder="IP (ex.: 10.x.x.x)" aria-label="IP do ${escH(s.name)}"><input type="number" data-sv="${i}" data-k="port" value="${escH(s.port)}" aria-label="Porta"></div>`).join("");
-  $("ossSrvList").querySelectorAll("input").forEach((el) => el.onchange = () => { const s = servers[+el.dataset.sv]; s[el.dataset.k] = el.dataset.k === "port" ? +el.value || 5022 : el.value.trim(); save({ servers }); drawSel(); });
+  $("ossSrvList").innerHTML = `<span class="note" style="margin:0">Endereços dos servidores (preencha uma vez) · usuário só se for diferente do login ao lado</span>` + servers.map((s, i) => `<div class="oss-srv"><input type="text" data-sv="${i}" data-k="name" value="${escH(s.name)}" aria-label="Nome"><input type="text" data-sv="${i}" data-k="host" value="${escH(s.host)}" placeholder="IP (ex.: 10.x.x.x)" aria-label="IP do ${escH(s.name)}"><input type="number" data-sv="${i}" data-k="port" value="${escH(s.port)}" aria-label="Porta"><input type="text" data-sv="${i}" data-k="user" value="${escH(s.user || "")}" placeholder="usuário próprio" aria-label="Usuário próprio do ${escH(s.name)}" autocomplete="off"></div>`).join("");
+  $("ossSrvList").querySelectorAll("input").forEach((el) => el.onchange = () => { const s = servers[+el.dataset.sv]; s[el.dataset.k] = el.dataset.k === "port" ? +el.value || 5022 : el.value.trim(); save({ servers }); drawSel(); drawOwnPw(); });
+  drawOwnPw();
   drawSel();
+}
+// senha separada para os servidores que têm usuário próprio (ex.: 2G). Fica só na memória desta página.
+const OWNPW = {};
+function drawOwnPw(){
+  const own = servers.map((s, i) => ({ s, i })).filter(({ s }) => s.user && s.host);
+  $("ossOwnPw").innerHTML = own.map(({ s, i }) => `<div class="oss-grid" style="grid-template-columns:1fr 1fr"><input type="text" value="${escH(s.name)} · ${escH(s.user)}" disabled aria-label="Servidor"><input type="password" data-own="${i}" value="${escH(OWNPW[i] || "")}" placeholder="Senha do ${escH(s.name)} (${escH(s.user)})" autocomplete="off"></div>`).join("");
+  $("ossOwnPw").querySelectorAll("[data-own]").forEach((el) => el.oninput = () => { OWNPW[+el.dataset.own] = el.value; });
 }
 function drawSel(){ const cur = load().srv ?? 0; $("ossSrv").innerHTML = servers.map((s, i) => `<option value="${i}" ${i === cur ? "selected" : ""}>${escH(s.name)}${s.host ? " · " + escH(s.host) + ":" + s.port : " (sem IP)"}</option>`).join(""); }
 $("ossSrv").onchange = () => save({ srv: +$("ossSrv").value });
@@ -4586,15 +4598,17 @@ $("ossStart").onclick = () => setTimeout(status, 2500);
 async function loginList(list){
   const user = $("ossUser").value.trim(), pwd = $("ossPwd").value;
   if (!list.length) { $("ossMsg").innerHTML = `<div class="msg warn">Preencha o IP dos servidores na lista à esquerda.</div>`; return; }
-  if (!user || !pwd) { $("ossMsg").innerHTML = `<div class="msg warn">Informe usuário e senha.</div>`; return; }
+  const need = list.filter((s) => !s.user); if (need.length && (!user || !pwd)) { $("ossMsg").innerHTML = `<div class="msg warn">Informe usuário e senha.</div>`; return; }
   save({ user }); $("ossLogin").disabled = $("ossLoginAll").disabled = true; $("ossMsg").innerHTML = ""; const bad = [];
   for (const s of list) {
-    log(`Conectando em ${s.name} (${s.host}:${s.port}) como ${user}...`, "cmd");
-    try { const r = await call("/login", { host: s.host, port: s.port, user, pwd, name: s.name });
+    const i = servers.indexOf(s), u = s.user || user, pw = s.user ? OWNPW[i] || "" : pwd;
+    if (!pw) { log(`${s.name}: falta a senha do usuário ${u}`, "er"); bad.push(`${s.name}: informe a senha do usuário ${u}`); continue; }
+    log(`Conectando em ${s.name} (${s.host}:${s.port}) como ${u}...`, "cmd");
+    try { const r = await call("/login", { host: s.host, port: s.port, user: u, pwd: pw, name: s.name });
       if (r.ok) log(`${s.name} conectado. Prompt: ${r.prompt}`, "ok"); else { log(`${s.name}: falha no login: ${r.erro}`, "er"); bad.push(`${s.name}: ${r.erro}`); }
     } catch (e) { log(String(e.message || e), "er"); bad.push(`${s.name}: ${e.message || e}`); }
   }
-  $("ossPwd").value = "";
+  $("ossPwd").value = ""; list.forEach((s) => { delete OWNPW[servers.indexOf(s)]; }); drawOwnPw();
   if (bad.length) $("ossMsg").innerHTML = `<div class="msg bad">${bad.map(escH).join("<br>")}</div>`;
   status();
 }
@@ -5022,9 +5036,9 @@ async function bkDetect(all){
   let rows = BK.rows.filter((r) => r.srv === -1 && r.node);
   if (!rows.length && all !== false) rows = BK.rows.filter((r) => r.node);
   if (!rows.length) return;
-  const on = servers.map((s, i) => ({ s, i })).filter(({ s }) => s.host && SS.some((x) => x.key === keyOf(s) && x.logged));
+  const on = servers.map((s, i) => ({ s, i })).filter(({ s }) => s.host && !is2g(s) && SS.some((x) => x.key === keyOf(s) && x.logged));
   if (!on.length) { $("bkMsg").innerHTML = `<div class="msg warn">Conecte os servidores primeiro (“Conectar todos”).</div>`; return; }
-  const off = servers.filter((s) => s.host && !on.some((o) => o.s === s)).map((s) => s.name);
+  const off = servers.filter((s) => s.host && !is2g(s) && !on.some((o) => o.s === s)).map((s) => s.name);
   BK.running = true; rows.forEach((r) => { r.st = "det"; r.err = ""; r.srv = -1; }); bkDraw();
   $("bkMsg").innerHTML = (BK.warn || "") + `<div class="msg">Procurando ${rows.length} site(s) em ${on.map((o) => o.s.name).join(", ")} ao mesmo tempo…${off.length ? " (" + escH(off.join(", ")) + " desconectado: não será consultado)" : ""}</div>`;
   log(`Procurando o servidor de ${rows.map((r) => r.node).join(", ")} em ${on.map((o) => o.s.name).join(", ")}...`, "cmd");
