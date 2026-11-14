@@ -11,7 +11,7 @@ import argparse, json, os, re, sys, threading, time, uuid
 from urllib.parse import urlparse, parse_qs
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.1"
+VERSION = "1.2"
 LOCAL_PORT = 8766
 LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "helper.log")
 
@@ -46,6 +46,7 @@ class Session:
     def __init__(self):
         self.client = None; self.chan = None; self.prompt = ""; self.host = ""; self.user = ""
         self.lock = threading.Lock(); self.banner = ""
+        self.cur_node = None; self.lt_done = False; self.last_amos = ""
 
     # ---------- leitura ----------
     def read_until(self, done, maxsec=60, idle=0.35, job=None, keep=True):
@@ -109,7 +110,7 @@ class Session:
             if self.client: self.client.close()
         except Exception:
             pass
-        self.client = self.chan = None; self.prompt = ""
+        self.client = self.chan = None; self.prompt = ""; self.cur_node = None; self.lt_done = False
 
     @property
     def logged(self):
@@ -155,7 +156,8 @@ def amos_prompt(node):
     def done(tail):
         last = tail.rstrip("\n").split("\n")[-1]
         if S.prompt and last.strip() == S.prompt.strip(): return "shell"
-        if pat.match(last): return "amos"
+        m = pat.match(last)
+        if m: S.last_amos = m.group(1); return "amos"
         if PWD_RE.search(last): return "pwd"
         if USER_RE.search(last): return "user"
         if ASK_RE.search(tail[-200:]): return "ask"
@@ -194,6 +196,18 @@ class NodeAuth:
             self.job["log"].append("Senha %d aceita pelo no." % (self.cur + 1)); self.cur = None
 
 
+def close_amos(job=None, out=None):
+    """Sai do AMOS (q) e volta ao prompt do servidor."""
+    if not S.cur_node: return
+    if job is not None: job["log"].append("Fechando AMOS em %s." % S.cur_node)
+    for _ in range(3):  # se o AMOS estiver aninhado, sai de todos os niveis
+        S.chan.send("q\n")
+        txt, r = S.read_until(amos_prompt(S.cur_node), maxsec=40, idle=0.6, job=job)
+        if out is not None: out.append(txt)
+        if r == "shell": break
+    S.cur_node = None; S.lt_done = False
+
+
 def run_job(job):
     """Executa um job: abre o AMOS no no, roda os comandos um a um e fecha."""
     p = job["params"]; node = p.get("node", "").strip(); out = []
@@ -207,29 +221,63 @@ def run_job(job):
                     job["step"] += 1; job["log"].append("$ " + c)
                     out.append(S.shell(c, p.get("timeout", 120), job))
                 job["state"] = "done"; return
+            keep = p.get("keepOpen", True)
+            open_tpl = (p.get("openCmd") or "amos {node}").strip(); switch_tpl = (p.get("switchCmd") or "!{node}").strip()
             if p.get("upload"):
+                if S.cur_node:  # o upload precisa do shell do servidor
+                    close_amos(job, out)
                 up = p["upload"]; job["log"].append("Enviando %s para o servidor..." % up["name"])
                 path, chk = S.upload(up["name"], up["text"], job)
                 job["log"].append("Arquivo gravado em %s (%s linhas)." % (path, re.sub(r"\D", "", chk.split("\n")[-2] if "\n" in chk else chk) or "?"))
                 cmds = cmds + ["run " + path]
-            job["total"] = len(cmds) + 1
-            job["log"].append("Abrindo AMOS em %s..." % node)
-            S.chan.send("amos %s\n" % node)
             auth = NodeAuth(job, node)
-            while True:
-                txt, r = S.read_until(amos_prompt(node), maxsec=p.get("openTimeout", 240), idle=0.8, job=job)
-                out.append(txt)
-                if auth.handle(r): continue
-                break
-            if r == "amos": auth.ok()
-            if r != "amos":
-                raise RuntimeError("o AMOS nao abriu em %s. Ultimas linhas: %s" % (node, txt.strip()[-400:]))
+            same = S.cur_node and S.cur_node.upper() == node.upper()
+            if same and S.lt_done and cmds and cmds[0].strip().lower() == "lt all":
+                cmds = cmds[1:]; job["log"].append("lt all ja carregado nesta sessao de %s: pulando." % node)
+            job["total"] = len(cmds) + 1
+            r = None
+            if same:
+                job["log"].append("AMOS ja aberto em %s." % node)
+                S.chan.send("\n"); txt, r = S.read_until(amos_prompt(node), maxsec=15, idle=0.4, job=job); out.append(txt)
+                if r != "amos":
+                    job["log"].append("Sessao do no nao respondeu; reabrindo."); S.cur_node = None; same = False
+            if not same:
+                if S.cur_node:
+                    cmd = switch_tpl.replace("{node}", node).replace("{no}", node)
+                    job["log"].append("Trocando de %s para %s: %s" % (S.cur_node, node, cmd))
+                else:
+                    cmd = open_tpl.replace("{node}", node).replace("{no}", node)
+                    job["log"].append("Abrindo AMOS em %s: %s" % (node, cmd))
+                S.chan.send(cmd + "\n")
+                while True:
+                    txt, r = S.read_until(amos_prompt(node), maxsec=p.get("openTimeout", 240), idle=0.8, job=job)
+                    out.append(txt)
+                    if auth.handle(r): continue
+                    break
+                if r == "amos" and S.last_amos and S.last_amos.upper() != node.upper() and S.cur_node and S.last_amos.upper() == S.cur_node.upper():
+                    r = "same-old"
+                if r != "amos" and S.cur_node:
+                    # a troca nao funcionou: fecha o no atual e abre o novo do jeito normal
+                    job["log"].append("A troca com '%s' nao abriu %s; fechando %s e abrindo de novo." % (cmd, node, S.cur_node))
+                    close_amos(job, out)
+                    cmd = open_tpl.replace("{node}", node).replace("{no}", node); job["log"].append("Abrindo AMOS em %s: %s" % (node, cmd))
+                    S.chan.send(cmd + "\n")
+                    while True:
+                        txt, r = S.read_until(amos_prompt(node), maxsec=p.get("openTimeout", 240), idle=0.8, job=job)
+                        out.append(txt)
+                        if auth.handle(r): continue
+                        break
+                if r == "amos": auth.ok(); S.cur_node = node; S.lt_done = False
+                else:
+                    S.cur_node = None
+                    raise RuntimeError("o AMOS nao abriu em %s. Ultimas linhas: %s" % (node, txt.strip()[-400:]))
             job["step"] = 1
             for c in cmds:
                 if job.get("stop"):
                     job["log"].append("Parado pelo usuario."); break
                 job["step"] += 1; job["log"].append("%s> %s" % (node, c))
                 S.chan.send(c + "\n")
+                if c.strip().lower() == "lt all": S.lt_done = True
                 while True:
                     txt, r = S.read_until(amos_prompt(node), maxsec=p.get("timeout", 1800), idle=0.6, job=job)
                     out.append(txt)
@@ -248,15 +296,16 @@ def run_job(job):
                     if r is None:
                         raise RuntimeError("tempo esgotado esperando o fim de '%s'" % c)
                     break
-            S.chan.send("q\n")
-            txt, _ = S.read_until(S.shell_done, maxsec=40, idle=0.6, job=job)
-            job["state"] = "done"; job["log"].append("Concluido.")
+            if not keep:
+                close_amos(job, out)
+            job["state"] = "done"; job["log"].append("Concluido." + (" AMOS continua aberto em %s." % node if keep and S.cur_node else ""))
     except Exception as e:
         job["state"] = "error"; job["error"] = str(e); job["log"].append("ERRO: " + str(e)); logf("job erro: %s" % e)
         try:
             if S.logged:
                 S.chan.send("\x03"); time.sleep(0.4); S.chan.send("q\n")
                 S.read_until(S.shell_done, maxsec=15, idle=0.6)
+            S.cur_node = None; S.lt_done = False
         except Exception:
             pass
     finally:
@@ -295,7 +344,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self._guard(): return
         u = urlparse(self.path); q = parse_qs(u.query)
         if u.path == "/":
-            return self._json({"ok": True, "app": "ericsson-helper", "version": VERSION, "logged": S.logged, "host": S.host, "user": S.user, "prompt": S.prompt,
+            return self._json({"ok": True, "app": "ericsson-helper", "version": VERSION, "logged": S.logged, "host": S.host, "user": S.user, "prompt": S.prompt, "curNode": S.cur_node or "",
                                "busy": any(j["state"] in ("running", "ask") for j in JOBS.values())})
         if u.path in ("/job", "/job/out"):
             j = JOBS.get((q.get("id") or [""])[0])
@@ -322,6 +371,11 @@ class Handler(BaseHTTPRequestHandler):
                 with S.lock:
                     r = S.login(d["host"], d.get("port", 5022), d["user"], d["pwd"])
                 return self._json({"ok": True, **r})
+            if p == "/close":
+                if any(j["state"] in ("running", "ask") for j in JOBS.values()):
+                    return self._json({"ok": False, "erro": "ha uma execucao em andamento"})
+                with S.lock: close_amos()
+                return self._json({"ok": True})
             if p == "/logout":
                 for j in JOBS.values(): j["stop"] = True
                 with S.lock: S.logout()

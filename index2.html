@@ -712,7 +712,15 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
 
     <section class="panel">
       <div class="ph"><span class="step">3</span><h2>Nó e ações</h2><p>Informe o nó como no AMOS (ex.: <code>4G-UBUR18</code>). Leituras rodam direto; qualquer comando de alteração (<code>set</code>, <code>crn</code>, <code>del</code>, <code>bl</code>, <code>deb</code>, <code>acc</code>, <code>run</code>…) só sai depois da sua confirmação, e as perguntas [y/n] do AMOS aparecem aqui para você responder.</p></div>
-      <div class="row" style="margin:0"><input type="text" id="ossNode" list="ossNodes" placeholder="Nó (ex.: 4G-UBUR18)" style="max-width:280px;text-transform:uppercase" autocomplete="off" spellcheck="false"><datalist id="ossNodes"></datalist><label class="note" style="margin:0"><input type="checkbox" id="ossLt" checked> rodar <code>lt all</code> antes</label></div>
+      <div class="row" style="margin:0"><input type="text" id="ossNode" list="ossNodes" placeholder="Nó (ex.: 4G-UBUR18)" style="max-width:280px;text-transform:uppercase" autocomplete="off" spellcheck="false"><datalist id="ossNodes"></datalist><label class="note" style="margin:0"><input type="checkbox" id="ossLt" checked> rodar <code>lt all</code> antes</label><span class="note" id="ossCur" style="margin:0"></span><button class="btn" id="ossClose" disabled>Fechar AMOS do nó</button></div>
+      <details><summary>Como abrir e trocar de nó</summary>
+        <div class="oss-grid" style="margin-top:8px">
+          <label class="note" style="margin:0">Abrir o primeiro nó <input type="text" id="ossOpenT" spellcheck="false"></label>
+          <label class="note" style="margin:0">Trocar para outro nó (com um já aberto) <input type="text" id="ossSwT" spellcheck="false"></label>
+          <label class="note" style="margin:0;align-self:end"><input type="checkbox" id="ossKeep"> manter o nó aberto entre as ações</label>
+        </div>
+        <p class="note" style="margin:6px 0 0"><code>{no}</code> é trocado pelo nome do nó. Com o nó aberto, as ações seguintes no mesmo site reaproveitam a sessão e o <code>lt all</code> já carregado; para outro site o helper digita o comando de troca (padrão <code>!{no}</code>) e, se não funcionar, fecha e abre de novo.</p>
+      </details>
       <div class="oss-actions">
         <div class="oss-act"><b>Rodada 1 → Entrada</b><span class="note">Roda os hget da aba 01, cola as respostas e processa (BULKLOAD/CDD).</span><button class="btn primary" id="ossR1">Coletar e processar</button></div>
         <div class="oss-act"><b>KGET → KGET Analyzer</b><span class="note">Gera o kget do nó (pode levar alguns minutos) e abre a análise completa na aba 06.</span><button class="btn primary" id="ossKget">Gerar kget e analisar</button></div>
@@ -4463,7 +4471,7 @@ render();
 
 // ================= EXECUTAR NO OSS (AMOS via helper local) =================
 (function(){
-const HELPER = "http://127.0.0.1:8766", MINV = 1.1, OSK = LSK + ":oss";
+const HELPER = "http://127.0.0.1:8766", MINV = 1.2, OSK = LSK + ":oss";
 const WRITE = /^\s*(set|sete|crn|cr|del|rdel|bl|deb|acc|run|ldeb|lbl|lset|lcr|ldel|restart|confb\+?|trun|upgrade|cvms|cvmk|cvrm|cvset)\b/i;
 const O = { online: false, logged: false, job: null, out: "", outName: "", logLen: 0, log: [], busy: false, files: [], after: null };
 const load = () => { try { return JSON.parse(localStorage.getItem(OSK) || "{}"); } catch (e) { return {}; } };
@@ -4485,6 +4493,10 @@ function saveCreds(){ const c = nodeCreds(); const rem = $("ossNRem").checked; s
 ["ossNUser", "ossNPwds"].forEach((id) => $(id).onchange = saveCreds); $("ossNRem").onchange = saveCreds;
 $("ossNShow").onclick = () => { const on = $("ossNPwds").style.webkitTextSecurity !== "none"; $("ossNPwds").style.webkitTextSecurity = on ? "none" : "disc"; $("ossNShow").textContent = on ? "Ocultar senhas" : "Mostrar senhas"; };
 saveCreds();
+// abrir / trocar de no
+$("ossOpenT").value = cfg.openCmd || "amos {no}"; $("ossSwT").value = cfg.switchCmd || "!{no}"; $("ossKeep").checked = cfg.keepOpen !== false;
+const nodeOpts = () => ({ openCmd: $("ossOpenT").value.trim() || "amos {no}", switchCmd: $("ossSwT").value.trim() || "!{no}", keepOpen: $("ossKeep").checked });
+["ossOpenT", "ossSwT", "ossKeep"].forEach((id) => $(id).onchange = () => save(nodeOpts()));
 drawServers();
 
 // ---------- helper ----------
@@ -4499,6 +4511,7 @@ function status(){
     const old = +s.version < MINV; $("ossUpd").hidden = !old; $("ossUpdT").textContent = `O helper deste PC é a versão ${s.version}; a atual é ${MINV.toFixed(1)}.`;
     $("ossSt").textContent = `helper v${s.version} OK` + (s.logged ? ` · conectado em ${s.host} como ${s.user}` : " · não conectado") + (old ? " · versão antiga" : "");
     $("ossWho").textContent = s.logged ? `prompt: ${s.prompt}` : "";
+    O.curNode = s.curNode || ""; $("ossCur").textContent = O.curNode ? `AMOS aberto em ${O.curNode}` : ""; 
     btns();
   }).catch(() => { $("ossUpd").hidden = true; O.online = false; O.logged = false; $("ossDot").className = "oss-dot off"; $("ossSt").textContent = "helper offline"; $("ossHelp").hidden = false; btns(); });
 }
@@ -4506,6 +4519,7 @@ function btns(){
   const can = O.online && O.logged && !O.busy;
   ["ossR1", "ossKget", "ossAlt", "ossSt1", "ossSt2", "ossRun", "ossScan"].forEach((id) => $(id).disabled = !can);
   $("ossLogin").disabled = !O.online || O.busy; $("ossLogout").disabled = !O.online || !O.logged;
+  $("ossClose").disabled = !(O.online && O.logged && !O.busy && O.curNode);
   $("ossStop").disabled = !O.busy; $("ossKill").disabled = !O.busy;
   const has = !!O.out; ["ossToIn", "ossToKg", "ossDl"].forEach((id) => $(id).disabled = !has);
 }
@@ -4522,6 +4536,7 @@ $("ossLogin").onclick = () => {
     status();
   }).catch((e) => { log(String(e.message || e), "er"); status(); });
 };
+$("ossClose").onclick = () => call("/close", {}).then((r) => { log(r.ok ? "AMOS fechado." : "Não fechou: " + r.erro, r.ok ? "" : "er"); status(); });
 $("ossLogout").onclick = () => call("/logout", {}).then(() => { log("Desconectado."); status(); });
 
 // ---------- nós conhecidos ----------
@@ -4536,7 +4551,7 @@ function start(body, label, after){
   if (O.busy) return;
   O.busy = true; O.out = ""; O.outName = label; O.after = after || null; O.logLen = 0; $("ossOut").hidden = true; $("ossAsk").innerHTML = ""; $("ossMsg").innerHTML = ""; btns();
   log(`▶ ${label} em ${body.node || ""}`, "cmd");
-  if (body.node) Object.assign(body, nodeCreds());
+  if (body.node) Object.assign(body, nodeCreds(), nodeOpts());
   call("/job", body).then((r) => {
     if (!r.ok) { O.busy = false; btns(); log("Não iniciou: " + r.erro, "er"); return; }
     O.job = r.id; poll();
@@ -4554,7 +4569,7 @@ function poll(){
     } else $("ossAsk").innerHTML = "";
     if (j.state === "running" || j.state === "ask") { setTimeout(poll, j.state === "ask" ? 600 : 800); return; }
     call("/job/out?id=" + O.job).then((txt) => {
-      O.out = txt; O.busy = false; btns();
+      O.out = txt; O.busy = false; btns(); status();
       $("ossOut").hidden = false; $("ossOut").textContent = txt.length > 200000 ? "… (mostrando o final; baixe a saída completa)\n" + txt.slice(-200000) : txt;
       if (j.state === "error") { $("ossMsg").innerHTML = `<div class="msg bad">${escH(j.error)}</div>`; return; }
       if (O.after) O.after(txt);
