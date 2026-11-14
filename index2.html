@@ -530,6 +530,58 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
       .kg-tabs2 button[aria-pressed="true"]{color:#000;background:var(--c1);border-color:var(--c1)}
       .kg-sector{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:12px}
       td.hm0{background:rgba(16,185,129,.08)} td.hm1{background:rgba(245,158,11,.12);color:var(--c4)} td.hm2{background:rgba(239,68,68,.12);color:var(--c5)}
+      .tp-box{position:relative;border:1px solid var(--border);border-radius:12px;overflow:hidden;background:radial-gradient(ellipse at top,rgba(0,212,255,.06),transparent 60%),radial-gradient(circle,rgba(255,255,255,.035) 1px,transparent 1px) 0 0/22px 22px,var(--bg)}
+      .tp-box:fullscreen{border-radius:0;overflow:auto}
+      .tp-stage{overflow:hidden}
+      .tp-bar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:10px;border-bottom:1px solid var(--border);background:color-mix(in srgb,var(--bg2) 80%,transparent)}
+      .tp-tools{display:flex;gap:5px;flex-wrap:wrap}
+      .tp-tools .btn{min-width:38px;padding:6px 8px;background:var(--bg2)}
+      .tp-layers{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+      .tp-layers b{font:600 9px var(--f-mono);letter-spacing:1px;color:var(--text3)}
+      .tp-layers button{display:flex;align-items:center;gap:6px;font:10px var(--f-mono);background:var(--bg4);border:1px solid var(--border2);color:var(--text2);border-radius:6px;padding:4px 9px;cursor:pointer}
+      .tp-layers button i{width:7px;height:7px;border-radius:50%;background:var(--text3)}
+      .tp-layers button[aria-pressed="true"]{color:var(--c1);border-color:rgba(0,212,255,.4)} .tp-layers button[aria-pressed="true"] i{background:var(--c3);box-shadow:0 0 6px var(--c3)}
+      .tp-panel{position:absolute;right:0;top:0;bottom:0;width:min(340px,92%);z-index:4;background:var(--bg2);border-left:1px solid var(--border2);padding:12px;display:flex;flex-direction:column;gap:8px;overflow:auto;box-shadow:-10px 0 30px rgba(0,0,0,.35)}
+      .tp-ph{display:flex;justify-content:space-between;align-items:center;gap:8px} .tp-ph b{font-size:14px}
+      .tp-pb{display:flex;flex-direction:column;gap:6px}
+      .tp-pb .ln{display:flex;justify-content:space-between;gap:8px;font:11px var(--f-mono);color:var(--text2);border-bottom:1px dashed var(--border);padding:4px 0} .tp-pb .ln b{color:var(--text);text-align:right}
+      #kgTopoSvgEl .tp-cell,#kgTopoSvgEl .tp-radio,#kgTopoSvgEl .tp-bb{cursor:pointer;transition:opacity .2s}
+      #kgTopoSvgEl .tp-cell:hover .tp-pill,#kgTopoSvgEl .tp-cell.sel .tp-pill,#kgTopoSvgEl .tp-cell:focus-visible .tp-pill{stroke:#fff;stroke-width:2}
+      #kgTopoSvgEl .tp-radio:hover rect:first-of-type,#kgTopoSvgEl .tp-radio.hl rect:first-of-type{stroke-width:2.6}
+      #kgTopoSvgEl.dim .tp-cell:not(.hl),#kgTopoSvgEl.dim .tp-radio:not(.hl),#kgTopoSvgEl.dim .tp-cpri:not(.hl),#kgTopoSvgEl.dim .tp-feed:not(.hl){opacity:.18}
+      #kgTopoSvgEl .tp-cpri{stroke:var(--c6);stroke-width:1.6;stroke-dasharray:6 6;opacity:.85}
+      #kgTopoSvgEl .tp-cpri.casc{stroke:var(--c4);stroke-width:1.1;stroke-dasharray:2 4;opacity:.6}
+      #kgTopoSvgEl .tp-cpri.down{stroke:var(--c5);stroke-dasharray:2 3}
+      #kgTopoSvgEl .tp-cpri.hl{stroke-width:3;opacity:1}
+      #kgTopoSvgEl .tp-feed{stroke-dasharray:4 4}
+      #kgTopoSvgEl .tp-feed.hl{opacity:1;stroke-width:2.4}
+      .tp-stage:not(.paused) .tp-cpri.flow{animation:tpFlow 1.1s linear infinite}
+      .tp-stage:not(.paused) .tp-feed{animation:tpFlow 1.6s linear infinite reverse}
+      .tp-stage:not(.paused) .tp-beacon{animation:tpBlink 1.4s ease-in-out infinite}
+      .tp-stage:not(.paused) .tp-wave{animation:tpWave 2.4s ease-out infinite}
+      .tp-stage:not(.paused) .tp-glow{animation:tpGlow 2.6s ease-in-out infinite}
+      .tp-stage:not(.paused) .tp-vswr{animation:tpBlink .9s ease-in-out infinite}
+      .tp-stage:not(.paused) .tp-ok{animation:tpGlow 3s ease-in-out infinite}
+      .tp-stage:not(.paused) .tp-tilt{animation:tpTilt 1.4s ease-out both}
+      .tp-stage:not(.paused) .tp-power,.tp-bar{animation:tpGrow 1.2s ease-out both;transform-box:fill-box;transform-origin:left}
+      .tp-stage:not(.paused) .tp-nb{animation:tpFlow 2s linear infinite;stroke-dasharray:3 5}
+      .tp-wave{transform-box:fill-box;transform-origin:center}
+      @keyframes tpFlow{to{stroke-dashoffset:-24}}
+      @keyframes tpBlink{0%,100%{opacity:1}50%{opacity:.2}}
+      @keyframes tpWave{0%{opacity:0;transform:scale(.7)}30%{opacity:.9}100%{opacity:0;transform:scale(1.35)}}
+      @keyframes tpGlow{0%,100%{opacity:.15}50%{opacity:.75}}
+      @keyframes tpTilt{from{stroke-dasharray:0 var(--len)}}
+      @keyframes tpGrow{from{transform:scaleX(0)}}
+      .sf-row{display:flex;align-items:stretch;gap:0;overflow-x:auto;padding-bottom:4px}
+      .sf-st{flex:1 0 150px;background:var(--bg2);border:1px solid var(--border2);border-radius:9px;padding:9px;display:flex;flex-direction:column;gap:2px;min-width:150px}
+      .sf-st i{font:600 9px var(--f-mono);font-style:normal;letter-spacing:.8px;text-transform:uppercase;color:var(--c4);margin-bottom:3px}
+      .sf-st .ln{font-size:10px}
+      .sf-ar{flex:0 0 34px;display:flex;align-items:center;justify-content:center;gap:3px}
+      .sf-ar span{width:5px;height:5px;border-radius:50%;background:var(--c6);opacity:.25}
+      .tp-flow:not(.paused) .sf-ar span{animation:tpDot 1.2s infinite}
+      .tp-flow .sf-ar span:nth-child(2){animation-delay:.2s} .tp-flow .sf-ar span:nth-child(3){animation-delay:.4s}
+      @keyframes tpDot{0%,100%{opacity:.2;transform:scale(.8)}50%{opacity:1;transform:scale(1.3)}}
+      @media (prefers-reduced-motion:reduce){.tp-stage *,.tp-flow *{animation:none!important}}
       @media (max-width:820px){section.panel.kg-app{grid-template-columns:1fr}.kg-side{flex-direction:row;overflow-x:auto;max-height:none;position:static;border-right:0;border-bottom:1px solid var(--border)}.kg-side h4{display:none}.kg-side button{white-space:nowrap}}
 </style>
     <section class="panel">
@@ -3743,92 +3795,179 @@ function topoModel(d, s){
   const bb = s.frus.filter((u) => !hw.rf.some((p) => p.fru === u.id) && !(d.byCls.get("Transceiver") || []).some((t) => t.key.includes("FieldReplaceableUnit=" + u.id + ",")));
   return { cells, secs: Object.values(secs).sort((a, b) => a.id.localeCompare(b.id)), bb, ri, hw, nbi };
 }
+// ---------- Topologia dinâmica: animações, pan/zoom, camadas, painel de detalhes, fluxo de sinal ----------
+function cellPeak(x){ const c = x.c; const sc = (c.scMo || [])[0]; const tx = sc ? +(sc.a.noOfTxAntennas || sc.a.noOfUsedTxAntennas || 0) : 0;
+  if (x.tech === "NB") return 0; const bw = x.tech === "5G" ? +c.bwDl || 0 : (+c.bwDl || 0) / 1000; const layers = x.tech === "5G" ? 4 : Math.min(4, tx || 2);
+  return Math.round(x.tech === "5G" ? bw * 5.5 * layers * 0.74 : bw * 3.75 * layers * 1.33); }
 function topoSvg(d, s, m, filt){
-  const W = 1180; const secs = m.secs; const n = Math.max(1, secs.length);
-  const colW = W / n; const pillW = 40, pillH = 66, gap = 6;
+  const W = 1180; const secs = m.secs; const n = Math.max(1, secs.length); const colW = W / n; const pillW = 40, pillH = 66, gap = 6;
+  const L = KG.topoL; const h = H(); const rank = Object.fromEntries(h.ranking.map((r) => [r.name, r]));
+  const freqCol = {}; const fpal = ["#22d3ee", "#a78bfa", "#34d399", "#fbbf24", "#f472b6", "#60a5fa", "#fb923c"];
+  [...new Set(m.cells.map((x) => x.tech + (x.c.earfcndl || x.c.arfcnDL || "")))].forEach((k, i) => { freqCol[k] = fpal[i % fpal.length]; });
   const techCol = { "4G": "var(--c1)", "NB": "#38bdf8", "5G": "var(--c6)" };
-  const radioBox = 150, radioH = 46; let svg = ""; const radioPos = {};
+  const colorOf = (x) => L.freq ? freqCol[x.tech + (x.c.earfcndl || x.c.arfcnDL || "")] : L.health ? scoreCol((rank[x.name] || {}).score) : techCol[x.tech];
+  const radioBox = 150, radioH = 46; let svg = ""; const pos = {}; const cellPos = {};
   const secPalette = ["#818cf8", "var(--c3)", "var(--c4)", "var(--c6)", "var(--c1)", "#fb923c"];
-  const maxRadios = Math.max(1, ...secs.map((sc) => sc.radios.length));
-  const rowsR = Math.ceil(maxRadios / Math.max(1, Math.floor((colW - 20) / (radioBox + 8))));
-  const yRad = 300; const yBB = yRad + rowsR * (radioH + 10) + 120; const H = yBB + 150;
-  // torre
-  const tx = W / 2; svg += `<g stroke="var(--text3)" stroke-width="1.4" fill="none" opacity=".75"><path d="M${tx - 6} 120 L${tx - 34} ${yBB - 20} M${tx + 6} 120 L${tx + 34} ${yBB - 20}"/>${Array.from({ length: 12 }, (_, i) => { const y1 = 130 + i * ((yBB - 160) / 12), y2 = y1 + (yBB - 160) / 12; const w1 = 6 + (y1 - 120) / (yBB - 140) * 28, w2 = 6 + (y2 - 120) / (yBB - 140) * 28; return `<path d="M${tx - w1} ${y1} L${tx + w2} ${y2} M${tx + w1} ${y1} L${tx - w2} ${y2}"/>`; }).join("")}<rect x="${tx - 44}" y="${yBB - 22}" width="88" height="5" fill="var(--text3)"/></g><circle cx="${tx}" cy="118" r="4" fill="var(--c5)"/>`;
+  const per = Math.max(1, Math.floor((colW - 20) / (radioBox + 8))); const rowsR = Math.max(1, ...secs.map((sc) => Math.ceil(sc.radios.length / per)));
+  const yRad = 300; const yBB = yRad + rowsR * (radioH + 10) + 120; const H0 = yBB + 150 + (m.bb.length - 1) * 70;
+  const tx = W / 2;
+  svg += `<g class="tp-tower" stroke="var(--text3)" stroke-width="1.4" fill="none" opacity=".75"><path d="M${tx - 6} 120 L${tx - 34} ${yBB - 20} M${tx + 6} 120 L${tx + 34} ${yBB - 20}"/>${Array.from({ length: 12 }, (_, i) => { const y1 = 130 + i * ((yBB - 160) / 12), y2 = y1 + (yBB - 160) / 12; const w1 = 6 + (y1 - 120) / (yBB - 140) * 28, w2 = 6 + (y2 - 120) / (yBB - 140) * 28; return `<path d="M${tx - w1} ${y1} L${tx + w2} ${y2} M${tx + w1} ${y1} L${tx - w2} ${y2}"/>`; }).join("")}<rect x="${tx - 44}" y="${yBB - 22}" width="88" height="5" fill="var(--text3)"/></g><circle class="tp-beacon" cx="${tx}" cy="117" r="4.5" fill="var(--c5)"/>`;
   secs.forEach((sc, i) => {
     const cx = colW * i + colW / 2; const col = secPalette[i % secPalette.length];
     const cl = sc.cells.filter((x) => filt === "ALL" || (filt === "LTE" ? x.tech !== "5G" : x.tech === "5G"));
-    const bw = Math.max(170, cl.length * (pillW + gap) + 26); const bx = cx - bw / 2, by = 70;
-    const tilt = sc.ret.map((r) => (+r.tilt / 10).toFixed(1) + "°").join("/");
+    const bw = Math.max(190, cl.length * (pillW + gap) + 30); const bx = cx - bw / 2, by = 70;
+    const tilts = sc.ret.map((r) => +r.tilt / 10); const tilt = tilts.map((t) => t.toFixed(1) + "°").join("/");
     svg += `<line x1="${cx}" y1="${by + 60}" x2="${tx}" y2="125" stroke="var(--border2)" stroke-width="1.2"/>`;
-    svg += `<rect x="${bx}" y="${by}" width="${bw}" height="150" rx="10" fill="var(--bg2)" stroke="var(--border2)"/><text x="${cx}" y="${by + 18}" text-anchor="middle" fill="${col}" style="font:800 12px var(--f-ui)">SETOR ${escH(sc.id)}</text><text x="${cx}" y="${by + 32}" text-anchor="middle" fill="var(--text3)" style="font:9px var(--f-mono)">${sc.cells.length} células · ${sc.radios.length} rádios${tilt ? " · tilt " + tilt : ""}</text>`;
-    cl.forEach((x, j) => { const px = cx - (cl.length * (pillW + gap) - gap) / 2 + j * (pillW + gap), py = by + 44;
-      svg += `<g><title>${escH(x.name)} · ${escH(x.band)} · PCI ${escH(x.pci ?? "-")} · ${x.ok ? "ativa" : "fora de serviço"}</title><rect x="${px}" y="${py}" width="${pillW}" height="${pillH}" rx="7" fill="${techCol[x.tech]}" opacity="${x.ok ? 0.9 : 0.35}" stroke="${x.ok ? "none" : "var(--c5)"}" stroke-width="2"/>
+    svg += `<g class="tp-sec" data-sec="${escH(sc.id)}"><rect x="${bx}" y="${by}" width="${bw}" height="${L.thr ? 168 : 152}" rx="10" fill="var(--bg2)" stroke="var(--border2)"/><text x="${cx}" y="${by + 18}" text-anchor="middle" fill="${col}" style="font:800 12px var(--f-ui)">SETOR ${escH(sc.id)}</text><text x="${cx}" y="${by + 32}" text-anchor="middle" fill="var(--text3)" style="font:9px var(--f-mono)">${sc.cells.length} células · ${sc.radios.length} rádios${tilt ? " · tilt " + tilt : ""}</text>`;
+    if (tilts.length) { const t = Math.max(...tilts); const r = 13, cx2 = bx + bw - 20, cy2 = by + 20, len = Math.PI * r; svg += `<g><title>Tilt elétrico máximo do setor: ${t.toFixed(1)}°</title><path d="M${cx2 - r} ${cy2} A${r} ${r} 0 0 1 ${cx2 + r} ${cy2}" fill="none" stroke="var(--bg4)" stroke-width="4"/><path class="tp-tilt" d="M${cx2 - r} ${cy2} A${r} ${r} 0 0 1 ${cx2 + r} ${cy2}" fill="none" stroke="${col}" stroke-width="4" stroke-dasharray="${len * Math.min(1, t / 14)} ${len}" style="--len:${len}"/><text x="${cx2}" y="${cy2 + 9}" text-anchor="middle" fill="var(--text2)" style="font:7px var(--f-mono)">${t.toFixed(0)}°</text></g>`; }
+    svg += `<g class="tp-waves" stroke="${col}" fill="none" opacity=".55">${[0, 1, 2].map((k) => `<path class="tp-wave" style="animation-delay:${k * 0.6 + i * 0.2}s" d="M${bx - 6 - k * 7} ${by + 60} q -10 17 0 34 M${bx + bw + 6 + k * 7} ${by + 60} q 10 17 0 34"/>`).join("")}</g>`;
+    cl.forEach((x, j) => { const px = cx - (cl.length * (pillW + gap) - gap) / 2 + j * (pillW + gap), py = by + 44; cellPos[x.name] = [px + pillW / 2, py];
+      const rk = rank[x.name] || { score: 100, issues: [] }; const fill = colorOf(x); const peak = cellPeak(x);
+      svg += `<g class="tp-cell ${x.ok ? "on" : "off"}" data-cell="${escH(x.name)}" data-radios="${escH(x.radios.join(" "))}" tabindex="0" role="button" aria-label="${escH(x.name)}"><title>${escH(x.name)} · ${escH(x.band)} · PCI ${escH(x.pci ?? "-")} · ${x.ok ? "ativa" : "fora de serviço"} — clique para detalhes</title>
+        ${x.ok ? `<rect class="tp-glow" x="${px - 3}" y="${py - 3}" width="${pillW + 6}" height="${pillH + 6}" rx="9" fill="none" stroke="${fill}" stroke-width="2"/>` : ""}
+        <rect class="tp-pill" x="${px}" y="${py}" width="${pillW}" height="${pillH}" rx="7" fill="${fill}" opacity="${x.ok ? 0.92 : 0.35}" stroke="${x.ok ? "none" : "var(--c5)"}" stroke-width="2"/>
         <text x="${px + pillW / 2}" y="${py + 15}" text-anchor="middle" fill="#04131c" style="font:800 11px var(--f-ui)">${x.tech}</text><text x="${px + pillW / 2}" y="${py + 28}" text-anchor="middle" fill="#04131c" style="font:700 9px var(--f-mono)">${escH(x.band)}</text>
         <text x="${px + pillW / 2}" y="${py + 41}" text-anchor="middle" fill="#04131c" style="font:8px var(--f-mono)">${escH(x.sub)}</text><text x="${px + pillW / 2}" y="${py + 54}" text-anchor="middle" fill="#04131c" style="font:8px var(--f-mono)">PCI ${escH(x.pci ?? "-")}</text>
-        <text x="${px + pillW / 2}" y="${py + pillH + 12}" text-anchor="middle" fill="var(--text2)" style="font:8px var(--f-mono)">${escH(x.short)}</text></g>`; });
-    // rádios
-    const per = Math.max(1, Math.floor((colW - 20) / (radioBox + 8)));
+        <text x="${px + pillW / 2}" y="${py + pillH + 12}" text-anchor="middle" fill="var(--text2)" style="font:8px var(--f-mono)">${escH(x.short)}</text>
+        ${L.health ? `<text x="${px + pillW / 2}" y="${py - 6}" text-anchor="middle" fill="${scoreCol(rk.score)}" style="font:800 9px var(--f-mono)">${rk.score}</text>` : ""}
+        ${L.comp && rk.issues.length ? `<circle cx="${px + pillW - 2}" cy="${py + 2}" r="7" fill="var(--c4)"/><text x="${px + pillW - 2}" y="${py + 5}" text-anchor="middle" fill="#000" style="font:800 8px var(--f-mono)">${rk.issues.length}</text>` : ""}
+        ${L.thr && peak ? `<rect x="${px}" y="${py + pillH + 18}" width="${pillW}" height="5" rx="2" fill="var(--bg4)"/><rect class="tp-power" x="${px}" y="${py + pillH + 18}" width="${pillW * Math.min(1, peak / 2200)}" height="5" rx="2" fill="${fill}"/><text x="${px + pillW / 2}" y="${py + pillH + 32}" text-anchor="middle" fill="var(--text2)" style="font:7px var(--f-mono)">${peak >= 1000 ? (peak / 1000).toFixed(1) + "G" : peak + "M"}</text>` : ""}</g>`; });
     sc.radios.forEach((id, j) => { const row = Math.floor(j / per), k = j % per, cnt = Math.min(per, sc.radios.length - row * per);
       const rx = cx - (cnt * (radioBox + 8) - 8) / 2 + k * (radioBox + 8), ry = yRad + row * (radioH + 10);
       const u = s.frus.find((f) => f.id === id) || {}; const ports = m.hw.rf.filter((p) => p.fru === id && p.used); const rl = ports.map((p) => +p.rl).filter((v) => v > 0);
-      const okR = (u.oper || "ENABLED") === "ENABLED"; const vswrOk = !ports.length || rl.every((v) => v >= 14);
-      radioPos[id] = [rx + radioBox / 2, ry, ry + radioH];
-      svg += `<line x1="${rx + radioBox / 2}" y1="${ry}" x2="${cx}" y2="${by + 150}" stroke="var(--c6)" stroke-width="1.2" stroke-dasharray="3 3" opacity=".7"/>
-        <g><title>${escH(id)} · ${escH(u.name || "")} · ${escH(u.serial || "")}${rl.length ? " · return loss " + rl.join("/") + " dB" : ""}</title><rect x="${rx}" y="${ry}" width="${radioBox}" height="${radioH}" rx="7" fill="var(--bg2)" stroke="${okR ? col : "var(--c5)"}" stroke-width="1.4"/>
-        <circle cx="${rx + radioBox - 9}" cy="${ry + 9}" r="3.5" fill="${okR ? "var(--c3)" : "var(--c5)"}"/>
+      const okR = (u.oper || "ENABLED") === "ENABLED"; const vswrOk = !ports.length || rl.every((v) => v >= 14); pos[id] = [rx + radioBox / 2, ry, ry + radioH];
+      svg += `<path class="tp-feed" data-radio-link="${escH(id)}" d="M${rx + radioBox / 2} ${ry} L${cx} ${by + (L.thr ? 168 : 152)}" stroke="${col}" stroke-width="1.3" fill="none" opacity=".55"/>
+        <g class="tp-radio" data-radio="${escH(id)}" tabindex="0" role="button" aria-label="${escH(id)}"><title>${escH(id)} · ${escH(u.name || "")} — clique para detalhes</title><rect x="${rx}" y="${ry}" width="${radioBox}" height="${radioH}" rx="7" fill="var(--bg2)" stroke="${okR ? col : "var(--c5)"}" stroke-width="1.4"/>
+        <circle class="${vswrOk ? "tp-ok" : "tp-vswr"}" cx="${rx + radioBox - 9}" cy="${ry + 9}" r="3.5" fill="${okR && vswrOk ? "var(--c3)" : "var(--c5)"}"/>
         <text x="${rx + radioBox / 2}" y="${ry + 15}" text-anchor="middle" fill="var(--text)" style="font:700 10px var(--f-ui)">${escH((u.name || id).slice(0, 22))}</text><text x="${rx + radioBox / 2}" y="${ry + 27}" text-anchor="middle" fill="var(--text3)" style="font:8px var(--f-mono)">${escH(id)}</text>
         <text x="${rx + 8}" y="${ry + 40}" fill="${vswrOk ? "var(--c3)" : "var(--c5)"}" style="font:8px var(--f-mono)">${ports.length ? (rl.length ? "RL " + Math.min(...rl).toFixed(1) + " dB" : "VSWR —") : "AAS"}</text><text x="${rx + radioBox - 8}" y="${ry + 40}" text-anchor="end" fill="var(--text3)" style="font:8px var(--f-mono)">${escH(u.number || "")}</text></g>`; });
   });
-  // baseband e CPRI
+  if (L.nb) { // vizinhas entre células do próprio site (arcos) e contagem por célula
+    const nb = K.neighbors(d); const seen = new Set();
+    nb.rels.filter((r) => r.local && cellPos[r.cell] && r.nbMo && cellPos[r.nbMo.id]).forEach((r) => { const k = [r.cell, r.nbMo.id].sort().join("|"); if (seen.has(k)) return; seen.add(k);
+      const [x1, y1] = cellPos[r.cell], [x2, y2] = cellPos[r.nbMo.id]; svg += `<path class="tp-nb" d="M${x1} ${y1} Q ${(x1 + x2) / 2} ${Math.min(y1, y2) - 60 - Math.abs(x1 - x2) / 8} ${x2} ${y2}" fill="none" stroke="var(--c3)" stroke-width="1" opacity=".45"/>`; });
+    nb.perCell.forEach((c) => { if (!cellPos[c.cell]) return; const [x, y] = cellPos[c.cell]; svg += `<text x="${x}" y="${y - (L.health ? 16 : 6)}" text-anchor="middle" fill="var(--c3)" style="font:700 8px var(--f-mono)">${c.total} viz</text>`; });
+  }
   const bbW = 300, bbX = tx - bbW / 2;
-  m.bb.forEach((u, i) => { const y = yBB + i * 70; radioPos[u.id] = [tx, y, y + 54];
-    svg += `<rect x="${bbX}" y="${y}" width="${bbW}" height="54" rx="9" fill="var(--bg2)" stroke="var(--c2)" stroke-width="1.6"/><text x="${tx}" y="${y + 18}" text-anchor="middle" fill="var(--c2)" style="font:800 11px var(--f-ui)">BASEBAND · ${escH(u.name || u.id)}</text><text x="${tx}" y="${y + 33}" text-anchor="middle" fill="var(--text3)" style="font:9px var(--f-mono)">${escH(u.id)} · ${escH(u.number || "")} · ${escH(u.serial || "")}</text><text x="${tx}" y="${y + 46}" text-anchor="middle" fill="var(--text3)" style="font:9px var(--f-mono)">${m.ri.filter((r) => r.fru1 === u.id || r.fru2 === u.id).length} links CPRI</text>`; });
-  m.ri.forEach((r) => { const a = radioPos[r.fru1], b = radioPos[r.fru2]; if (!a || !b) return;
-    const isBB = (id) => m.bb.some((u) => u.id === id); let x1, y1, x2, y2;
-    if (isBB(r.fru1) || isBB(r.fru2)) { const bbp = isBB(r.fru1) ? a : b, rp = isBB(r.fru1) ? b : a; const port = isBB(r.fru1) ? r.port1 : r.port2; const off = ((port || "A").charCodeAt(0) - 72) * 9; x1 = tx + off; y1 = bbp[1]; x2 = rp[0]; y2 = rp[2]; }
-    else { x1 = a[0]; y1 = a[2]; x2 = b[0]; y2 = b[2]; }
-    const okL = r.oper === "ENABLED"; const casc = !(isBB(r.fru1) || isBB(r.fru2)); const mid = isBB(r.fru1) || isBB(r.fru2) ? `C${x1} ${(y1 + y2) / 2} ${x2} ${(y1 + y2) / 2 + 30} ${x2} ${y2}` : `C${x1} ${y1 + 26} ${x2} ${y2 + 26} ${x2} ${y2}`;
-    svg += `<path d="M${x1} ${y1} ${mid}" fill="none" stroke="${!okL ? "var(--c5)" : casc ? "var(--c4)" : "var(--c6)"}" stroke-width="${casc ? 1.1 : 1.5}" stroke-dasharray="${okL ? (casc ? "2 3" : "5 4") : "2 3"}" opacity="${casc ? 0.55 : 0.85}"><title>RiLink ${escH(r.id)}: ${escH(r.fru1 + ":" + r.port1)} ↔ ${escH(r.fru2 + ":" + r.port2)} · ${escH(r.oper)}${r.rate ? " · " + escH(r.rate) : ""}</title></path>`; });
+  m.bb.forEach((u, i) => { const y = yBB + i * 70; pos[u.id] = [tx, y, y + 54];
+    svg += `<g class="tp-bb" data-bb="${escH(u.id)}" tabindex="0" role="button"><title>${escH(u.name || u.id)} — clique para detalhes</title><rect x="${bbX}" y="${y}" width="${bbW}" height="54" rx="9" fill="var(--bg2)" stroke="var(--c2)" stroke-width="1.6"/>${Array.from({ length: 8 }, (_, k) => `<rect x="${bbX + 30 + k * 30}" y="${y - 3}" width="10" height="6" rx="1.5" fill="${m.ri.some((r) => (r.fru1 === u.id && r.port1 === String.fromCharCode(65 + k)) || (r.fru2 === u.id && r.port2 === String.fromCharCode(65 + k))) ? "var(--c6)" : "var(--bg4)"}"/>`).join("")}<text x="${tx}" y="${y + 20}" text-anchor="middle" fill="var(--c2)" style="font:800 11px var(--f-ui)">BASEBAND · ${escH(u.name || u.id)}</text><text x="${tx}" y="${y + 34}" text-anchor="middle" fill="var(--text3)" style="font:9px var(--f-mono)">${escH(u.id)} · ${escH(u.number || "")} · ${escH(u.serial || "")}</text><text x="${tx}" y="${y + 47}" text-anchor="middle" fill="var(--text3)" style="font:9px var(--f-mono)">${m.ri.filter((r) => r.fru1 === u.id || r.fru2 === u.id).length} links CPRI · portas A–H</text></g>`; });
+  const isBB = (id) => m.bb.some((u) => u.id === id);
+  m.ri.forEach((r) => { const a = pos[r.fru1], b = pos[r.fru2]; if (!a || !b) return; let x1, y1, x2, y2, path;
+    const casc = !(isBB(r.fru1) || isBB(r.fru2));
+    if (!casc) { const bbp = isBB(r.fru1) ? a : b, rp = isBB(r.fru1) ? b : a; const port = isBB(r.fru1) ? r.port1 : r.port2; x1 = bbX + 35 + Math.max(0, Math.min(7, (port || "A").charCodeAt(0) - 65)) * 30; y1 = bbp[1]; x2 = rp[0]; y2 = rp[2]; path = `M${x1} ${y1} C${x1} ${(y1 + y2) / 2} ${x2} ${(y1 + y2) / 2 + 30} ${x2} ${y2}`; }
+    else { x1 = a[0]; y1 = a[2]; x2 = b[0]; y2 = b[2]; path = `M${x1} ${y1} C${x1} ${y1 + 26} ${x2} ${y2 + 26} ${x2} ${y2}`; }
+    const okL = r.oper === "ENABLED"; const radio = isBB(r.fru1) ? r.fru2 : r.fru1;
+    svg += `<path class="tp-cpri ${okL ? "flow" : "down"} ${casc ? "casc" : ""}" data-ri="${escH(r.id)}" data-ends="${escH(r.fru1 + " " + r.fru2)}" d="${path}" fill="none"><title>RiLink ${escH(r.id)}: ${escH(r.fru1 + ":" + r.port1)} ↔ ${escH(r.fru2 + ":" + r.port2)} · ${escH(r.oper)}${r.rate ? " · " + escH(r.rate) : ""}</title></path>`; });
   const core = d.mos.filter((x) => /^TermPointTo(Mme|Amf)$/.test(x.cls)); const coreOk = core.filter((x) => K.st(x.a.operationalState) === "ENABLED").length;
-  if (m.bb.length) svg += `<path d="M${bbX + bbW} ${yBB + 27} L${bbX + bbW + 70} ${yBB + 27}" stroke="var(--text2)" stroke-width="1.4" marker-end="url(#kgArr)"/><text x="${bbX + bbW + 78}" y="${yBB + 24}" fill="var(--text2)" style="font:700 10px var(--f-ui)">Para o core</text><text x="${bbX + bbW + 78}" y="${yBB + 37}" fill="${coreOk === core.length ? "var(--c3)" : "var(--c4)"}" style="font:9px var(--f-mono)">S1/NG ${coreOk}/${core.length} OK</text>`;
+  if (m.bb.length) svg += `<path class="tp-core" d="M${bbX + bbW} ${yBB + 27} L${bbX + bbW + 70} ${yBB + 27}" stroke="var(--text2)" stroke-width="1.6" marker-end="url(#kgArr)"/><text x="${bbX + bbW + 78}" y="${yBB + 24}" fill="var(--text2)" style="font:700 10px var(--f-ui)">Para o core</text><text x="${bbX + bbW + 78}" y="${yBB + 37}" fill="${coreOk === core.length ? "var(--c3)" : "var(--c4)"}" style="font:9px var(--f-mono)">S1/NG ${coreOk}/${core.length} OK</text>`;
   svg += `<line x1="20" y1="${yBB - 18}" x2="${W - 20}" y2="${yBB - 18}" stroke="var(--border2)" stroke-dasharray="4 4"/>`;
-  const legend = `<g style="font:9px var(--f-mono)" fill="var(--text2)">${[["4G LTE", techCol["4G"]], ["NB-IoT", techCol.NB], ["5G NR", techCol["5G"]]].map(([t, c], i) => `<rect x="${20 + i * 82}" y="16" width="11" height="11" rx="3" fill="${c}"/><text x="${36 + i * 82}" y="25">${t}</text>`).join("")}<line x1="270" y1="22" x2="300" y2="22" stroke="var(--c6)" stroke-dasharray="5 4"/><text x="306" y="25">CPRI baseband–rádio</text><line x1="430" y1="22" x2="460" y2="22" stroke="var(--c4)" stroke-dasharray="2 3"/><text x="466" y="25">CPRI em cascata</text><circle cx="580" cy="22" r="4" fill="var(--c5)"/><text x="588" y="25">fora de serviço</text></g>`;
-  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Mapa de topologia do site" style="display:block;max-width:none;min-width:900px"><defs><marker id="kgArr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--text2)"/></marker></defs>${legend}${svg}</svg>`;
+  const leg = L.freq ? Object.entries(freqCol).map(([k, c]) => [k.replace(/^(4G|5G|NB)/, "$1 "), c]) : L.health ? [["Saúde ≥85", "var(--c3)"], ["70–84", "var(--c4)"], ["<70", "var(--c5)"]] : [["4G LTE", techCol["4G"]], ["NB-IoT", techCol.NB], ["5G NR", techCol["5G"]]];
+  const legend = `<g style="font:9px var(--f-mono)" fill="var(--text2)">${leg.map(([t, c], i) => `<rect x="${20 + i * 96}" y="${H0 - 22}" width="11" height="11" rx="3" fill="${c}"/><text x="${36 + i * 96}" y="${H0 - 13}">${escH(t)}</text>`).join("")}<line x1="${20 + leg.length * 96}" y1="${H0 - 16}" x2="${50 + leg.length * 96}" y2="${H0 - 16}" stroke="var(--c6)" stroke-dasharray="6 6"/><text x="${56 + leg.length * 96}" y="${H0 - 13}">CPRI</text><line x1="${100 + leg.length * 96}" y1="${H0 - 16}" x2="${130 + leg.length * 96}" y2="${H0 - 16}" stroke="var(--c4)" stroke-dasharray="2 4"/><text x="${136 + leg.length * 96}" y="${H0 - 13}">CPRI em cascata</text></g>`;
+  return { svg: `<svg id="kgTopoSvgEl" viewBox="0 0 ${W} ${H0}" width="100%" height="${Math.round(H0 * 0.9)}" preserveAspectRatio="xMidYMin meet" role="img" aria-label="Mapa de topologia do site" style="display:block;max-width:none;min-width:900px;cursor:grab;touch-action:none"><defs><marker id="kgArr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--text2)"/></marker></defs><g id="kgTopoVp">${legend}${svg}</g></svg>`, W, H: H0 };
+}
+function topoPanel(d, s, m, kind, id){
+  const P = $("kgTopoPanel"); if (!P) return; KG.tpTab = KG.tpTab || "ov";
+  const rowsKV = (l) => l.map(([k, v]) => ln(k, v)).join("");
+  let title = "", tabs = [], body = "";
+  if (kind === "cell") {
+    const x = m.cells.find((c) => c.name === id); if (!x) return; const c = x.c; const rk = (H().ranking.find((r) => r.name === id) || { score: "-", issues: [] });
+    const nb = K.neighbors(d).rels.filter((r) => r.cell === id); title = x.name; tabs = [["ov", "Visão geral"], ["nb", `Vizinhas (${nb.length})`], ["aud", `Auditoria (${rk.issues.length})`], ["thr", "Capacidade"]];
+    if (KG.tpTab === "ov") body = rowsKV([["Tecnologia", x.tech === "4G" ? "LTE" : x.tech === "5G" ? "NR" : "NB-IoT"], ["Setor", x.sector], ["Banda", escH(x.band)], ["Cell ID", escH(c.cellId ?? c.cellLocalId ?? "-")], ["PCI", escH(c.pci ?? "-")], ["EARFCN / ARFCN", escH(c.earfcndl ?? c.arfcnDL ?? "-")], ["Banda de canal", escH(x.sub)], ["TAC", escH(c.tac ?? "-")], ["rachRootSequence", escH(c.rach ?? c.mo.a.rachRootSequence ?? "-")], ["Rádio(s)", escH(x.radios.join(", ") || "-")], ["Admin", stc(c.admin)], ["Oper", stc(c.oper)], ["Saúde", `<b style="color:${scoreCol(rk.score)}">${rk.score}</b>`]]);
+    else if (KG.tpTab === "nb") { const by = {}; nb.forEach((r) => { by[r.type] = (by[r.type] || 0) + 1; }); body = `<div>${Object.entries(by).map(([t, n]) => `<span class="kg-chip c">${t}: ${n}</span>`).join("")}</div>` + nb.slice(0, 40).map((r) => ln(`${r.type} · ${r.freq ?? ""}`, escH(r.nb) + (r.pci != null ? " · PCI " + r.pci : ""))).join("") + (nb.length > 40 ? `<p class="note">+${nb.length - 40} na seção Vizinhas.</p>` : ""); }
+    else if (KG.tpTab === "aud") body = rk.issues.length ? rk.issues.map((a) => `<div class="kg-card" style="padding:9px;gap:4px;border-left:3px solid ${sevI(a.sev) <= 1 ? "var(--c5)" : "var(--c4)"}">${sevB(a.sev)}<b style="font-size:12px">${escH(a.title)}</b><span class="note" style="margin:0">${escH(a.msg)}</span></div>`).join("") : `<p class="note">Nenhum achado para esta célula.</p>`;
+    else { const pk = cellPeak(x); const sc = (c.scMo || [])[0]; body = rowsKV([["Pico DL estimado", pk ? pk.toLocaleString("pt-BR") + " Mbps" : "-"], ["Antenas TX / RX", sc ? escH((sc.a.noOfTxAntennas || sc.a.noOfUsedTxAntennas || "-") + " / " + (sc.a.noOfRxAntennas || "-")) : "-"], ["Potência configurada", sc && sc.a.configuredMaxTxPower ? escH((+sc.a.configuredMaxTxPower / 1000) + " W") : "-"]]) + `<p class="note">Estimativa teórica pela banda e camadas, não é medição.</p>`; }
+  } else if (kind === "radio") {
+    const u = s.frus.find((f) => f.id === id) || { id }; const ports = m.hw.rf.filter((p) => p.fru === id); const ri = m.ri.filter((r) => r.fru1 === id || r.fru2 === id); const cells = m.cells.filter((x) => x.radios.includes(id));
+    title = `${id} · ${u.name || ""}`; tabs = [["ov", "Visão geral"]];
+    body = rowsKV([["Produto", escH(u.name || "-")], ["Número / revisão", escH((u.number || "-") + " " + (u.rev || ""))], ["Série", escH(u.serial || "-")], ["Admin / Oper", stc(u.admin) + " / " + stc(u.oper)], ["Células", escH(cells.map((x) => x.short).join(", ") || "-")]])
+      + `<h3 class="sub">Portas RF</h3>` + (ports.map((p) => ln(`${p.id} · ${p.role}`, `${p.rl ? escH(p.rl) + " dB" : "-"} · VSWR ${/true/i.test(p.vswr || "") ? "ligada" : "desligada"}`)).join("") || `<p class="note">Rádio integrado (AAS), sem portas de RF externas.</p>`)
+      + `<h3 class="sub">CPRI</h3>` + ri.map((r) => ln(`RiLink ${r.id}`, `${escH(r.fru1 + ":" + r.port1 + " ↔ " + r.fru2 + ":" + r.port2)} · ${stc(r.oper)}`)).join("");
+  } else {
+    const u = s.frus.find((f) => f.id === id) || { id }; const ri = m.ri.filter((r) => r.fru1 === id || r.fru2 === id); title = `Baseband · ${u.name || id}`; tabs = [["ov", "Visão geral"]];
+    body = rowsKV([["Produto", escH(u.name || "-")], ["Número", escH(u.number || "-")], ["Série", escH(u.serial || "-")], ["Admin / Oper", stc(u.admin) + " / " + stc(u.oper)], ["Links CPRI", ri.length]]) + ri.map((r) => ln(`RiLink ${r.id}`, `${escH(r.fru1 + ":" + r.port1 + " ↔ " + r.fru2 + ":" + r.port2)} · ${stc(r.oper)}`)).join("")
+      + `<h3 class="sub">Interfaces para o core</h3>` + d.mos.filter((x) => /^TermPointTo(Mme|Amf)$/.test(x.cls)).map((x) => ln(x.cls.replace("TermPointTo", "") + " " + x.id, stc(K.st(x.a.operationalState)))).join("");
+  }
+  P.hidden = false; P.innerHTML = `<div class="tp-ph"><b>${escH(title)}</b><button class="btn" id="kgTpX" aria-label="Fechar detalhes">✕</button></div><div class="kg-tabs2">${tabs.map(([k, t]) => `<button data-tp="${k}" aria-pressed="${k === KG.tpTab}">${escH(t)}</button>`).join("")}</div><div class="tp-pb">${body}</div>`;
+  $("kgTpX").onclick = () => { P.hidden = true; KG.tpSel = null; document.querySelectorAll("#kgTopoSvgEl .sel").forEach((e) => e.classList.remove("sel")); };
+  P.querySelectorAll("[data-tp]").forEach((b) => b.onclick = () => { KG.tpTab = b.dataset.tp; topoPanel(d, s, m, kind, id); });
+}
+function topoInteract(d, s, m, dims){
+  const el = $("kgTopoSvgEl"); if (!el) return; const vp0 = KG.tpVB || [0, 0, dims.W, dims.H]; let vb = vp0.slice();
+  const apply = () => { el.setAttribute("viewBox", vb.map((v) => v.toFixed(1)).join(" ")); KG.tpVB = vb.slice(); $("kgTz1").textContent = Math.round(dims.W / vb[2] * 100) + "%"; };
+  const zoomAt = (f, cx, cy) => { const nw = Math.max(dims.W / 5, Math.min(dims.W * 2, vb[2] * f)), nh = nw * dims.H / dims.W; vb = [cx - (cx - vb[0]) * nw / vb[2], cy - (cy - vb[1]) * nh / vb[3], nw, nh]; apply(); };
+  const toSvg = (e) => { const r = el.getBoundingClientRect(); return [vb[0] + (e.clientX - r.left) / r.width * vb[2], vb[1] + (e.clientY - r.top) / r.height * vb[3]]; };
+  el.addEventListener("wheel", (e) => { e.preventDefault(); const [x, y] = toSvg(e); zoomAt(e.deltaY > 0 ? 1.12 : 1 / 1.12, x, y); }, { passive: false });
+  let drag = null; el.addEventListener("pointerdown", (e) => { if (e.target.closest(".tp-cell,.tp-radio,.tp-bb")) return; drag = { x: e.clientX, y: e.clientY, vb: vb.slice() }; el.setPointerCapture(e.pointerId); el.style.cursor = "grabbing"; });
+  el.addEventListener("pointermove", (e) => { if (!drag) return; const r = el.getBoundingClientRect(); vb[0] = drag.vb[0] - (e.clientX - drag.x) / r.width * vb[2]; vb[1] = drag.vb[1] - (e.clientY - drag.y) / r.height * vb[3]; apply(); });
+  const end = () => { drag = null; el.style.cursor = "grab"; }; el.addEventListener("pointerup", end); el.addEventListener("pointercancel", end);
+  $("kgTzI").onclick = () => zoomAt(1 / 1.2, vb[0] + vb[2] / 2, vb[1] + vb[3] / 2); $("kgTzO").onclick = () => zoomAt(1.2, vb[0] + vb[2] / 2, vb[1] + vb[3] / 2);
+  $("kgTz1").onclick = () => { vb = [0, 0, dims.W, dims.H]; apply(); };
+  $("kgTzF").onclick = () => { const box = $("kgTopoBox"); try { if (document.fullscreenElement) document.exitFullscreen(); else box.requestFullscreen().catch(() => { $("kgTopoMsg").innerHTML = `<div class="msg warn">Tela cheia não é permitida nesta visualização.</div>`; }); } catch (e) {} };
+  const svgText = () => { const c = el.cloneNode(true); c.setAttribute("viewBox", `0 0 ${dims.W} ${dims.H}`); c.setAttribute("width", dims.W); c.setAttribute("height", dims.H); c.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    const cs = getComputedStyle(document.documentElement); let t = new XMLSerializer().serializeToString(c); t = t.replace(/var\(--([\w-]+)(?:,[^)]*)?\)/g, (m0, v) => cs.getPropertyValue("--" + v).trim() || "#888");
+    return t.replace("<g id=\"kgTopoVp\">", `<rect width="${dims.W}" height="${dims.H}" fill="${cs.getPropertyValue("--bg").trim() || "#0a0a0f"}"/><g id="kgTopoVp">`); };
+  $("kgTzS").onclick = () => offer([{ name: `${s.node}_topologia.svg`, data: svgText() }], $("kgTopoMsg"));
+  $("kgTzP").onclick = () => { const img = new Image(); img.onload = () => { const cv = document.createElement("canvas"); cv.width = dims.W * 2; cv.height = dims.H * 2; const g = cv.getContext("2d"); g.scale(2, 2); g.drawImage(img, 0, 0); cv.toBlob((b) => offer([{ name: `${s.node}_topologia.png`, data: b }], $("kgTopoMsg"))); }; img.onerror = () => { $("kgTopoMsg").innerHTML = `<div class="msg warn">Não consegui gerar o PNG; use o SVG.</div>`; }; img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgText()); };
+  // destaque: célula → rádios → CPRI
+  const hl = (cell, on) => { const g = el.querySelector(`.tp-cell[data-cell="${CSS.escape(cell)}"]`); if (!g) return; const rs = (g.dataset.radios || "").split(" ").filter(Boolean);
+    el.classList.toggle("dim", on); g.classList.toggle("hl", on);
+    rs.forEach((r) => { el.querySelectorAll(`.tp-radio[data-radio="${CSS.escape(r)}"],[data-radio-link="${CSS.escape(r)}"]`).forEach((e) => e.classList.toggle("hl", on)); el.querySelectorAll(".tp-cpri").forEach((p) => { if ((p.dataset.ends || "").split(" ").includes(r)) p.classList.toggle("hl", on); }); el.querySelectorAll(".tp-bb").forEach((b) => b.classList.toggle("hl", on)); }); };
+  el.querySelectorAll(".tp-cell").forEach((g) => { g.addEventListener("mouseenter", () => hl(g.dataset.cell, true)); g.addEventListener("mouseleave", () => hl(g.dataset.cell, false));
+    const open = () => { el.querySelectorAll(".sel").forEach((e) => e.classList.remove("sel")); g.classList.add("sel"); KG.tpTab = "ov"; KG.tpSel = ["cell", g.dataset.cell]; topoPanel(d, s, m, "cell", g.dataset.cell); };
+    g.addEventListener("click", open); g.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } }); });
+  el.querySelectorAll(".tp-radio").forEach((g) => { const open = () => { KG.tpTab = "ov"; KG.tpSel = ["radio", g.dataset.radio]; topoPanel(d, s, m, "radio", g.dataset.radio); }; g.addEventListener("click", open); g.addEventListener("keydown", (e) => { if (e.key === "Enter") open(); }); });
+  el.querySelectorAll(".tp-bb").forEach((g) => { const open = () => { KG.tpTab = "ov"; KG.tpSel = ["bb", g.dataset.bb]; topoPanel(d, s, m, "bb", g.dataset.bb); }; g.addEventListener("click", open); g.addEventListener("keydown", (e) => { if (e.key === "Enter") open(); }); });
+  apply(); if (KG.tpSel) topoPanel(d, s, m, KG.tpSel[0], KG.tpSel[1]);
+}
+function signalFlow(d, s, m){
+  return m.secs.map((sc, i) => { const cells = sc.cells; const peakL = cells.filter((x) => x.tech === "4G").reduce((a, x) => a + cellPeak(x), 0), peakN = cells.filter((x) => x.tech === "5G").reduce((a, x) => a + cellPeak(x), 0);
+    const bands = [...new Set(cells.map((x) => x.band).filter(Boolean))]; const radios = sc.radios.map((id) => s.frus.find((f) => f.id === id) || { id });
+    const ports = m.hw.rf.filter((p) => sc.radios.includes(p.fru) && p.used); const rl = ports.map((p) => +p.rl).filter((v) => v > 0);
+    const ri = m.ri.filter((r) => sc.radios.includes(r.fru1) || sc.radios.includes(r.fru2)); const bb = m.bb[0] || {};
+    const totBw = cells.reduce((a, x) => a + (x.tech === "5G" ? +x.c.bwDl || 0 : x.tech === "4G" ? (+x.c.bwDl || 0) / 1000 : 0), 0);
+    const stage = (t, rows) => `<div class="sf-st"><i>${t}</i>${rows.map(([k, v]) => `<div class="ln"><span>${escH(k)}</span><b>${v}</b></div>`).join("")}</div>`;
+    const arrow = `<div class="sf-ar" aria-hidden="true"><span></span><span></span><span></span></div>`;
+    return `<div class="kg-card"><h4><span><span class="kg-chip c">${escH(sc.id)}</span> Cadeia do setor ${escH(sc.id)} <span class="note" style="margin:0">${cells.length} células · ${escH(bands.join(", "))}</span></span><span class="kg-chip g">Pico ${peakL.toLocaleString("pt-BR")} LTE / ${peakN.toLocaleString("pt-BR")} NR Mbps</span></h4>
+      <div class="sf-row">${stage("UE", [["Modulação", "256QAM"], ["Pico DL", (peakL + peakN).toLocaleString("pt-BR") + " Mbps"]])}${arrow}${stage("Interface aérea", [["Bandas", escH(bands.join(", "))], ["BW total", totBw + " MHz"], ["Tilt", escH(sc.ret.map((r) => (+r.tilt / 10).toFixed(1) + "°").join(" / ") || "-")]])}${arrow}
+      ${stage("Células (RRC/PDCP)", cells.slice(0, 5).map((x) => [x.tech + " " + x.short, "PCI " + (x.pci ?? "-") + (x.ok ? "" : " ⚠")]))}${arrow}
+      ${stage("Rádio (RF/CPRI)", [...radios.map((u) => [u.id, escH((u.name || "").slice(0, 18))]), ["Return loss", rl.length ? Math.min(...rl).toFixed(1) + " dB (pior)" : "AAS / -"]])}${arrow}
+      ${stage("Fibra CPRI", ri.map((r) => ["RiLink " + r.id, stc(r.oper)]))}${arrow}${stage("Baseband", [["Produto", escH(bb.name || "-")], ["Estado", stc(bb.oper || "-")]])}</div></div>`; }).join("");
 }
 function secTopo(d, s){
-  const m = topoModel(d, s); KG.topoTab = KG.topoTab || "map"; KG.topoF = KG.topoF || "ALL"; KG.topoZ = KG.topoZ || 1;
-  const lteN = m.cells.filter((x) => x.tech !== "5G").length, nrN = m.cells.filter((x) => x.tech === "5G").length;
-  const antN = m.hw.ant.length; const radN = s.frus.length - m.bb.length;
+  const m = topoModel(d, s); KG.topoTab = KG.topoTab || "map"; KG.topoF = KG.topoF || "ALL"; KG.topoL = KG.topoL || {};
+  const nrN = m.cells.filter((x) => x.tech === "5G").length; const radN = s.frus.length - m.bb.length;
   const head = `<div class="kg-hero" style="padding:12px 16px;gap:12px;justify-content:space-between"><div><h3 style="font-size:16px">${escH(s.node)}</h3><span class="note" style="margin:0">${escH(s.sw || "")}</span></div>
-    <div>${[[m.cells.filter((x) => x.tech === "4G").length + " células LTE" + (m.nbi.length ? " + " + m.nbi.length + " NB-IoT" : ""), "c"], [nrN + " células NR", "r"], [antN + " antenas", "g"], [radN + " rádios", ""], [m.bb.length + " baseband", "a"]].map(([t, c]) => `<span class="kg-chip ${c}">${t}</span>`).join("")}</div>
+    <div>${[[m.cells.filter((x) => x.tech === "4G").length + " células LTE" + (m.nbi.length ? " + " + m.nbi.length + " NB-IoT" : ""), "c"], [nrN + " células NR", "r"], [m.hw.ant.length + " antenas", "g"], [radN + " rádios", ""], [m.bb.length + " baseband", "a"]].map(([t, c]) => `<span class="kg-chip ${c}">${t}</span>`).join("")}</div>
     <div class="kg-tabs2">${["ALL", "LTE", "NR"].map((f) => `<button data-tf="${f}" aria-pressed="${KG.topoF === f}">${f === "ALL" ? "Todas" : f}</button>`).join("")}</div></div>
-    <div class="kg-tabs2">${[["map", "Topologia"], ["flow", "Fluxo de sinal"], ["spec", "Espectro"], ["cap", "Capacidade"]].map(([k, t]) => `<button data-tt="${k}" aria-pressed="${KG.topoTab === k}">${t}</button>`).join("")}</div>`;
-  let body = "";
-  if (KG.topoTab === "map") body = `<div class="row"><button class="btn" id="kgTzI" aria-label="Aproximar">＋</button><button class="btn" id="kgTzO" aria-label="Afastar">－</button><button class="btn" id="kgTz1">100%</button><span class="note">Passe o mouse sobre células, rádios e links para ver os detalhes. Setor deduzido pelo nome da célula (A/I → A, B/J → B, C/K → C).</span></div>
-    <div class="tablebox" style="background:radial-gradient(ellipse at top,rgba(0,212,255,.05),transparent 60%),var(--bg);max-height:none;overflow:auto"><div id="kgTopoSvg" style="width:${KG.topoZ * 100}%">${topoSvg(d, s, m, KG.topoF)}</div></div>`;
-  else if (KG.topoTab === "flow") body = `<div id="kgTopoCh"></div>`;
+    <div class="kg-tabs2">${[["map", "Topologia"], ["flow", "Fluxo de sinal"], ["chain", "Cadeia por célula"], ["spec", "Espectro"], ["cap", "Capacidade"]].map(([k, t]) => `<button data-tt="${k}" aria-pressed="${KG.topoTab === k}">${t}</button>`).join("")}</div>`;
+  let body = "", dims = null;
+  if (KG.topoTab === "map") { const r = topoSvg(d, s, m, KG.topoF); dims = r;
+    const layers = [["nb", "Vizinhas"], ["health", "Saúde"], ["comp", "Conformidade"], ["thr", "Throughput"], ["freq", "Plano de frequência"]];
+    body = `<div class="tp-box" id="kgTopoBox"><div class="tp-bar"><div class="tp-tools"><button class="btn" id="kgTzI" title="Aproximar" aria-label="Aproximar">＋</button><button class="btn" id="kgTzO" title="Afastar" aria-label="Afastar">－</button><button class="btn" id="kgTz1" title="Reiniciar vista">100%</button><button class="btn" id="kgTzF" title="Tela cheia" aria-label="Tela cheia">⛶</button><button class="btn" id="kgTzP" title="Exportar PNG">PNG</button><button class="btn" id="kgTzS" title="Exportar SVG">SVG</button><button class="btn" id="kgTzA" title="Pausar/retomar animações" aria-pressed="${!KG.tpPause}">${KG.tpPause ? "▶" : "❚❚"}</button></div>
+      <div class="tp-layers"><b>CAMADAS</b>${layers.map(([k, t]) => `<button data-ly="${k}" aria-pressed="${!!KG.topoL[k]}"><i></i>${t}</button>`).join("")}</div></div>
+      <div class="tp-stage ${KG.tpPause ? "paused" : ""}" id="kgTopoStage">${r.svg}</div><aside class="tp-panel" id="kgTopoPanel" hidden></aside></div>
+      <p class="note">Role para dar zoom, arraste para mover, passe o mouse numa célula para ver o caminho até o baseband e clique para abrir os detalhes. Setor deduzido pelo nome da célula (A/I → A, B/J → B, C/K → C).</p><div id="kgTopoMsg"></div>`; }
+  else if (KG.topoTab === "flow") body = `<div class="tp-flow ${KG.tpPause ? "paused" : ""}">${signalFlow(d, s, m)}</div>`;
+  else if (KG.topoTab === "chain") body = `<div id="kgTopoCh"></div>`;
   else if (KG.topoTab === "spec") {
-    const car = K.freqPlan(d).carriers.map((c) => { const f = c.tech === "NR" ? nrMHz(c.arfcn) : lteMHz(c.arfcn); return { ...c, f }; }).filter((c) => c.f);
-    const groups = {}; car.forEach((c) => { const g = c.band; (groups[g] = groups[g] || []).push(c); });
+    const car = K.freqPlan(d).carriers.map((c) => ({ ...c, f: c.tech === "NR" ? nrMHz(c.arfcn) : lteMHz(c.arfcn) })).filter((c) => c.f);
+    const groups = {}; car.forEach((c) => { (groups[c.band] = groups[c.band] || []).push(c); });
     body = `<p class="note">Portadoras no eixo de frequência de downlink (MHz), calculado pelo EARFCN/ARFCN. Cada bloco tem a largura da banda configurada.</p>` + Object.entries(groups).map(([g, l]) => {
       const lo = Math.min(...l.map((c) => c.f - c.bw / 2)) - 5, hi = Math.max(...l.map((c) => c.f + c.bw / 2)) + 5; const W = 900, sc = (W - 40) / (hi - lo);
-      return `<div class="kg-card"><h4>${escH(g)} · ${escH(l[0].tech)}<span class="note" style="margin:0">${lo.toFixed(0)}–${hi.toFixed(0)} MHz</span></h4><div style="overflow-x:auto"><svg viewBox="0 0 ${W} 86" width="100%" style="min-width:520px;display:block">${l.map((c) => { const x = 20 + (c.f - c.bw / 2 - lo) * sc, w = c.bw * sc; return `<g><title>${escH(c.cells.join(", "))}</title><rect x="${x}" y="14" width="${w}" height="34" rx="5" fill="${c.tech === "NR" ? "var(--c6)" : "var(--c1)"}" opacity=".8"/><text x="${x + w / 2}" y="35" text-anchor="middle" fill="#04131c" style="font:700 11px var(--f-mono)">${c.bw} MHz</text><text x="${x + w / 2}" y="62" text-anchor="middle" fill="var(--text2)" style="font:9px var(--f-mono)">${c.tech === "NR" ? "ARFCN" : "EARFCN"} ${escH(c.arfcn)} · ${c.f.toFixed(1)} MHz</text><text x="${x + w / 2}" y="76" text-anchor="middle" fill="var(--text3)" style="font:9px var(--f-mono)">${c.cells.length} célula(s)</text></g>`; }).join("")}<line x1="20" y1="50" x2="${W - 20}" y2="50" stroke="var(--border2)"/></svg></div></div>`; }).join("");
+      return `<div class="kg-card"><h4>${escH(g)} · ${escH(l[0].tech)}<span class="note" style="margin:0">${lo.toFixed(0)}–${hi.toFixed(0)} MHz</span></h4><div style="overflow-x:auto"><svg viewBox="0 0 ${W} 86" width="100%" style="min-width:520px;display:block">${l.map((c) => { const x = 20 + (c.f - c.bw / 2 - lo) * sc, w = c.bw * sc; return `<g><title>${escH(c.cells.join(", "))}</title><rect class="tp-power" x="${x}" y="14" width="${w}" height="34" rx="5" fill="${c.tech === "NR" ? "var(--c6)" : "var(--c1)"}" opacity=".8"/><text x="${x + w / 2}" y="35" text-anchor="middle" fill="#04131c" style="font:700 11px var(--f-mono)">${c.bw} MHz</text><text x="${x + w / 2}" y="62" text-anchor="middle" fill="var(--text2)" style="font:9px var(--f-mono)">${c.tech === "NR" ? "ARFCN" : "EARFCN"} ${escH(c.arfcn)} · ${c.f.toFixed(1)} MHz</text><text x="${x + w / 2}" y="76" text-anchor="middle" fill="var(--text3)" style="font:9px var(--f-mono)">${c.cells.length} célula(s)</text></g>`; }).join("")}<line x1="20" y1="50" x2="${W - 20}" y2="50" stroke="var(--border2)"/></svg></div></div>`; }).join("");
   } else {
-    const ant = (c) => { const sc = (c.scMo || [])[0]; const n = sc ? +(sc.a.noOfTxAntennas || sc.a.noOfUsedTxAntennas || 0) : 0; return n; };
-    const rows = m.cells.filter((x) => x.tech !== "NB").map((x) => { const c = x.c; const bw = x.tech === "5G" ? +c.bwDl || 0 : (+c.bwDl || 0) / 1000; const tx = ant(c);
-      const layers = x.tech === "5G" ? Math.min(4, tx >= 4 ? 4 : tx || 4) : Math.min(4, tx || 2);
-      const peak = x.tech === "5G" ? bw * 5.5 * layers * 0.74 : bw * 3.75 * layers * 1.33; return { x, bw, tx, layers, peak: Math.round(peak) }; });
+    const rows = m.cells.filter((x) => x.tech !== "NB").map((x) => { const c = x.c; const sc = (c.scMo || [])[0]; const tx = sc ? +(sc.a.noOfTxAntennas || sc.a.noOfUsedTxAntennas || 0) : 0; return { x, bw: x.tech === "5G" ? +c.bwDl || 0 : (+c.bwDl || 0) / 1000, tx, layers: x.tech === "5G" ? 4 : Math.min(4, tx || 2), peak: cellPeak(x) }; });
     const max = Math.max(1, ...rows.map((r) => r.peak)); const bySec = {}; rows.forEach((r) => { bySec[r.x.sector] = (bySec[r.x.sector] || 0) + r.peak; });
-    body = `<p class="note">Pico teórico de downlink por célula, estimado pela banda, número de camadas (antenas TX da portadora, máx. 4) e modulação 256QAM; NR TDD com ~74% dos slots em DL. É uma referência de dimensionamento, não medição.</p>
+    body = `<p class="note">Pico teórico de downlink por célula, estimado pela banda, camadas (antenas TX, máx. 4) e 256QAM; NR TDD com ~74% dos slots em DL. Referência de dimensionamento, não medição.</p>
       <div class="kg-tiles">${[["Pico LTE (Mbps)", rows.filter((r) => r.x.tech === "4G").reduce((a, r) => a + r.peak, 0)], ["Pico NR (Mbps)", rows.filter((r) => r.x.tech === "5G").reduce((a, r) => a + r.peak, 0)], ...Object.entries(bySec).sort().map(([k, v]) => ["Setor " + k + " (Mbps)", v])].map(([l, v]) => `<div class="kg-tile"><b>${v.toLocaleString("pt-BR")}</b><span>${l}</span></div>`).join("")}</div>
-      <div class="tablebox"><table>${table(["Célula", "Setor", "Tecnologia", "Banda", "BW (MHz)", "Antenas TX", "Camadas", "Pico DL estimado"], rows.sort((a, b) => b.peak - a.peak).map((r) => tr([`<b>${escH(r.x.name)}</b>`, escH(r.x.sector), escH(r.x.tech), escH(r.x.band), r.bw, r.tx || "-", r.layers, `<div style="display:flex;align-items:center;gap:8px"><span style="flex:1;min-width:80px;height:8px;border-radius:4px;background:var(--bg4)"><span style="display:block;height:8px;border-radius:4px;width:${r.peak / max * 100}%;background:${r.x.tech === "5G" ? "var(--c6)" : "var(--c1)"}"></span></span><b>${r.peak.toLocaleString("pt-BR")} Mbps</b></div>`])))}</table></div>`;
+      <div class="tablebox"><table>${table(["Célula", "Setor", "Tecnologia", "Banda", "BW (MHz)", "Antenas TX", "Camadas", "Pico DL estimado"], rows.sort((a, b) => b.peak - a.peak).map((r) => tr([`<b>${escH(r.x.name)}</b>`, escH(r.x.sector), escH(r.x.tech), escH(r.x.band), r.bw, r.tx || "-", r.layers, `<div style="display:flex;align-items:center;gap:8px"><span style="flex:1;min-width:80px;height:8px;border-radius:4px;background:var(--bg4)"><span class="tp-bar" style="display:block;height:8px;border-radius:4px;width:${r.peak / max * 100}%;background:${r.x.tech === "5G" ? "var(--c6)" : "var(--c1)"}"></span></span><b>${r.peak.toLocaleString("pt-BR")} Mbps</b></div>`])))}</table></div>`;
   }
   $("kgSec").innerHTML = head + body;
   $("kgSec").querySelectorAll("[data-tt]").forEach((b) => b.onclick = () => { KG.topoTab = b.dataset.tt; secTopo(d, s); });
   $("kgSec").querySelectorAll("[data-tf]").forEach((b) => b.onclick = () => { KG.topoF = b.dataset.tf; secTopo(d, s); });
-  if (KG.topoTab === "map") { const z = (v) => { KG.topoZ = Math.max(0.4, Math.min(2.5, v)); $("kgTopoSvg").style.width = (KG.topoZ * 100) + "%"; };
-    $("kgTzI").onclick = () => z(KG.topoZ + 0.15); $("kgTzO").onclick = () => z(KG.topoZ - 0.15); $("kgTz1").onclick = () => z(1); }
-  if (KG.topoTab === "flow") secHwOld(d, s, $("kgTopoCh"));
+  $("kgSec").querySelectorAll("[data-ly]").forEach((b) => b.onclick = () => { KG.topoL[b.dataset.ly] = !KG.topoL[b.dataset.ly]; secTopo(d, s); });
+  if (KG.topoTab === "map") { topoInteract(d, s, m, dims); $("kgTzA").onclick = () => { KG.tpPause = !KG.tpPause; $("kgTopoStage").classList.toggle("paused", KG.tpPause); $("kgTzA").textContent = KG.tpPause ? "▶" : "❚❚"; }; }
+  if (KG.topoTab === "chain") secHwOld(d, s, $("kgTopoCh"));
 }
 function secHw(d, s){
   const hw = K.hardware(d); const ri = K.riLinks(d);
