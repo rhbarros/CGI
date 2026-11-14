@@ -19,3 +19,10 @@ As senhas **não ficam neste repositório** (ele é público). Os scripts usam m
 
 Na saída e no log as senhas aparecem como `******`.
 Para usar fora da ferramenta (colando no WinFiol), troque os marcadores pelas senhas antes.
+
+## 2G Ericsson (BACKUP_2G.mos)
+
+Ao colar o STATION ID, se a CGI tiver 2G Ericsson nele (coluna F = 2G), entra uma linha 2G na fila:
+site (coluna K), BSC (coluna J) e células (coluna L). No servidor 2G a ferramenta abre o BSC com `eaw`,
+roda `RXTCP:MOTY=RXOTG,CELL=<célula>;` em cada célula para achar os TGs e repete o bloco `{TG}` para cada TG
+encontrado; depois roda `RLCRP` em cada célula. Só comandos de impressão.
