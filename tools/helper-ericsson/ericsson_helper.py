@@ -11,7 +11,7 @@ import argparse, json, os, re, sys, threading, time, uuid
 from urllib.parse import urlparse, parse_qs
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.4"
+VERSION = "1.5"
 LOCAL_PORT = 8766
 LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "helper.log")
 
@@ -48,6 +48,7 @@ class Session:
         self.client = None; self.chan = None; self.prompt = ""; self.host = ""; self.user = ""
         self.lock = threading.Lock(); self.banner = ""
         self.cur_node = None; self.lt_done = False; self.last_amos = ""; self.depth = 0
+        self.key = ""; self.name = ""; self.port = 0; self._cred = None
 
     # ---------- leitura ----------
     def read_until(self, done, maxsec=60, idle=0.35, job=None, keep=True):
@@ -89,6 +90,9 @@ class Session:
         self.logout()
         c = paramiko.SSHClient(); c.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         c.connect(host, port=int(port), username=user, password=pwd, timeout=25, banner_timeout=40, auth_timeout=40, look_for_keys=False, allow_agent=False)
+        try: c.get_transport().set_keepalive(30)  # mantem a sessao viva enquanto ociosa
+        except Exception: pass
+        self.port = int(port); self._cred = (host, int(port), user, pwd)  # so em memoria, para reconectar se cair
         ch = c.invoke_shell(term="vt100", width=400, height=2000)
         ch.settimeout(0.3)
         self.client, self.chan, self.host, self.user = c, ch, host, user
@@ -112,6 +116,21 @@ class Session:
         except Exception:
             pass
         self.client = self.chan = None; self.prompt = ""; self.cur_node = None; self.lt_done = False; self.depth = 0
+
+    def forget(self):
+        self.logout(); self._cred = None
+
+    def ensure(self, job=None):
+        """Se a sessao caiu (rede/VPN), reconecta com as credenciais guardadas em memoria."""
+        if self.logged: return
+        if not self._cred: raise RuntimeError("servidor %s nao conectado: faca o login de novo" % (self.name or self.key))
+        if job is not None: job["log"].append("Sessao com %s tinha caido: reconectando..." % (self.name or self.key))
+        h, pt, u, pw = self._cred; self.login(h, pt, u, pw)
+        if job is not None: job["log"].append("Reconectado.")
+
+    def info(self):
+        return {"key": self.key, "name": self.name, "host": self.host, "port": self.port, "user": self.user, "logged": self.logged, "prompt": self.prompt,
+                "curNode": (self.cur_node or "") if self.logged else "", "depth": self.depth, "busy": any(j["state"] in ("running", "ask") and j.get("server") == self.key for j in JOBS.values())}
 
     @property
     def logged(self):
@@ -148,8 +167,37 @@ class Session:
         return path, chk
 
 
-S = Session()
 JOBS = {}
+SESS = {}  # "host:porta" -> Session (uma sessao SSH por servidor, todas conectadas ao mesmo tempo)
+_TL = threading.local()
+
+
+class _Cur:
+    """S.<x> = sessao da execucao atual (cada job/requisicao escolhe a sua)."""
+    def __getattr__(self, n): return getattr(_TL.s, n)
+    def __setattr__(self, n, v): setattr(_TL.s, n, v)
+
+
+S = _Cur()
+
+
+def use(key):
+    s = SESS.get(key)
+    if s is None: raise RuntimeError("servidor nao conectado: faca o login")
+    _TL.s = s; return s
+
+
+def pick(d):
+    key = d.get("server") or d.get("key")
+    if not key:
+        on = [k for k, v in SESS.items() if v.logged]
+        if len(on) == 1: key = on[0]
+        else: raise RuntimeError("informe o servidor (ha %d conectados)" % len(on))
+    return key
+
+
+def busy(key=None):
+    return any(j["state"] in ("running", "ask") and (key is None or j.get("server") == key) for j in JOBS.values())
 
 
 def amos_prompt(node):
@@ -229,9 +277,9 @@ def run_job(job):
     """Executa um job: abre o AMOS no no, roda os comandos um a um e fecha."""
     p = job["params"]; node = p.get("node", "").strip(); out = []
     try:
+        use(job["server"])
         with S.lock:
-            if not S.logged:
-                raise RuntimeError("helper nao conectado ao servidor: faca o login de novo")
+            S.ensure(job)
             cmds = [c for c in p.get("cmds", []) if c.strip() and not c.strip().startswith("//")]
             if p.get("kind") == "shell":
                 for c in cmds:
@@ -378,8 +426,9 @@ class Handler(BaseHTTPRequestHandler):
         if not self._guard(): return
         u = urlparse(self.path); q = parse_qs(u.query)
         if u.path == "/":
-            return self._json({"ok": True, "app": "ericsson-helper", "version": VERSION, "logged": S.logged, "host": S.host, "user": S.user, "prompt": S.prompt, "curNode": S.cur_node or "", "depth": S.depth,
-                               "busy": any(j["state"] in ("running", "ask") for j in JOBS.values())})
+            ss = [v.info() for v in SESS.values()]; first = next((x for x in ss if x["logged"]), {})
+            return self._json({"ok": True, "app": "ericsson-helper", "version": VERSION, "sessions": ss, "logged": any(x["logged"] for x in ss),
+                               "host": first.get("host", ""), "user": first.get("user", ""), "prompt": first.get("prompt", ""), "curNode": first.get("curNode", ""), "depth": first.get("depth", 0), "busy": busy()})
         if u.path in ("/job", "/job/out"):
             j = JOBS.get((q.get("id") or [""])[0])
             if not j: return self._json({"ok": False, "erro": "job nao encontrado"}, 404)
@@ -400,29 +449,39 @@ class Handler(BaseHTTPRequestHandler):
         p = urlparse(self.path).path
         try:
             if p == "/login":
-                if any(j["state"] in ("running", "ask") for j in JOBS.values()):
-                    return self._json({"ok": False, "erro": "ha uma execucao em andamento"})
-                with S.lock:
-                    r = S.login(d["host"], d.get("port", 5022), d["user"], d["pwd"])
-                return self._json({"ok": True, **r})
+                key = "%s:%s" % (d["host"], int(d.get("port", 5022)))
+                if busy(key): return self._json({"ok": False, "erro": "ha uma execucao em andamento neste servidor"})
+                sess = SESS.setdefault(key, Session()); sess.key = key; sess.name = d.get("name") or sess.name or d["host"]
+                _TL.s = sess
+                with sess.lock:
+                    r = sess.login(d["host"], d.get("port", 5022), d["user"], d["pwd"])
+                return self._json({"ok": True, "key": key, **r})
             if p == "/close":
-                if any(j["state"] in ("running", "ask") for j in JOBS.values()):
-                    return self._json({"ok": False, "erro": "ha uma execucao em andamento"})
+                key = pick(d)
+                if busy(key): return self._json({"ok": False, "erro": "ha uma execucao em andamento neste servidor"})
+                use(key)
                 with S.lock: close_amos()
                 return self._json({"ok": True})
             if p == "/logout":
-                for j in JOBS.values(): j["stop"] = True
-                with S.lock: S.logout()
+                keys = [d["key"]] if d.get("key") else list(SESS.keys())
+                for k in keys:
+                    for j in JOBS.values():
+                        if j.get("server") == k: j["stop"] = True
+                    sess = SESS.pop(k, None)
+                    if sess:
+                        with sess.lock: sess.forget()
                 return self._json({"ok": True})
             if p == "/job":
-                if any(j["state"] in ("running", "ask") for j in JOBS.values()):
-                    return self._json({"ok": False, "erro": "ja existe uma execucao em andamento"})
+                key = pick(d)
+                if key not in SESS: return self._json({"ok": False, "erro": "servidor nao conectado: faca o login"})
+                if busy(key):
+                    return self._json({"ok": False, "erro": "ja existe uma execucao em andamento neste servidor"})
                 cmds = d.get("cmds", [])
                 writes = [c for c in cmds if WRITE_RE.match(c)] + (["run " + d["upload"]["name"]] if d.get("upload") else [])
                 if writes and not d.get("confirmWrites"):
                     return self._json({"ok": False, "needConfirm": True, "writes": writes[:50], "erro": "comandos de alteracao precisam de confirmacao"})
                 jid = uuid.uuid4().hex[:10]
-                job = {"id": jid, "params": d, "state": "running", "step": 0, "total": len(cmds), "log": [], "start": time.time()}
+                job = {"id": jid, "server": key, "params": d, "state": "running", "step": 0, "total": len(cmds), "log": [], "start": time.time()}
                 JOBS[jid] = job
                 for k in [k for k, v in JOBS.items() if v is not job and v["state"] in ("done", "error") and time.time() - v.get("end", 0) > 1800]:
                     JOBS.pop(k, None)
