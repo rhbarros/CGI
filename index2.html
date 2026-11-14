@@ -675,6 +675,12 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
       #p-oss .oss-log .er{color:var(--c5)} #p-oss .oss-log .ok{color:var(--c3)} #p-oss .oss-log .cmd{color:var(--c1)}
       #p-oss .oss-out{background:var(--bg);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;font:11px/1.45 var(--f-mono);max-height:420px;overflow:auto;white-space:pre;color:var(--text)}
       #p-oss .oss-ask{border:1px solid rgba(245,158,11,.5);background:rgba(245,158,11,.08);border-radius:9px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+      #p-oss .oss-tabs{display:flex;gap:4px;flex-wrap:wrap;align-items:flex-end;border-bottom:1px solid var(--bg4);margin:0 0 4px}
+      #p-oss .oss-tab{display:flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--bg4);border-bottom:none;border-radius:6px 6px 0 0;background:var(--bg2);color:var(--c4,inherit);font:12px var(--f-mono);cursor:pointer;margin-bottom:-1px}
+      #p-oss .oss-tab[aria-selected="true"]{background:var(--bg);border-color:var(--c1);color:var(--c1)}
+      #p-oss .oss-tab .x{border:none;background:none;color:inherit;cursor:pointer;padding:0 2px;font:inherit;opacity:.7}
+      #p-oss .oss-tab .d{width:7px;height:7px;border-radius:50%;background:var(--bg4)} #p-oss .oss-tab .d.run{background:var(--c3,#f5a623);animation:tpBlink 1s infinite} #p-oss .oss-tab .d.open{background:var(--c2,#3ecf8e)}
+      #p-oss .oss-tab.add{background:none;border-style:dashed}
       #p-oss .oss-prog{height:6px;border-radius:3px;background:var(--bg4);overflow:hidden} #p-oss .oss-prog span{display:block;height:100%;background:var(--c1);transition:width .3s}
       #p-oss .oss-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:10px}
       #p-oss .oss-act{background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:7px}
@@ -714,6 +720,7 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
 
     <section class="panel">
       <div class="ph"><span class="step">3</span><h2>Nó e ações</h2><p>Informe o nó como no AMOS (ex.: <code>4G-UBUR18</code>). Leituras rodam direto; qualquer comando de alteração (<code>set</code>, <code>crn</code>, <code>del</code>, <code>bl</code>, <code>deb</code>, <code>acc</code>, <code>run</code>…) só sai depois da sua confirmação, e as perguntas [y/n] do AMOS aparecem aqui para você responder.</p></div>
+      <div class="oss-tabs" id="ossTabs" role="tablist" aria-label="Abas do moshell"></div>
       <div class="row" style="margin:0"><input type="text" id="ossNode" list="ossNodes" placeholder="Nó (ex.: 4G-UBUR18)" style="max-width:280px;text-transform:uppercase" autocomplete="off" spellcheck="false"><datalist id="ossNodes"></datalist><label class="note" style="margin:0"><input type="checkbox" id="ossLt" checked> rodar <code>lt all</code> antes</label><span class="note" id="ossCur" style="margin:0"></span><button class="btn" id="ossClose" disabled>Fechar AMOS do nó</button></div>
       <details><summary>Como abrir e trocar de nó</summary>
         <div class="oss-grid" style="margin-top:8px">
@@ -754,7 +761,7 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
     </section>
 
     <section class="panel">
-      <div class="ph"><span class="step">4</span><h2>Execução</h2></div>
+      <div class="ph"><span class="step">4</span><h2>Execução <span class="note" id="ossTabName" style="margin:0;font-weight:400"></span></h2></div>
       <div class="oss-prog"><span id="ossBar" style="width:0"></span></div>
       <div class="row" style="margin:0"><span class="note" id="ossProg">Nada em execução.</span><button class="btn" id="ossStop" disabled>Parar após o comando atual</button><button class="btn" id="ossKill" disabled>Parar agora (Ctrl-C)</button></div>
       <div id="ossAsk"></div>
@@ -4490,7 +4497,7 @@ render();
 
 // ================= EXECUTAR NO OSS (AMOS via helper local) =================
 (function(){
-const HELPER = "http://127.0.0.1:8766", MINV = 1.9, OSK = LSK + ":oss";
+const HELPER = "http://127.0.0.1:8766", MINV = 2.0, OSK = LSK + ":oss";
 const WRITE = /^\s*(set|sete|crn|cr|del|rdel|bl|deb|acc|run|ldeb|lbl|lset|lcr|ldel|restart|confb\+?|trun|upgrade|cvms|cvmk|cvrm|cvset)\b/i;
 const O = { online: false, logged: false, job: null, out: "", outName: "", logLen: 0, log: [], busy: false, files: [], after: null };
 const load = () => { try { return JSON.parse(localStorage.getItem(OSK) || "{}"); } catch (e) { return {}; } };
@@ -4533,11 +4540,11 @@ function status(){
     $("ossDot").className = "oss-dot on"; $("ossHelp").hidden = true;
     const old = +s.version < MINV; $("ossUpd").hidden = !old; $("ossUpdT").textContent = `O helper deste PC é a versão ${s.version}; a atual é ${MINV.toFixed(1)}.`;
     const sel = SS.find((x) => x.key === keyOf(selSrv())) || (!s.sessions && SS[0]) || null;
-    O.logged = !!(sel && sel.logged); O.curNode = sel && sel.logged ? sel.curNode || "" : "";
+    O.logged = !!(sel && sel.logged); if (!O.logged && TABS.length) T().curNode = "";
     const on = SS.filter((x) => x.logged);
     $("ossSt").textContent = `helper v${s.version} OK · ` + (on.length ? `${on.length} servidor(es) conectado(s)` : "nenhum servidor conectado") + (old ? " · versão antiga" : "");
     $("ossWho").textContent = sel && sel.logged ? `Ações em ${sel.name || sel.host} · prompt: ${sel.prompt}` : (selSrv() ? `${selSrv().name} não está conectado.` : "");
-    $("ossCur").textContent = O.curNode ? `AMOS aberto em ${O.curNode}` + (sel.depth > 1 ? ` (${sel.depth} sessões empilhadas)` : "") : "";
+    $("ossCur").textContent = TABS.length && T().curNode ? `AMOS aberto em ${T().curNode} nesta aba` : "";
     $("ossSrvState").innerHTML = servers.filter((x) => x.host).map((x, i) => { const ss = SS.find((y) => y.key === keyOf(x));
       const st = !ss ? `<span class="kg-chip">desconectado</span>` : ss.logged ? `<span class="kg-chip g">conectado</span>` : `<span class="kg-chip a">caiu · reconecta na próxima ação</span>`;
       return `<div class="ln" style="display:flex;gap:8px;align-items:center;font:11px var(--f-mono);flex-wrap:wrap"><b style="min-width:52px">${escH(x.name)}</b>${st}${ss && ss.curNode ? `<span class="kg-chip c">AMOS: ${escH(ss.curNode)}${ss.depth > 1 ? " ×" + ss.depth : ""}</span>` : ""}${ss && ss.lanes ? `<span class="kg-chip">+${ss.lanes} terminal(is)</span>` : ""}${ss && ss.busy ? `<span class="kg-chip a">executando</span>` : ""}</div>`; }).join("");
@@ -4545,9 +4552,11 @@ function status(){
   }).catch(() => { $("ossUpd").hidden = true; O.online = false; O.logged = false; SS = []; $("ossDot").className = "oss-dot off"; $("ossSt").textContent = "helper offline"; $("ossHelp").hidden = false; $("ossSrvState").innerHTML = ""; btns(); });
 }
 function btns(){
+  const tb = TABS && TABS.length ? T() : { busy: false, out: "", curNode: "" };
+  O.busy = tb.busy; O.out = tb.out; O.curNode = tb.curNode;
   const can = O.online && O.logged && !O.busy;
   ["ossR1", "ossKget", "ossAlt", "ossSt1", "ossSt2", "ossRun", "ossScan"].forEach((id) => $(id).disabled = !can);
-  $("ossLogin").disabled = !O.online || O.busy; $("ossLoginAll").disabled = !O.online || O.busy;
+  $("ossLogin").disabled = !O.online; $("ossLoginAll").disabled = !O.online;
   $("ossLogout").disabled = !O.online || !SS.some((x) => x.key === keyOf(selSrv())); $("ossLogoutAll").disabled = !O.online || !SS.length;
   $("ossClose").disabled = !(O.online && O.logged && !O.busy && O.curNode);
   $("ossStop").disabled = !O.busy; $("ossKill").disabled = !O.busy;
@@ -4573,7 +4582,7 @@ async function loginList(list){
 }
 $("ossLogin").onclick = () => { const s = selSrv(); if (!s || !s.host) { $("ossMsg").innerHTML = `<div class="msg warn">Preencha o IP do servidor ${escH(s ? s.name : "")} na lista à esquerda.</div>`; return; } save({ srv: +$("ossSrv").value }); loginList([s]); };
 $("ossLoginAll").onclick = () => loginList(servers.filter((s) => s.host));
-$("ossClose").onclick = () => call("/close", { key: keyOf(selSrv()) }).then((r) => { log(r.ok ? `AMOS fechado em ${selSrv().name}.` : "Não fechou: " + r.erro, r.ok ? "" : "er"); status(); });
+$("ossClose").onclick = () => { const tb = T(); call("/close", { key: keyOf(servers[tb.srv]), lane: laneOf(tb) }).then((r) => { log(r.ok ? `[${tabName(tb)}] AMOS fechado.` : "Não fechou: " + r.erro, r.ok ? "" : "er"); if (r.ok) tb.curNode = ""; tabsDraw(); status(); }); };
 $("ossLogout").onclick = () => call("/logout", { key: keyOf(selSrv()) }).then(() => { log(`Desconectado de ${selSrv().name}.`); status(); });
 $("ossLogoutAll").onclick = () => call("/logout", {}).then(() => { log("Desconectado de todos os servidores."); status(); });
 
@@ -4584,25 +4593,68 @@ drawNodes();
 const node = () => $("ossNode").value.trim().toUpperCase();
 function needNode(){ const n = node(); if (!/^[\w.\-]{3,}$/.test(n)) { $("ossMsg").innerHTML = `<div class="msg warn">Informe o nó (ex.: 4G-UBUR18).</div>`; return null; } const l = load().nodes || []; if (!l.includes(n)) save({ nodes: [n, ...l].slice(0, 40) }); drawNodes(); return n; }
 
+// ---------- abas do moshell: cada aba é um terminal próprio no servidor (como as abas do WinFiol) ----------
+// Uma aba ocupada não trava as outras: cada uma usa o seu terminal (faixa 10+id no helper).
+var TID = 0, TABS = [], act = 0;
+function newTab(o){ const id = o && o.id != null ? o.id : TID; TID = Math.max(TID, id + 1);
+  return { id, srv: o && o.srv != null ? o.srv : (+$("ossSrv").value || 0), node: (o && o.node) || "", job: null, busy: false, out: "", outName: "", after: null, logLen: 0, lbl: null, kg: null, con: "", tlog: [], curNode: "", prog: "Nada em execução.", bar: 0, ask: null, msg: "", kfiles: null }; }
+function T(){ return TABS[act]; }
+const laneOf = (tb) => 10 + tb.id;
+const tabName = (tb) => tb.node || `Aba ${TABS.indexOf(tb) + 1}`;
+const isAct = (tb) => tb === T();
+function tabsSave(){ save({ tabs: TABS.map((t) => ({ id: t.id, srv: t.srv, node: t.node })), tabAct: act }); }
+function tabsDraw(){
+  $("ossTabs").innerHTML = TABS.map((t, i) => `<div class="oss-tab" role="tab" tabindex="0" aria-selected="${i === act}" data-tab="${i}" title="${escH((servers[t.srv] || {}).name || "")}${t.curNode ? " · AMOS em " + escH(t.curNode) : ""}"><span class="d ${t.busy ? "run" : t.curNode ? "open" : ""}"></span>${escH(tabName(t))}<span class="note" style="margin:0;font-size:10px">${escH((servers[t.srv] || {}).name || "")}</span>${TABS.length > 1 ? `<button class="x" data-tx="${i}" aria-label="Fechar aba ${escH(tabName(t))}">✕</button>` : ""}</div>`).join("") + `<button class="oss-tab add" id="ossTabAdd" title="Abrir outro terminal">+ Nova aba</button>`;
+  $("ossTabs").querySelectorAll("[data-tab]").forEach((el) => { el.onclick = (e) => { if (e.target.dataset.tx == null) tabGo(+el.dataset.tab); }; el.onkeydown = (e) => { if (e.key === "Enter") tabGo(+el.dataset.tab); }; });
+  $("ossTabs").querySelectorAll("[data-tx]").forEach((b) => b.onclick = () => tabClose(+b.dataset.tx));
+  $("ossTabAdd").onclick = () => { const tb = newTab({ srv: T().srv }); TABS.push(tb); tabGo(TABS.length - 1); $("ossNode").focus(); };
+  $("ossTabName").textContent = `· ${tabName(T())} (${(servers[T().srv] || {}).name || ""})`;
+}
+function tabShow(){
+  const tb = T();
+  $("ossNode").value = tb.node; $("ossSrv").value = String(tb.srv);
+  $("ossBar").style.width = tb.bar + "%"; $("ossProg").textContent = tb.prog;
+  $("ossMsg").innerHTML = tb.msg || ""; $("ossConfirm").innerHTML = "";
+  askDraw(tb); conShow(); tabsDraw(); status();
+  $("ossKget").textContent = tb.kg && tb.busy ? `Gerando kget… ${tb.kg.last || 0}%` : "Gerar kget e analisar";
+}
+function tabGo(i){ if (!TABS[i]) return; T().cmd = $("ossCmd").value; act = i; $("ossCmd").value = T().cmd || ""; tabsSave(); tabShow(); }
+function tabClose(i){
+  const tb = TABS[i]; if (!tb) return;
+  if (tb.busy) { setMsg(T(), `<div class="msg warn">A aba ${escH(tabName(tb))} está executando. Pare a execução antes de fechar.</div>`); return; }
+  const s = servers[tb.srv]; if (s && s.host && tb.curNode) call("/close", { key: keyOf(s), lane: laneOf(tb) }).catch(() => {});
+  TABS.splice(i, 1); if (act >= TABS.length) act = TABS.length - 1; else if (i < act) act--; tabsSave(); tabShow();
+}
+function setMsg(tb, h){ tb.msg = h; if (isAct(tb)) $("ossMsg").innerHTML = h; }
+function setProg(tb, txt, bar){ tb.prog = txt; if (bar != null) tb.bar = bar; if (isAct(tb)) { $("ossProg").textContent = txt; $("ossBar").style.width = tb.bar + "%"; } }
+// as entradas da aba ativa ficam guardadas nela
+$("ossNode").addEventListener("input", () => { T().node = node(); tabsDraw(); });
+$("ossNode").addEventListener("change", () => { T().node = node(); tabsSave(); tabsDraw(); });
+$("ossSrv").addEventListener("change", () => { T().srv = +$("ossSrv").value; tabsSave(); tabsDraw(); });
+(load().tabs || [{ id: 0, srv: load().srv ?? 0, node: "" }]).forEach((o) => TABS.push(newTab(o)));
+act = Math.min(TABS.length - 1, load().tabAct || 0);
+
 // ---------- execução ----------
 function start(body, label, after){
-  if (O.busy) return;
-  O.busy = true; O.out = ""; O.outName = label; O.after = after || null; O.logLen = 0; O.lbl = { label, node: body.node || "", srv: selSrv() ? selSrv().name : "", cmds: body.cmds || [] }; O.kg = null; $("ossAsk").innerHTML = ""; $("ossMsg").innerHTML = ""; btns();
-  log(`▶ ${label} em ${body.node || ""}`, "cmd");
+  const tb = T(); if (tb.busy) return;
+  const s = servers[tb.srv];
+  tb.busy = true; tb.out = ""; tb.outName = label; tb.after = after || null; tb.logLen = 0; tb.tlog = []; tb.lbl = { label, node: body.node || "", srv: s ? s.name : "", cmds: body.cmds || [] }; tb.kg = null; tb.ask = null;
+  askDraw(tb); setMsg(tb, ""); btns(); tabsDraw();
+  log(`[${tabName(tb)}] ▶ ${label} em ${body.node || ""} (${s ? s.name : "?"})`, "cmd");
   if (body.node) Object.assign(body, nodeCreds(), nodeOpts());
-  body.server = keyOf(selSrv()); log(`Servidor: ${selSrv().name}`);
+  body.server = keyOf(s); body.lane = laneOf(tb);
   call("/job", body).then((r) => {
-    if (!r.ok) { O.busy = false; btns(); log("Não iniciou: " + r.erro, "er"); $("ossKget").textContent = "Gerar kget e analisar"; return; }
-    O.job = r.id; poll();
-  }).catch((e) => { O.busy = false; btns(); log(String(e.message || e), "er"); });
+    if (!r.ok) { tb.busy = false; btns(); tabsDraw(); log(`[${tabName(tb)}] Não iniciou: ` + r.erro, "er"); if (isAct(tb)) $("ossKget").textContent = "Gerar kget e analisar"; return; }
+    tb.job = r.id; poll(tb);
+  }).catch((e) => { tb.busy = false; btns(); tabsDraw(); log(String(e.message || e), "er"); });
 }
 // ---------- percentual do KGET (dcgk): o dcgk é um comando só, então a estimativa usa as fases e o tempo das execuções anteriores ----------
 const KGK = OSK + ":dcgkT";
 function kgAvg(){ try { const a = JSON.parse(localStorage.getItem(KGK) || "[]"); return a.length ? a.reduce((x, y) => x + y, 0) / a.length : 300; } catch (e) { return 300; } }
 function kgSaveT(sec){ try { const a = JSON.parse(localStorage.getItem(KGK) || "[]"); a.push(Math.round(sec)); localStorage.setItem(KGK, JSON.stringify(a.slice(-8))); } catch (e) {} }
-function kgProg(j){
-  const K = O.kg || (O.kg = { t0: Date.now(), tRun: 0, exp: kgAvg() });
-  const L = O.log.slice(-60).join("\n");
+function kgProg(tb, j){
+  const K = tb.kg || (tb.kg = { t0: Date.now(), tRun: 0, exp: kgAvg() });
+  const L = tb.tlog.slice(-60).join("\n");
   if (!K.tRun && /> dcgk/.test(L)) K.tRun = Date.now();
   if (/Copiando /.test(L)) K.copy = true; if (/Arquivo recebido/.test(L)) K.got = true;
   const now = Date.now(), el = (now - K.t0) / 1000;
@@ -4615,90 +4667,95 @@ function kgProg(j){
     pct = f < 1 ? 5 + Math.round(f * 84) : Math.min(91, 89 + Math.round((f - 1) * 4)); rest = Math.max(0, Math.round(K.exp - t)); fase = "dcgk coletando no nó"; }
   if (j.state === "ask") fase = "Aguardando sua resposta";
   pct = Math.max(K.last || 0, Math.floor(pct)); K.last = pct;
-  $("ossBar").style.width = pct + "%";
   const mmss = (x) => x >= 60 ? `${Math.floor(x / 60)} min ${String(Math.round(x % 60)).padStart(2, "0")} s` : `${Math.round(x)} s`;
-  $("ossProg").textContent = `KGET ${pct}% · ${fase} · ${mmss(el)} decorridos` + (rest ? ` · faltam ~${mmss(rest)} (estimativa)` : "") + ` · ${(j.bytes / 1024).toFixed(0)} KB recebidos`;
-  $("ossKget").textContent = j.state === "running" || j.state === "ask" ? `Gerando kget… ${pct}%` : "Gerar kget e analisar";
+  setProg(tb, `KGET ${pct}% · ${fase} · ${mmss(el)} decorridos` + (rest ? ` · faltam ~${mmss(rest)} (estimativa)` : "") + ` · ${(j.bytes / 1024).toFixed(0)} KB recebidos`, pct);
+  if (isAct(tb)) $("ossKget").textContent = j.state === "running" || j.state === "ask" ? `Gerando kget… ${pct}%` : "Gerar kget e analisar";
 }
-function kgNext(j){
-  if (j.state === "running" || j.state === "ask") return pollAsk(j);
-  const K = O.kg; O.kg = null;
+function kgNext(tb, j){
+  if (j.state === "running" || j.state === "ask") return pollAsk(tb, j);
+  const K = tb.kg; tb.kg = null;
   if (j.state === "done" && K && K.tRun) kgSaveT((Date.now() - K.tRun) / 1000);
-  const after = O.after;
-  O.after = async (txt, jj) => { if (after) await after(txt, jj); if (jj.state === "done") { $("ossBar").style.width = "100%"; $("ossProg").textContent = $("ossProg").textContent.replace(/^KGET \d+% · [^·]+/, "KGET 100% · Concluído e aberto na aba 06 "); } };
-  return pollEnd(j);
+  const after = tb.after;
+  tb.after = async (txt, jj, t2) => { if (after) await after(txt, jj, t2); if (jj.state === "done") setProg(tb, tb.prog.replace(/^KGET \d+% · [^·]+/, "KGET 100% · Concluído e aberto na aba 06 "), 100); };
+  return pollEnd(tb, j);
 }
-function poll(){
-  call("/job?id=" + O.job + "&since=" + O.logLen).then((j) => {
-    j.log.forEach((t) => log(t, /^ERRO/.test(t) ? "er" : /> /.test(t) ? "cmd" : ""));
-    O.logLen = j.logLen;
-    const pct = j.total ? Math.min(100, Math.round(j.step / j.total * 100)) : 0; $("ossBar").style.width = pct + "%";
-    if (O.lbl && O.lbl.label === "dcgk ~/dcgk") { kgProg(j); return kgNext(j); }
-    $("ossProg").textContent = `${j.state === "ask" ? "Aguardando sua resposta" : j.state === "running" ? "Executando" : j.state === "done" ? "Concluído" : "Erro"} · passo ${j.step}/${j.total} · ${(j.bytes / 1024).toFixed(0)} KB recebidos`;
-    if (j.state === "running" || j.state === "ask") return pollAsk(j);
-    pollEnd(j);
-  }).catch((e) => { log(String(e.message || e), "er"); O.busy = false; O.kg = null; $("ossKget").textContent = "Gerar kget e analisar"; btns(); });
+function poll(tb){
+  call("/job?id=" + tb.job + "&since=" + tb.logLen).then((j) => {
+    j.log.forEach((t) => { tb.tlog.push(t); log(`[${tabName(tb)}] ${t}`, /^ERRO/.test(t) ? "er" : /> /.test(t) ? "cmd" : ""); });
+    tb.logLen = j.logLen;
+    if (tb.lbl && tb.lbl.label === "dcgk ~/dcgk") { kgProg(tb, j); return kgNext(tb, j); }
+    const pct = j.total ? Math.min(100, Math.round(j.step / j.total * 100)) : 0;
+    setProg(tb, `${j.state === "ask" ? "Aguardando sua resposta" : j.state === "running" ? "Executando" : j.state === "done" ? "Concluído" : "Erro"} · ${pct}% · passo ${j.step}/${j.total} · ${(j.bytes / 1024).toFixed(0)} KB recebidos`, pct);
+    if (j.state === "running" || j.state === "ask") return pollAsk(tb, j);
+    pollEnd(tb, j);
+  }).catch((e) => { log(String(e.message || e), "er"); tb.busy = false; tb.kg = null; if (isAct(tb)) $("ossKget").textContent = "Gerar kget e analisar"; btns(); tabsDraw(); });
 }
-function pollAsk(j){
-  if (j.state === "ask") {
-    if (!$("ossAskBox")) { $("ossAsk").innerHTML = `<div class="oss-ask" id="ossAskBox"><b>O AMOS está perguntando:</b><pre class="oss-out" style="max-height:140px">${escH(j.question)}</pre><div class="row" style="margin:0"><button class="btn primary" id="ossYes">Sim (y)</button><button class="btn" id="ossNo">Não (n)</button></div></div>`;
-      $("ossYes").onclick = () => answer("y"); $("ossNo").onclick = () => answer("n"); }
-  } else $("ossAsk").innerHTML = "";
-  setTimeout(poll, j.state === "ask" ? 600 : 800);
+function askDraw(tb){
+  if (!isAct(tb)) return;
+  if (!tb.ask) { $("ossAsk").innerHTML = ""; return; }
+  $("ossAsk").innerHTML = `<div class="oss-ask" id="ossAskBox"><b>O AMOS está perguntando (${escH(tabName(tb))}):</b><pre class="oss-out" style="max-height:140px">${escH(tb.ask)}</pre><div class="row" style="margin:0"><button class="btn primary" id="ossYes">Sim (y)</button><button class="btn" id="ossNo">Não (n)</button></div></div>`;
+  $("ossYes").onclick = () => answer(tb, "y"); $("ossNo").onclick = () => answer(tb, "n");
 }
-function pollEnd(j){
-  $("ossAsk").innerHTML = "";
-  call("/job/out?id=" + O.job).then((txt) => {
-    O.out = txt; O.busy = false; btns(); status();
-    conAdd(txt, j);
-    if (j.state === "error") { $("ossMsg").innerHTML = `<div class="msg bad">${escH(j.error)}</div>`; return; }
-    if (O.after) O.after(txt, j);
+function pollAsk(tb, j){
+  const q = j.state === "ask" ? j.question || "?" : null;
+  if (q !== tb.ask) { tb.ask = q; askDraw(tb); }
+  setTimeout(() => poll(tb), j.state === "ask" ? 600 : 800);
+}
+function pollEnd(tb, j){
+  tb.ask = null; askDraw(tb);
+  call("/job/out?id=" + tb.job).then((txt) => {
+    tb.out = txt; tb.busy = false;
+    if (j.state === "done" && tb.lbl && tb.lbl.node && nodeOpts().keepOpen) tb.curNode = tb.lbl.node; else if (j.state === "error") tb.curNode = "";
+    btns(); tabsDraw(); status();
+    conAdd(tb, txt, j);
+    if (j.state === "error") { setMsg(tb, `<div class="msg bad">${escH(j.error)}</div>`); return; }
+    if (tb.after) tb.after(txt, j, tb);
   });
 }
-// ---------- tela do moshell: junta a saída de todos os comandos (como no WinFiol) ----------
-O.con = "";
+// ---------- tela do moshell: junta a saída de todos os comandos da aba (como no WinFiol) ----------
 function conShow(){
-  const el = $("ossOut"), c = O.con; el.hidden = !c;
+  const el = $("ossOut"), c = T().con; el.hidden = !c;
   el.textContent = c.length > 400000 ? "… (início omitido: use “Baixar tela inteira”)\n" + c.slice(-400000) : c;
   el.scrollTop = el.scrollHeight; $("ossConDl").disabled = $("ossConClr").disabled = !c;
 }
-function conAdd(txt, j){
-  const l = O.lbl || {}, t = new Date().toLocaleTimeString("pt-BR");
+function conAdd(tb, txt, j){
+  const l = tb.lbl || {}, t = new Date().toLocaleTimeString("pt-BR");
   const what = l.label === "comandos" && l.cmds.length ? l.cmds.filter((c) => c !== "lt all").join(" ; ") || "lt all" : l.label;
-  O.con += `${O.con ? "\n" : ""}===== ${t} · ${l.srv || ""} · ${l.node || ""} · ${what}${j && j.state === "error" ? " · ERRO" : ""} =====\n` + (txt || "").replace(/\s+$/, "") + "\n";
-  if (O.con.length > 8e6) O.con = O.con.slice(-6e6);
-  conShow();
+  tb.con += `${tb.con ? "\n" : ""}===== ${t} · ${l.srv || ""} · ${l.node || ""} · ${what}${j && j.state === "error" ? " · ERRO" : ""} =====\n` + (txt || "").replace(/\s+$/, "") + "\n";
+  if (tb.con.length > 8e6) tb.con = tb.con.slice(-6e6);
+  if (isAct(tb)) conShow();
 }
-$("ossConClr").onclick = () => { O.con = ""; conShow(); };
-$("ossConDl").onclick = () => offer([{ name: `moshell_${new Date().toISOString().slice(0, 16).replace(/\D/g, "")}.txt`, data: O.con }], $("ossMsg"));
-function answer(a){ call("/job/answer", { id: O.job, answer: a }); $("ossAsk").innerHTML = ""; }
-$("ossStop").onclick = () => O.job && call("/job/stop", { id: O.job });
-$("ossKill").onclick = () => O.job && call("/job/stop", { id: O.job, now: true });
+$("ossConClr").onclick = () => { T().con = ""; conShow(); };
+$("ossConDl").onclick = () => offer([{ name: `moshell_${(T().node || "aba").replace(/\W+/g, "_")}_${new Date().toISOString().slice(0, 16).replace(/\D/g, "")}.txt`, data: T().con }], $("ossMsg"));
+function answer(tb, a){ call("/job/answer", { id: tb.job, answer: a }); tb.ask = null; askDraw(tb); }
+$("ossStop").onclick = () => T().job && T().busy && call("/job/stop", { id: T().job });
+$("ossKill").onclick = () => T().job && T().busy && call("/job/stop", { id: T().job, now: true });
 const lt = (cmds) => ($("ossLt").checked ? ["lt all"] : []).concat(cmds);
 
 // Rodada 1 → Entrada (usa os mesmos comandos da aba 01)
 $("ossR1").onclick = () => { const n = needNode(); if (!n) return;
   const cmds = $("cmds").textContent.split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("#"));
   start({ node: n, cmds: lt(cmds) }, "Rodada 1 (hget)", toIn); };
-function toIn(txt){
+function toIn(txt, j, tb){
   $("raw").value = txt; showTab("in"); $("bProc").click();
-  $("ossMsg").innerHTML = `<div class="msg ok">Respostas coladas e processadas na aba 01 · Entrada.</div>`;
+  setMsg(tb || T(), `<div class="msg ok">Respostas coladas e processadas na aba 01 · Entrada.</div>`);
 }
 // KGET: roda "dcgk ~/dcgk" no nó, o helper copia o pacote gerado (.zip com o dcg_k.log.gz) e a aba 06 abre direto
 $("ossKget").onclick = () => { const n = needNode(); if (!n) return; start({ node: n, cmds: ["dcgk ~/dcgk"], fetchDir: ["~/dcgk", "/home/shared/{user}/dcgk"], timeout: 5400 }, "dcgk ~/dcgk", toKgDcgk); };
-async function toKgDcgk(txt, j){
-  const fs = (j && j.files) || [];
-  if (!fs.length) { $("ossMsg").innerHTML = `<div class="msg bad">O dcgk terminou, mas não achei o arquivo gerado em ~/dcgk nem em /home/shared/(seu usuário)/dcgk para trazer. Veja a saída abaixo; se o pacote foi salvo em outra pasta, carregue o .zip direto na aba 06.</div>`; return; }
+async function toKgDcgk(txt, j, tb){
+  tb = tb || T(); const fs = (j && j.files) || [];
+  if (!fs.length) { setMsg(tb, `<div class="msg bad">O dcgk terminou, mas não achei o arquivo gerado em ~/dcgk nem em /home/shared/(seu usuário)/dcgk para trazer. Veja a saída abaixo; se o pacote foi salvo em outra pasta, carregue o .zip direto na aba 06.</div>`); return; }
   try {
     const files = [];
-    for (let i = 0; i < fs.length; i++) files.push(new File([await call(`/job/file?id=${O.job}&n=${i}`)], fs[i].name));
-    O.kfiles = files;
+    for (let i = 0; i < fs.length; i++) files.push(new File([await call(`/job/file?id=${tb.job}&n=${i}`)], fs[i].name));
+    tb.kfiles = files;
     if (!window.KGloadFiles) throw new Error("KGET Analyzer indisponível");
     showTab("kg"); await window.KGloadFiles(files);
-    $("ossMsg").innerHTML = `<div class="msg ok">dcgk de ${escH(node())} trazido do servidor (${fs.map((f) => escH(f.name) + " · " + (f.size / 1048576).toFixed(1) + " MB").join(", ")}) e aberto na aba 06. <button class="btn" id="ossKDl">Baixar o pacote</button></div>`;
-    $("ossKDl").onclick = async () => offer(await Promise.all(O.kfiles.map(async (f) => ({ name: f.name, data: new Uint8Array(await f.arrayBuffer()) }))), $("ossMsg"));
-  } catch (e) { $("ossMsg").innerHTML = `<div class="msg bad">${escH(e.message || e)}</div>`; }
+    setMsg(tb, `<div class="msg ok">dcgk de ${escH(tb.lbl ? tb.lbl.node : "")} trazido do servidor (${fs.map((f) => escH(f.name) + " · " + (f.size / 1048576).toFixed(1) + " MB").join(", ")}) e aberto na aba 06. <button class="btn" data-kdl="1">Baixar o pacote</button></div>`);
+  } catch (e) { setMsg(tb, `<div class="msg bad">${escH(e.message || e)}</div>`); }
 }
+$("ossMsg").addEventListener("click", async (e) => { if (!e.target.dataset.kdl || !T().kfiles) return; const tb = T();
+  offer(await Promise.all(tb.kfiles.map(async (f) => ({ name: f.name, data: new Uint8Array(await f.arrayBuffer()) }))), $("ossMsg")); });
 function toKg(txt){
   const n = node() || "kget"; if (!window.KGload) { $("ossMsg").innerHTML = `<div class="msg bad">KGET Analyzer indisponível.</div>`; return; }
   try { window.KGload(`${n}_kget.log`, txt); showTab("kg"); } catch (e) { $("ossMsg").innerHTML = `<div class="msg bad">${escH(e.message || e)}</div>`; }
@@ -4725,13 +4782,13 @@ $("ossCmd").addEventListener("keydown", (e) => {
   e.preventDefault(); hPos = e.key === "ArrowUp" ? Math.min(HIST.length - 1, hPos + 1) : Math.max(-1, hPos - 1);
   $("ossCmd").value = hPos < 0 ? "" : HIST[hPos];
 });
-histDraw();
+histDraw(); tabShow();
 $("ossRun").onclick = () => { const n = needNode(); if (!n) return; const cmds = $("ossCmd").value.split(/;|\n/).map((c) => c.trim()).filter(Boolean); if (!cmds.length) return; histAdd($("ossCmd").value);
   const w = cmds.filter((c) => WRITE.test(c)); if (w.length) { confirmBox(w, () => start({ node: n, cmds: lt(cmds), confirmWrites: true }, "comandos")); return; }
   start({ node: n, cmds: lt(cmds) }, "comandos"); };
-$("ossToIn").onclick = () => toIn(O.out);
-$("ossToKg").onclick = () => toKg(O.out);
-$("ossDl").onclick = () => offer([{ name: `${node() || "saida"}_${(O.outName || "amos").replace(/\W+/g, "_")}.txt`, data: O.out }], $("ossMsg"));
+$("ossToIn").onclick = () => toIn(T().out);
+$("ossToKg").onclick = () => toKg(T().out);
+$("ossDl").onclick = () => offer([{ name: `${node() || "saida"}_${(T().outName || "amos").replace(/\W+/g, "_")}.txt`, data: T().out }], $("ossMsg"));
 $("ossLogDl").onclick = () => offer([{ name: `log_execucao_oss_${new Date().toISOString().slice(0, 16).replace(/\D/g, "")}.txt`, data: O.log.join("\n") }], $("ossMsg"));
 
 // ---------- scripts ----------
@@ -4877,7 +4934,7 @@ function bkDraw(){
     if (k === "script") r.auto = false; if (k === "node") { r.typ = ""; r.auto = true; bkApplyCgi(r); const w = where()[r.node]; r.srv = w !== undefined && srvIdx(w) >= 0 && servers[srvIdx(w)].name.toUpperCase() === String(w).toUpperCase() ? srvIdx(w) : -1; bkSave(); bkDraw(); return; }
     bkSave(); bkInfo(); });
   $("bkTbl").querySelectorAll("[data-br]").forEach((b) => b.onclick = () => { BK.rows.splice(+b.dataset.br, 1); bkSave(); bkDraw(); });
-  $("bkTbl").querySelectorAll("[data-bo]").forEach((b) => b.onclick = () => { const r = BK.rows[+b.dataset.bo]; O.out = r.out; O.outName = r.script; $("ossOut").hidden = false; $("ossOut").textContent = r.out.length > 200000 ? "… (final)\n" + r.out.slice(-200000) : r.out; btns(); $("ossOut").scrollIntoView({ block: "nearest" }); });
+  $("bkTbl").querySelectorAll("[data-bo]").forEach((b) => b.onclick = () => { const r = BK.rows[+b.dataset.bo]; T().out = r.out; T().outName = r.script; $("ossOut").hidden = false; $("ossOut").textContent = r.out.length > 200000 ? "… (final)\n" + r.out.slice(-200000) : r.out; btns(); $("ossOut").scrollIntoView({ block: "nearest" }); });
   $("bkTbl").querySelectorAll("[data-bd]").forEach((b) => b.onclick = () => { const r = BK.rows[+b.dataset.bd]; offer([{ name: `${r.node}_${r.script}_${new Date().toISOString().slice(0, 10)}.txt`, data: r.out }], $("bkMsg")); });
   bkInfo();
 }

@@ -11,7 +11,7 @@ import argparse, json, os, re, shlex, sys, threading, time, uuid
 from urllib.parse import urlparse, parse_qs
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.9"
+VERSION = "2.0"
 LOCAL_PORT = 8766
 LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "helper.log")
 
@@ -751,7 +751,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"ok": True, "key": key, **r})
             if p == "/close":
                 key = pick(d)
-                if busy(key): return self._json({"ok": False, "erro": "ha uma execucao em andamento neste servidor"})
+                if d.get("lane"):  # aba do moshell (terminal extra)
+                    lk = "%s#%d" % (key, int(d["lane"]))
+                    if lk not in SESS: return self._json({"ok": True})
+                    key = lk
+                if busy(key): return self._json({"ok": False, "erro": "ha uma execucao em andamento neste terminal"})
                 use(key)
                 with S.lock: close_amos()
                 return self._json({"ok": True})
