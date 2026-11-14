@@ -1634,13 +1634,18 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
       if (prevRule && (m = l.match(/^\s*(?:\d+\s+)?([A-Za-z]\w*=[^\s]+)\s*$/))) { mo = addMo(d, m[1]); lastAttr = null; prevRule = false; continue; }
       prevRule = false;
       if (/^\s*Total:\s*\d+\s+MOs?/i.test(l)) { mo = null; continue; }
+      if (/^[A-Za-z0-9][\w.-]*>(\s|$)/.test(l)) { if (!mo && d.header.length < 40) d.header.push(l); mo = null; continue; } // prompt do moshell
       if (!mo) { if (d.header.length < 40) d.header.push(l); continue; }
+      if ((m = l.match(/^\s*Struct\s+([A-Za-z]\w*)(?:\[\d+\])?\s+has\s+\d+\s+members?/i))) { lastAttr = m[1]; sIdx = null; if (mo.a[m[1]] == null) mo.a[m[1]] = ''; continue; }
       if ((m = l.match(/^\s*>>>\s*Struct\[(\d+)\]/i))) { sIdx = m[1]; continue; }
+      if ((m = l.match(/^\s*>>>\s*([A-Za-z]\w*)\s*=\s*(.*)$/)) && m[1] === lastAttr && sIdx == null) {
+        const v = cleanVal(m[2]); mo.a[lastAttr] = mo.a[lastAttr] ? mo.a[lastAttr] + ' ' + v : v; continue; // elemento de lista (ex.: sectorCarrierRef[1])
+      }
       if ((m = l.match(/^\s*>>>\s*(?:\d+\.)?\s*([A-Za-z]\w*)\s*=\s*(.*)$/))) {
         if (lastAttr) mo.a[lastAttr + (sIdx != null ? '[' + sIdx + ']' : '') + '.' + m[1]] = cleanVal(m[2]);
         continue;
       }
-      if ((m = l.match(/^\s*([A-Za-z]\w*)(?:\s+(.*))?$/))) {
+      if ((m = l.match(/^\s*([A-Za-z]\w*)(?:\[\d+\])?(?:\s+(.*))?$/))) {
         if (/^(Proxy|MO|Attribute)$/.test(m[1]) && /\s{2,}/.test(m[2] || '')) continue; // cabeçalhos de tabela
         lastAttr = m[1]; sIdx = null;
         mo.a[m[1]] = cleanVal(m[2] || '');
@@ -1759,17 +1764,20 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
     let act = inv ? refsOf(d, inv.a.active) : [];
     if (!act.length) act = (d.byCls.get('SwVersion') || []).slice(0, 1);
     const pick = (m) => [m.a['administrativeData.productName'], m.a['administrativeData.productNumber'], m.a['administrativeData.productRevision']].filter(Boolean).join(' ');
-    let sw = act.map(pick).filter(Boolean).join(' / ');
+    const me0 = first(d, 'ManagedElement'); const rel = me0 ? str(me0.a.swVersion || me0.a.release || '') : '';
+    let sw = act.map((m) => [m.a['administrativeData.productNumber'], m.a['administrativeData.productRevision']].filter(Boolean).join(' ') || pick(m)).filter(Boolean).join(' / ');
+    if (rel) sw = sw ? rel + ' · ' + sw : rel;
     if (!sw) { const me = first(d, 'ManagedElement'); sw = me ? str(me.a.swVersion || me.a.productVersion || '') : ''; }
     if (!sw) { const up = (d.byCls.get('UpgradePackage') || []).slice(-1)[0]; if (up) sw = up.id; }
     if (!sw) { const h = d.header.join(' ').match(/\b([A-Z]{2,4}_?NODE_MODEL_\w+|\d{2}\.Q\d|CXP\w+\/?\w*\s+R\w+)\b/); if (h) sw = h[1]; }
     return sw;
   }
   function summary(d) {
+    if (d._sum) return d._sum;
     const me = first(d, 'ManagedElement'); const enb = first(d, 'ENodeBFunction'); const gdu = first(d, 'GNBDUFunction');
     const prompt = (d.header.map((l) => (l.match(/^([A-Za-z0-9][\w.-]*)>\s/) || [])[1]).find(Boolean)) || '';
     const node = d.meContext || (me && (me.a.networkManagedElementId || me.a.userLabel)) || prompt || d.name.replace(/\.[^.]+$/, '');
-    return {
+    const out = {
       node, sw: swInfo(d), type: me ? str(me.a.managedElementType || me.a.siteLocation || '') : '',
       eNBId: enb ? enb.a.eNBId : '', gNBId: gdu ? gdu.a.gNBId : '', gNBIdLength: gdu ? gdu.a.gNBIdLength : '',
       plmn: enb ? [enb.a['eNodeBPlmnId.mcc'], enb.a['eNodeBPlmnId.mnc']].filter(Boolean).join('-') : '',
@@ -1777,11 +1785,13 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
       features: (d.byCls.get('FeatureState') || []).filter((f) => st(f.a.featureState) === 'ACTIVATED').length,
       featuresTotal: (d.byCls.get('FeatureState') || []).length,
     };
+    Object.defineProperty(d, '_sum', { value: out, enumerable: false });
+    return out;
   }
 
   // ---------------- topologia (cadeia de sinal) ----------------
-  const FOLLOW = /^(sectorCarrierRef|nRSectorCarrierRef|sectorFunctionRef|rfBranchRef|rfBranchRxRef|rfBranchTxRef|rfPortRef|reservedBy)$/;
-  const CHAIN_CLS = /^(SectorCarrier|NRSectorCarrier|SectorEquipmentFunction|RfBranch|AntennaUnitGroup|RfPort|FieldReplaceableUnit|CommonBeamforming)$/;
+  const FOLLOW = /^(sectorCarrierRef|nRSectorCarrierRef|sectorFunctionRef|sectorEquipmentFunctionRef|rfBranchRef|rfBranchRxRef|rfBranchTxRef|rfPortRef|reservedBy)$/;
+  const CHAIN_CLS = /^(SectorCarrier|NRSectorCarrier|SectorEquipmentFunction|RfBranch|AntennaUnitGroup|RfPort|Transceiver|FieldReplaceableUnit|CommonBeamforming)$/;
   function chainOf(d, cell) {
     const seen = new Set([cell.key]); const steps = []; let frontier = [cell];
     for (let depth = 0; depth < 6 && frontier.length; depth++) {
@@ -1797,14 +1807,14 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
       }));
       // RfPort pertence a uma FieldReplaceableUnit (pai)
       next.slice().forEach((m) => {
-        if (m.cls === 'RfPort') { const p = d.byKey.get(parentKey(m.key)); if (p && !seen.has(p.key)) { seen.add(p.key); next.push(p); steps.push({ depth: depth + 2, mo: p }); } }
+        if (m.cls === 'RfPort' || m.cls === 'Transceiver') { const p = d.byKey.get(parentKey(m.key)); if (p && !seen.has(p.key)) { seen.add(p.key); next.push(p); steps.push({ depth: depth + 2, mo: p }); } }
       });
       frontier = next;
     }
     const by = (re) => steps.filter((s) => re.test(s.mo.cls)).map((s) => s.mo);
     const radios = by(/^FieldReplaceableUnit$/);
     const ri = riLinks(d).filter((r) => radios.some((f) => r.fru1 === f.id || r.fru2 === f.id));
-    return { sc: by(/SectorCarrier$/), sef: by(/^SectorEquipmentFunction$/), branch: by(/^(RfBranch|AntennaUnitGroup)$/), port: by(/^RfPort$/), radio: radios, ri };
+    return { sc: by(/SectorCarrier$/), sef: by(/^SectorEquipmentFunction$/), branch: by(/^(RfBranch|AntennaUnitGroup)$/), port: by(/^(RfPort|Transceiver)$/), radio: radios, ri };
   }
   function riLinks(d) {
     return (d.byCls.get('RiLink') || []).map((r) => {
@@ -1875,11 +1885,11 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
   rule('HW-04', 'Hardware', 'CRÍTICO', 'RiLink (CPRI) fora de operação', 'Confira fibra/SFP entre baseband e rádio.', (x) => riLinks(x.d).filter((r) => r.oper && r.oper !== 'ENABLED').map((r) => f(r.mo, `${r.fru1}:${r.port1} ↔ ${r.fru2}:${r.port2} = ${r.oper}`)));
   rule('HW-05', 'Hardware', 'MÉDIO', 'Rádio sem RiLink', 'Unidade de rádio sem link CPRI configurado.', (x) => { const ri = riLinks(x.d); if (!ri.length) return []; return x.frus.filter((u) => (x.d.byCls.get('RfPort') || []).some((p) => parentKey(p.key) === u.mo.key) && !ri.some((r) => r.fru1 === u.id || r.fru2 === u.id)).map((u) => f(u.mo, `${u.name || u.id} sem RiLink`)); });
   rule('HW-06', 'Hardware', 'ALTO', 'Sem referência de sincronismo', 'Site sem RadioEquipmentClockReference (GPS/PTP/NTP).', (x) => x.d.byCls.has('RadioEquipmentClock') && !x.d.byCls.has('RadioEquipmentClockReference') ? [f(first(x.d, 'RadioEquipmentClock'), 'nenhuma RadioEquipmentClockReference')] : []);
-  rule('HW-07', 'Hardware', 'ALTO', 'Referência de sincronismo com problema', 'operationalState/referenceStatus da referência de clock não OK.', (x) => (x.d.byCls.get('RadioEquipmentClockReference') || []).filter((r) => (r.a.operationalState && st(r.a.operationalState) !== 'ENABLED') || (r.a.referenceStatus && !/OK/i.test(r.a.referenceStatus))).map((r) => f(r, `operationalState ${st(r.a.operationalState) || '-'} · referenceStatus ${r.a.referenceStatus || '-'}`)));
+  rule('HW-07', 'Hardware', 'ALTO', 'Referência de sincronismo com problema', 'operationalState/referenceStatus da referência de clock não OK.', (x) => (x.d.byCls.get('RadioEquipmentClockReference') || []).filter((r) => (r.a.operationalState && st(r.a.operationalState) !== 'ENABLED') || (r.a.referenceStatus && !/OK|NO_FAULT/i.test(r.a.referenceStatus))).map((r) => f(r, `operationalState ${st(r.a.operationalState) || '-'} · referenceStatus ${r.a.referenceStatus || '-'}`)));
   rule('HW-08', 'Hardware', 'MÉDIO', 'Servidor NTP ausente ou bloqueado', 'Configure NtpServer desbloqueado para horário/OSS.', (x) => { const n = x.d.byCls.get('NtpServer') || []; if (!n.length) return x.d.byCls.has('SysM') || x.d.byCls.has('SystemFunctions') ? [f(first(x.d, 'ManagedElement') || x.d.mos[0], 'nenhum NtpServer')] : []; return n.filter((s) => st(s.a.administrativeState) === 'LOCKED').map((s) => f(s, 'NtpServer LOCKED', `deb ${s.key}`)); });
   rule('HW-09', 'Licença', 'MÉDIO', 'Feature ativada mas inoperante', 'featureState ACTIVATED com serviceState INOPERABLE (licença ou dependência).', (x) => (x.d.byCls.get('FeatureState') || []).filter((s) => st(s.a.featureState) === 'ACTIVATED' && st(s.a.serviceState) === 'INOPERABLE').map((s) => f(s, `${s.id}: ${s.a.description || ''}`)));
-  rule('HW-10', 'Licença', 'INFO', 'Licença disponível e feature desativada', 'licenseState ENABLED com featureState DEACTIVATED.', (x) => (x.d.byCls.get('FeatureState') || []).filter((s) => st(s.a.featureState) === 'DEACTIVATED' && st(s.a.licenseState) === 'ENABLED').map((s) => f(s, `${s.id}: ${s.a.description || ''}`)));
-  rule('HW-11', 'Hardware', 'ALTO', 'Outros MOs desabilitados', 'MOs com operationalState DISABLED não cobertos pelas regras acima.', (x) => x.d.mos.filter((m) => st(m.a.operationalState) === 'DISABLED' && !/^(EUtranCell(FDD|TDD)|NRCellDU|FieldReplaceableUnit|RiLink|RadioEquipmentClockReference|TermPointTo\w+)$/.test(m.cls)).slice(0, 200).map((m) => f(m, 'operationalState = DISABLED')));
+  rule('HW-10', 'Licença', 'INFO', 'Licenças disponíveis com feature desativada', 'licenseState ENABLED com featureState DEACTIVATED; veja a lista completa em Navegador MO › FeatureState.', (x) => { const l = (x.d.byCls.get('FeatureState') || []).filter((s) => st(s.a.featureState) === 'DEACTIVATED' && st(s.a.licenseState) === 'ENABLED'); return l.length ? [f(l[0], `${l.length} feature(s): ${l.slice(0, 8).map((s) => s.id + (s.a.description ? ' (' + s.a.description + ')' : '')).join(', ')}${l.length > 8 ? '…' : ''}`)] : []; });
+  rule('HW-11', 'Hardware', 'ALTO', 'Outros MOs desabilitados', 'MOs com operationalState DISABLED não cobertos pelas regras acima.', (x) => x.d.mos.filter((m) => st(m.a.operationalState) === 'DISABLED' && !/^(EUtranCell(FDD|TDD)|NRCellDU|FieldReplaceableUnit|RiLink|RiPort|SfpModule|EthernetPort|RadioEquipmentClockReference|TermPointTo\w+)$/.test(m.cls)).slice(0, 200).map((m) => f(m, 'operationalState = DISABLED')));
 
   // --- Transporte / interfaces ---
   rule('TR-01', 'Transporte', 'CRÍTICO', 'S1 / NG para o core indisponível', 'TermPointToMme/TermPointToAmf DISABLED: verifique SCTP, IP e rota.', (x) => x.d.mos.filter((m) => /^TermPointTo(Mme|Amf)$/.test(m.cls) && st(m.a.operationalState) === 'DISABLED').map((m) => f(m, `${m.cls}=${m.id} DISABLED`)));
@@ -1892,11 +1902,78 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
   rule('TR-08', 'Transporte', 'BAIXO', 'Autonegociação desligada', 'autoNegEnable = false exige velocidade/duplex fixos iguais nos dois lados.', (x) => (x.d.byCls.get('EthernetPort') || []).filter((m) => /false/i.test(m.a.autoNegEnable || '')).map((m) => f(m, `admOperatingMode = ${m.a.admOperatingMode || '-'}`)));
   rule('TR-09', 'Transporte', 'MÉDIO', 'Sem associação com o core', 'Site LTE sem TermPointToMme ou site NR SA/NSA sem TermPointToAmf/ENodeB.', (x) => (x.lte.length && x.d.byCls.has('ENodeBFunction') && !x.d.byCls.has('TermPointToMme') && x.d.mos.length > 50) ? [f(first(x.d, 'ENodeBFunction'), 'nenhum TermPointToMme')] : []);
 
+  // --- Alarmes ativos (alarmlist.txt do pacote modump) ---
+  const ALSEV = { CRITICAL: 'CRÍTICO', MAJOR: 'ALTO', MINOR: 'MÉDIO', WARNING: 'BAIXO', INDETERMINATE: 'INFO' };
+  rule('AL-01', 'Alarme', 'MÉDIO', 'Alarme ativo no nó', 'Trate o alarme conforme o OPI Ericsson do specificProblem.', () => []);
+  function alarmFindings(d) {
+    return (d.alarms || []).map((a) => ({ rule: 'AL-01', cat: 'Alarme', sev: ALSEV[a.sev] || 'INFO', title: 'Alarme ativo: ' + (a.problem || a.text || '?'), rec: 'Trate conforme o OPI do alarme (' + (a.problem || '') + ').',
+      mo: keyOf(a.source || ''), msg: [a.text, a.time].filter(Boolean).join(' · '), fix: '' }));
+  }
+  function parseAlarms(text) {
+    const out = []; let cur = null;
+    String(text).split(/\r?\n/).forEach((l) => {
+      let m = l.match(/^FmAlarm=(\S+)/); if (m) { cur = { id: m[1] }; out.push(cur); return; }
+      if (!cur) return;
+      m = l.match(/^ {2,4}(\w+)=(.*)$/); if (!m) return;
+      const v = m[2].trim().replace(/^"(.*)"$/, '$1');
+      ({ activeSeverity: () => { cur.sev = v; }, specificProblem: () => { cur.problem = v; }, additionalText: () => { cur.text = v; }, source: () => { cur.source = v; },
+        lastEventTime: () => { cur.time = v.replace('T', ' ').slice(0, 19); }, eventType: () => { cur.type = v; } }[m[1]] || (() => {}))();
+    });
+    return out;
+  }
+
+  // --- MOM do nó (MSRBS_NODE_MODEL_*.xml do pacote modump): descrição, tipo, faixa, padrão ---
+  function parseMom(x, name) {
+    const kid = (e, n) => { for (const c of e.children) if (c.localName === n) return c; return null; };
+    const txt = (e, n) => { const c = e && kid(e, n); return c ? c.textContent.trim() : ''; };
+    const dd = {};
+    for (const e of x.getElementsByTagName('derivedDataType')) {
+      const bt = kid(e, 'baseType'); const b = bt && bt.children[0]; if (!b) continue;
+      const r = kid(b, 'range'); const sl = kid(b, 'stringLength'); const rs = kid(b, 'ranges');
+      const subs = rs ? [...rs.children].filter((s) => s.localName === 'subrange').map((s) => txt(s, 'min') === txt(s, 'max') ? txt(s, 'min') : `${txt(s, 'min')} a ${txt(s, 'max')}`) : [];
+      dd[e.getAttribute('name')] = { base: b.localName, min: r ? txt(r, 'min') : sl ? txt(sl, 'min') : '', max: r ? txt(r, 'max') : sl ? txt(sl, 'max') : '', unit: txt(b, 'unit'), str: !!sl, subs };
+    }
+    const en = {};
+    for (const e of x.getElementsByTagName('enum')) en[e.getAttribute('name')] = [...e.children].filter((c) => c.localName === 'enumMember').map((c) => `${txt(c, 'value')}=${c.getAttribute('name')}`).join(', ');
+    const classes = new Map(); let nAttrs = 0;
+    for (const ce of x.getElementsByTagName('class')) {
+      const cn = ce.getAttribute('name'); let cl = classes.get(cn);
+      if (!cl) { cl = { desc: txt(ce, 'description').slice(0, 800), attrs: new Map() }; classes.set(cn, cl); }
+      for (const ae of ce.children) {
+        if (ae.localName !== 'attribute') continue;
+        const an = ae.getAttribute('name'); const dt = kid(ae, 'dataType'); if (!dt) continue;
+        let t = dt; let seq = false; const sq = kid(dt, 'sequence'); if (sq) { t = sq; seq = true; }
+        const ref = [...t.children].find((c) => /Ref$/.test(c.localName)) || t.children[0];
+        const def = (dt.getElementsByTagName('defaultValue')[0] || {}).textContent;
+        const o = { desc: txt(ae, 'description').slice(0, 1200), readOnly: !!kid(ae, 'readOnly'), takes: txt(ae, 'takesEffect'), def: def == null ? '' : String(def).trim(), seq, type: '', range: '', unit: '', enumVals: '' };
+        if (ref) {
+          const rn = ref.getAttribute('name');
+          if (ref.localName === 'derivedDataTypeRef' && dd[rn]) { const q = dd[rn]; o.type = q.base; o.unit = q.unit; o.range = q.subs.length > 1 ? q.subs.join(', ') : q.min !== '' || q.max !== '' ? (q.str ? `${q.min}–${q.max} caracteres` : `${q.min} a ${q.max}`) : ''; }
+          else if (ref.localName === 'enumRef') { o.type = 'enum ' + rn; o.enumVals = en[rn] || ''; }
+          else if (ref.localName === 'structRef') o.type = 'struct ' + rn;
+          else if (ref.localName === 'moRef') o.type = 'ref ' + rn;
+          else { o.type = ref.localName; const r = kid(ref, 'range'); if (r) o.range = `${txt(r, 'min')} a ${txt(r, 'max')}`; o.unit = txt(ref, 'unit'); }
+        }
+        if (seq) o.type = 'lista de ' + o.type;
+        if (!cl.attrs.has(an)) nAttrs++;
+        cl.attrs.set(an, o);
+      }
+    }
+    return { name, classes, nAttrs };
+  }
+  // Referência do MOM para classe.atributo (atributo de struct "a.b" usa "a")
+  function momAttr(mom, cls, attr) { if (!mom) return null; const c = mom.classes.get(cls); return c ? c.attrs.get(String(attr).split(/[.[]/)[0]) || null : null; }
+  function momInfo(o) {
+    if (!o) return '';
+    return [o.type, o.range ? 'faixa ' + o.range : '', o.unit, o.def !== '' ? 'padrão ' + o.def : '', o.enumVals ? '[' + o.enumVals + ']' : '', o.takes ? 'efeito: ' + o.takes : '', o.readOnly ? 'somente leitura' : ''].filter(Boolean).join(' · ');
+  }
+
   function audit(d) {
     const s = summary(d); const ctx = { d, lte: s.lte, nr: s.nr, frus: s.frus };
     const out = [];
     R.forEach((r) => { let list = []; try { list = r.fn(ctx) || []; } catch (e) { list = []; }
       list.forEach((it) => out.push({ rule: r.id, cat: r.cat, sev: r.sev, title: r.title, rec: r.rec, mo: it.mo ? it.mo.key : '', msg: it.msg, fix: it.fix || '' })); });
+    out.push(...alarmFindings(d));
     out.sort((a, b) => SEV.indexOf(a.sev) - SEV.indexOf(b.sev) || a.rule.localeCompare(b.rule));
     return out;
   }
@@ -2097,7 +2174,7 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
     return parseText(t, name);
   }
 
-  const api = { parse, parseText, parseXmlDoc, keyOf, refsOf, summary, lteCells, nrCells, frus, riLinks, chainOf, audit, healthScore, RULES: R, SEV,
+  const api = { parseAlarms, parseMom, momAttr, momInfo, parse, parseText, parseXmlDoc, keyOf, refsOf, summary, lteCells, nrCells, frus, riLinks, chainOf, audit, healthScore, RULES: R, SEV,
     nrDeep, compare, fleet, setCmd, script, LIB, moRows, st, num, lteBand, nrBands, siteTokens, childrenOf };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CoreKget = api;
@@ -3049,18 +3126,34 @@ function table(head, rows, opt){
 const tr = (cells, cls) => `<tr${cls ? ` class="${cls}"` : ""}>${cells.map((c) => `<td class="mono">${c}</td>`).join("")}</tr>`;
 
 // ---------- leitura de arquivos ----------
+async function gunzipText(blob){
+  if (typeof DecompressionStream === "undefined") throw new Error("este navegador não descompacta .gz; use Chrome/Edge atualizado");
+  return await new Response(blob.stream().pipeThrough(new DecompressionStream("gzip"))).text();
+}
+// Abre .zip (inclusive .gz dentro do .zip, como o pacote modump do AMOS), .gz ou texto.
 async function textsOf(file){
   const n = file.name;
   if (/\.zip$/i.test(n)) {
     const z = await JSZip.loadAsync(await file.arrayBuffer()); const out = [];
-    for (const p of Object.keys(z.files)) if (!z.files[p].dir && /\.(log|txt|kget|xml|mo)$/i.test(p)) out.push({ name: p.split("/").pop(), text: await z.files[p].async("string") });
+    for (const p of Object.keys(z.files)) {
+      const e = z.files[p]; if (e.dir) continue; const b = p.split("/").pop();
+      if (/\.gz$/i.test(b)) out.push({ name: b.replace(/\.gz$/i, ""), text: await gunzipText(new Blob([await e.async("uint8array")])) });
+      else if (/\.(log|txt|kget|xml|mo)$/i.test(b)) out.push({ name: b, text: await e.async("string") });
+      else out.push({ name: b, skip: true });
+    }
     return out;
   }
-  if (/\.gz$/i.test(n) && typeof DecompressionStream !== "undefined") {
-    const s = file.stream().pipeThrough(new DecompressionStream("gzip"));
-    return [{ name: n.replace(/\.gz$/i, ""), text: await new Response(s).text() }];
-  }
+  if (/\.gz$/i.test(n)) return [{ name: n.replace(/\.gz$/i, ""), text: await gunzipText(file) }];
   return [{ name: n, text: await file.text() }];
+}
+// Classifica cada arquivo do pacote: dump de MOs, MOM do nó, lista de alarmes ou outro log.
+function sniff(t){
+  const head = t.text.slice(0, 20000);
+  if (/<models>/.test(head) && /<mim\s/.test(head)) return "mom";
+  if (/^FmAlarm=\S+/m.test(head) || /^alarmlist/i.test(t.name)) return "alarm";
+  if (/^\s*<(\?xml|bulkCmConfigDataFile|rpc|hello|config|ManagedElement)/.test(head.replace(/^\s*<!--[\s\S]*?-->/, ""))) return "dump";
+  if (/^\s*MO\s+[A-Za-z]\w*=\S+\s*$/m.test(t.text) || /^=+\s*\n\s*\d+\s+[A-Za-z]\w*=\S+\s*$/m.test(t.text)) return "dump";
+  return "other";
 }
 function parseOne(name, text){
   let d = K.parse(text, name);
@@ -3074,13 +3167,31 @@ function parseOne(name, text){
   return d;
 }
 async function load(files){
-  const out = []; const errs = [];
+  const out = []; const errs = []; const info = [];
   for (const f of files) {
-    try { for (const t of await textsOf(f)) { try { out.push(parseOne(t.name, t.text)); } catch (e) { errs.push(e.message); } } }
-    catch (e) { errs.push(`${f.name}: ${e.message || e}`); }
+    try {
+      const ts = await textsOf(f); const dumps = []; const alarms = []; const ign = [];
+      for (const t of ts) {
+        if (t.skip) { ign.push(t.name); continue; }
+        const kind = sniff(t);
+        if (kind === "dump") { try { dumps.push(parseOne(t.name, t.text)); } catch (e) { errs.push(e.message); } }
+        else if (kind === "mom") {
+          try { const x = new DOMParser().parseFromString("<momset>" + t.text.replace(/<\?xml[^>]*\?>/g, "").replace(/<!DOCTYPE[^>]*>/g, "") + "</momset>", "application/xml"); // vários MOMs concatenados
+            if (x.getElementsByTagName("parsererror")[0]) throw new Error("XML inválido");
+            KG.mom = K.parseMom(x, t.name); info.push(`MOM do nó: ${t.name} (${KG.mom.classes.size} classes, ${KG.mom.nAttrs} parâmetros) — use em Biblioteca e no Gerador de script`); }
+          catch (e) { errs.push(`${t.name}: não consegui ler o MOM (${e.message || e})`); }
+        }
+        else if (kind === "alarm") alarms.push(...K.parseAlarms(t.text));
+        else ign.push(t.name);
+      }
+      if (alarms.length) dumps.forEach((d) => { const node = K.summary(d).node; const mine = alarms.filter((a) => !a.source || dumps.length === 1 || a.source.includes(node)); d.alarms = mine; });
+      out.push(...dumps);
+      if (ts.length > 1) info.push(`${f.name}: ${dumps.length ? "carregado " + dumps.map((d) => `${d.name} (${d.mos.length} MOs)`).join(", ") : "nenhum dump de MOs encontrado"}${alarms.length ? ` · ${alarms.length} alarme(s) ativos` : ""}${ign.length ? ` · ignorados: ${ign.join(", ")}` : ""}.`);
+    } catch (e) { errs.push(`${f.name}: ${e.message || e}`); }
   }
-  return { out, errs };
+  return { out, errs, info };
 }
+const infoMsg = (info) => info.length ? info.map((t) => `<div class="msg ok">${escH(t)}</div>`).join("") : "";
 const errMsg = (errs) => errs.length ? errs.map((e) => `<div class="msg bad">${escH(e)}</div>`).join("") : "";
 function stLine(d){ const s = K.summary(d); return `${escH(d.name)} · ${escH(s.node)} · ${s.mos} MOs · ${s.lte.length} LTE · ${s.nr.length} NR`; }
 
@@ -3107,22 +3218,22 @@ function bindDrop(el, input, cb){
 async function gotA(files){
   if (KG.mode === "fleet") return gotF(files);
   $("kgMsg").innerHTML = `<div class="msg">Lendo ${escH(files.map((f) => f.name).join(", "))}…</div>`;
-  const { out, errs } = await load(files);
+  const { out, errs, info } = await load(files);
   if (KG.mode === "cmp" && out.length >= 2) { KG.A = out[0]; KG.B = out[1]; }
   else if (out.length) { KG.A = out[0]; KG.aud = null; }
-  $("kgMsg").innerHTML = errMsg(errs) + (out.length > 1 && KG.mode === "single" ? `<div class="msg warn">Vieram ${out.length} dumps; mostrando o primeiro. Use o modo Frota para analisar todos.</div>` : "");
+  $("kgMsg").innerHTML = errMsg(errs) + infoMsg(info) + (out.length > 1 && KG.mode === "single" ? `<div class="msg warn">Vieram ${out.length} dumps; mostrando o primeiro. Use o modo Frota para analisar todos.</div>` : "");
   KG.aud = null; render();
 }
 async function gotB(files){
-  const { out, errs } = await load(files);
+  const { out, errs, info } = await load(files);
   if (out.length) KG.B = out[0];
-  $("kgMsg").innerHTML = errMsg(errs); render();
+  $("kgMsg").innerHTML = errMsg(errs) + infoMsg(info); render();
 }
 async function gotF(files){
   $("kgMsg").innerHTML = `<div class="msg">Lendo ${files.length} arquivo(s)…</div>`;
-  const { out, errs } = await load(files);
+  const { out, errs, info } = await load(files);
   out.forEach((d) => { const n = K.summary(d).node; KG.fleet = KG.fleet.filter((x) => K.summary(x).node !== n); KG.fleet.push(d); });
-  $("kgMsg").innerHTML = errMsg(errs); KG.fl = null; render();
+  $("kgMsg").innerHTML = errMsg(errs) + infoMsg(info); KG.fl = null; render();
 }
 bindDrop($("kgDropA"), $("kgFileA"), (fs) => KG.mode === "fleet" ? gotF(fs) : gotA(fs));
 bindDrop($("kgDropB"), $("kgFileB"), gotB);
@@ -3182,6 +3293,7 @@ function secDash(d, s){
     <div><h3 class="sub">Auditoria (${a.length} achados em ${K.RULES.length} regras)</h3>${bar}<p class="note">${leg}</p>
       <div class="tablebox"><table>${table(["Sev.", "Achado", "MO"], a.slice(0, 8).map((x) => tr([sevB(x.sev), escH(x.title) + "<br><span class='note'>" + escH(x.msg) + "</span>", escH(x.mo)])), { empty: "Nenhum achado." })}</table></div>
       <div class="row"><button class="btn" id="kgGoAud">Ver auditoria completa</button></div></div></div>
+    ${d.alarms ? `<h3 class="sub">Alarmes ativos (${d.alarms.length}) · alarmlist.txt do pacote</h3><div class="tablebox"><table>${table(["Sev.", "Problema", "Texto", "Origem", "Último evento"], d.alarms.map((x) => tr([escH(x.sev), escH(x.problem), escH(x.text), escH(K.keyOf(x.source || "")), escH(x.time)])), { empty: "Nenhum alarme ativo." })}</table></div>` : ""}
     <h3 class="sub">Classes com mais MOs</h3><div class="tablebox"><table>${table(["Classe", "MOs"], classes.map(([c, l]) => tr([escH(c), l.length])))}</table></div>
     <div class="row"><button class="btn primary" id="kgXls">Exportar relatório do site (.xlsx)</button></div><div id="kgXMsg"></div>`;
   $("kgGoAud").onclick = () => { KG.sec = "audit"; renderSingle(); };
@@ -3204,7 +3316,7 @@ function secHw(d, s){
   const chain = (c, nr) => {
     const ch = K.chainOf(d, c.mo); const parts = [node(c.name, nr ? "NRCellDU" : c.mo.cls, (nr ? "nr" : "cell") + (c.oper && c.oper !== "ENABLED" ? " bad" : ""))];
     const add = (list, kind) => { if (list.length) parts.push(`<span class="kg-arrow">→</span>`, list.map((m) => node(m.id, kind)).join(" ")); };
-    add(ch.sc, nr ? "NRSectorCarrier" : "SectorCarrier"); add(ch.sef, "SectorEquipmentFunction"); add(ch.branch, "RfBranch"); add(ch.port, "RfPort");
+    add(ch.sc, nr ? "NRSectorCarrier" : "SectorCarrier"); add(ch.sef, "SectorEquipmentFunction"); add(ch.branch, "RfBranch"); if (ch.port.length) parts.push(`<span class="kg-arrow">→</span>`, ch.port.map((m) => node(m.id, m.cls)).join(" "));
     if (ch.radio.length) parts.push(`<span class="kg-arrow">→</span>`, ch.radio.map((m) => { const f = s.frus.find((x) => x.id === m.id); return node(fruName(m.id), "Rádio", f && f.oper && f.oper !== "ENABLED" ? "bad" : ""); }).join(" "));
     if (ch.ri.length) parts.push(`<span class="kg-arrow">⇄</span>`, ch.ri.map((r) => { const other = ch.radio.some((m) => m.id === r.fru1) ? [r.fru2, r.port2, r.port1] : [r.fru1, r.port1, r.port2]; return node(`${fruName(other[0])} (${other[1]})`, `RiLink ${r.id}`, r.oper && r.oper !== "ENABLED" ? "bad" : ""); }).join(" "));
     if (parts.length === 1) parts.push(`<span class="note">sem cadeia encontrada (referências ausentes no dump)</span>`);
@@ -3263,7 +3375,8 @@ function secMo(d){
   const drawTbl = () => {
     const rows = K.moRows(d, KG.cls); const [h, ...body] = rows;
     $("kgMT").textContent = `${KG.cls} · ${body.length} MO(s) · ${h.length - 1} atributos`;
-    $("kgMTbl").innerHTML = table(h.map(escH), body.map((r) => tr(r.map((v, i) => i === 0 ? `<b>${escH(v)}</b>` : escH(v)))), { max: 300 });
+    const th = (x, i) => { const o = i && K.momAttr(KG.mom, KG.cls, x); return o ? `<span title="${escH(o.desc + "\n" + K.momInfo(o))}" style="text-decoration:underline dotted">${escH(x)}</span>` : escH(x); };
+    $("kgMTbl").innerHTML = table(h.map(th), body.map((r) => tr(r.map((v, i) => i === 0 ? `<b>${escH(v)}</b>` : escH(v)))), { max: 300 });
   };
   $("kgMCF").oninput = drawCls; drawCls(); drawTbl();
   $("kgMXls").onclick = () => xls([[KG.cls.slice(0, 31), K.moRows(d, KG.cls)]], `${K.summary(d).node}_${KG.cls}.xlsx`, $("kgMMsg"));
@@ -3291,7 +3404,7 @@ function secScript(d, s){
   const fillMo = () => { const l = mosOf(); $("kgSM").innerHTML = `<option value="*">todos (${l.length})</option>` + l.map((m) => `<option value="${escH(m.key)}">${escH(m.id)}</option>`).join(""); fillAttr(); };
   const fillAttr = () => { const at = new Set(); mosOf().forEach((m) => Object.keys(m.a).forEach((k) => at.add(k))); $("kgSA").innerHTML = [...at].sort().map((k) => `<option>${escH(k)}</option>`).join(""); showCur(); };
   const sel = () => $("kgSM").value === "*" ? mosOf() : mosOf().filter((m) => m.key === $("kgSM").value);
-  const showCur = () => { const at = $("kgSA").value; const vals = [...new Set(sel().map((m) => m.a[at] ?? ""))]; $("kgSCur").textContent = at ? `Valor atual: ${vals.slice(0, 6).join(" | ")}${vals.length > 6 ? " …" : ""}` : ""; };
+  const showCur = () => { const at = $("kgSA").value; const vals = [...new Set(sel().map((m) => m.a[at] ?? ""))]; const o = K.momAttr(KG.mom, $("kgSC").value, at); $("kgSCur").textContent = at ? `Valor atual: ${vals.slice(0, 6).join(" | ")}${vals.length > 6 ? " …" : ""}${o ? `  ·  MOM: ${K.momInfo(o)}` : ""}` : ""; $("kgSCur").title = o ? o.desc : ""; };
   const sync = () => { $("kgSTxt").value = K.script(KG.script, s.node); $("kgSN").textContent = `${KG.script.length} comando(s)`; };
   $("kgSC").onchange = fillMo; $("kgSM").onchange = showCur; $("kgSA").onchange = showCur; fillMo(); sync();
   $("kgSAdd").onclick = () => { const at = $("kgSA").value, v = $("kgSV").value; if (!at || v === "") { $("kgSMsg").innerHTML = `<div class="msg warn">Escolha o atributo e informe o novo valor.</div>`; return; } sel().forEach((m) => KG.script.push(K.setCmd(m.key, at, v))); $("kgSMsg").innerHTML = ""; sync(); };
@@ -3392,7 +3505,24 @@ $("kgFScr").onclick = async () => {
 // ================= BIBLIOTECA =================
 $("kgLQ").oninput = () => renderLib(); $("kgLSrc").onchange = () => renderLib();
 function renderLib(){
-  const q = $("kgLQ").value.toLowerCase(); const src = $("kgLSrc").value; const d = KG.A || KG.fleet[0];
+  const sel = $("kgLSrc");
+  if (KG.mom && !sel.querySelector('option[value="mom"]')) { sel.insertAdjacentHTML("afterbegin", `<option value="mom">MOM do nó (${escH(KG.mom.name.replace(/\.xml$/i, ""))})</option><option value="momdef">MOM: valores diferentes do padrão</option>`); sel.value = "mom"; }
+  const q = $("kgLQ").value.toLowerCase(); const src = sel.value; const d = KG.A || KG.fleet[0];
+  if (src === "mom" || src === "momdef") {
+    $("kgLibNote").textContent = `MOM oficial do nó, lido do pacote modump: ${KG.mom.classes.size} classes e ${KG.mom.nAttrs} parâmetros com descrição, tipo, faixa, unidade, padrão e quando a alteração tem efeito.${src === "momdef" ? " Mostrando só parâmetros do KGET carregado cujo valor difere do padrão do MOM." : ""}`;
+    const rows = []; const H = ["Classe", "Parâmetro", "Descrição", "Tipo · faixa · unidade", "Padrão", "Efeito", d ? "No KGET carregado" : "—"];
+    for (const [cls, c] of KG.mom.classes) {
+      const mos = d ? d.byCls.get(cls) || [] : [];
+      if (src === "momdef" && !mos.length) continue;
+      for (const [an, o] of c.attrs) {
+        if (q && !(cls + " " + an).toLowerCase().includes(q) && !(q.length > 3 && o.desc.toLowerCase().includes(q))) continue;
+        const vs = [...new Set(mos.map((m) => m.a[an]).filter((v) => v != null))];
+        if (src === "momdef") { if (o.def === "" || !vs.length) continue; const nv = (v) => String(v).replace(/^(-?\d+)\s+\(\w+\)$/, "$1").trim(); const dv = o.def; const dif = vs.filter((v) => nv(v) !== dv && String(v).replace(/^-?\d+\s+\((\w+)\)$/, "$1") !== dv); if (!dif.length) continue; }
+        rows.push(tr([escH(cls), `<b>${escH(an)}</b>`, `<span title="${escH(o.desc)}">${escH(o.desc.length > 220 ? o.desc.slice(0, 220) + "…" : o.desc)}</span>`, escH([o.type, o.range, o.unit, o.enumVals ? "[" + o.enumVals + "]" : ""].filter(Boolean).join(" · ")), escH(o.def), escH(o.takes + (o.readOnly ? " (somente leitura)" : "")), escH(vs.slice(0, 4).join(" | "))]));
+      }
+    }
+    $("kgLTbl").innerHTML = table(H, rows, { max: 500, empty: src === "momdef" && !d ? "Carregue um KGET para comparar com o padrão." : "Nada encontrado." }); return;
+  }
   $("kgLibNote").textContent = `Referência resumida com ${K.LIB.length} parâmetros mais usados em RAN Ericsson (descrição, faixa e unidade). Não é a MOM oficial completa: para o restante, consulte a CPI/ELEX. Em “atributos do KGET carregado” aparecem todas as classes e atributos do seu arquivo, com exemplos de valor.`;
   if (src === "file") {
     if (!d) { $("kgLTbl").innerHTML = table(["Classe", "Atributo", "MOs", "Valores (exemplos)", "Referência"], [], { empty: "Carregue um KGET (Site único ou Frota) para listar os atributos dele." }); return; }
