@@ -729,7 +729,8 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
         <div class="oss-act"><b>Alarmes e estado</b><span class="note">Alarmes ativos e estado de células, rádios e links.</span><div class="row" style="margin:0"><button class="btn" id="ossAlt">alt</button><button class="btn" id="ossSt1">st cell</button><button class="btn" id="ossSt2">st ri|rfport</button></div></div>
       </div>
       <h3 class="sub">Comandos AMOS</h3>
-      <div class="row" style="margin:0"><input type="text" id="ossCmd" placeholder="ex.: get EUtranCellFDD qRxLevMin  (vários: separe com ;)" spellcheck="false"><button class="btn" id="ossRun">Executar</button></div>
+      <div class="row" style="margin:0"><input type="text" id="ossCmd" list="ossCmdHist" autocomplete="off" placeholder="ex.: get EUtranCellFDD qRxLevMin  (vários: separe com ;) · ↑ ↓ = histórico · Enter executa" spellcheck="false"><datalist id="ossCmdHist"></datalist><button class="btn" id="ossRun">Executar</button><button class="btn" id="ossHistB" aria-expanded="false">Histórico</button></div>
+      <div id="ossHistBox" hidden style="max-height:220px;overflow:auto;border:1px solid var(--bg4);border-radius:6px;padding:6px"></div>
       <h3 class="sub">Rodar script (.mos)</h3>
       <div class="row" style="margin:0"><input type="file" id="ossFile" accept=".mos,.txt" multiple><span class="note" id="ossFileN"></span></div>
       <textarea id="ossScript" spellcheck="false" placeholder="Cole o script .mos aqui ou escolha os arquivos acima (ex.: os scripts gerados nas abas 03 e 05). Vários arquivos rodam na ordem do nome."></textarea>
@@ -758,7 +759,7 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
       <div class="row" style="margin:0"><span class="note" id="ossProg">Nada em execução.</span><button class="btn" id="ossStop" disabled>Parar após o comando atual</button><button class="btn" id="ossKill" disabled>Parar agora (Ctrl-C)</button></div>
       <div id="ossAsk"></div>
       <div class="oss-log" id="ossLog"></div>
-      <div class="row" style="margin:0"><button class="btn" id="ossToIn" disabled>Enviar saída para a Entrada</button><button class="btn" id="ossToKg" disabled>Enviar saída para o KGET Analyzer</button><button class="btn" id="ossDl" disabled>Baixar saída (.txt)</button><button class="btn" id="ossLogDl">Exportar log (.txt)</button></div>
+      <div class="row" style="margin:0"><button class="btn" id="ossToIn" disabled>Enviar saída para a Entrada</button><button class="btn" id="ossToKg" disabled>Enviar saída para o KGET Analyzer</button><button class="btn" id="ossDl" disabled>Baixar saída (.txt)</button><button class="btn" id="ossLogDl">Exportar log (.txt)</button><button class="btn" id="ossConDl" disabled>Baixar tela inteira (.txt)</button><button class="btn" id="ossConClr" disabled>Limpar tela</button></div>
       <pre class="oss-out" id="ossOut" hidden></pre>
       <div id="ossMsg"></div>
     </section>
@@ -4586,7 +4587,7 @@ function needNode(){ const n = node(); if (!/^[\w.\-]{3,}$/.test(n)) { $("ossMsg
 // ---------- execução ----------
 function start(body, label, after){
   if (O.busy) return;
-  O.busy = true; O.out = ""; O.outName = label; O.after = after || null; O.logLen = 0; $("ossOut").hidden = true; $("ossAsk").innerHTML = ""; $("ossMsg").innerHTML = ""; btns();
+  O.busy = true; O.out = ""; O.outName = label; O.after = after || null; O.logLen = 0; O.lbl = { label, node: body.node || "", srv: selSrv() ? selSrv().name : "", cmds: body.cmds || [] }; $("ossAsk").innerHTML = ""; $("ossMsg").innerHTML = ""; btns();
   log(`▶ ${label} em ${body.node || ""}`, "cmd");
   if (body.node) Object.assign(body, nodeCreds(), nodeOpts());
   body.server = keyOf(selSrv()); log(`Servidor: ${selSrv().name}`);
@@ -4608,12 +4609,28 @@ function poll(){
     if (j.state === "running" || j.state === "ask") { setTimeout(poll, j.state === "ask" ? 600 : 800); return; }
     call("/job/out?id=" + O.job).then((txt) => {
       O.out = txt; O.busy = false; btns(); status();
-      $("ossOut").hidden = false; $("ossOut").textContent = txt.length > 200000 ? "… (mostrando o final; baixe a saída completa)\n" + txt.slice(-200000) : txt;
+      conAdd(txt, j);
       if (j.state === "error") { $("ossMsg").innerHTML = `<div class="msg bad">${escH(j.error)}</div>`; return; }
       if (O.after) O.after(txt, j);
     });
   }).catch((e) => { log(String(e.message || e), "er"); O.busy = false; btns(); });
 }
+// ---------- tela do moshell: junta a saída de todos os comandos (como no WinFiol) ----------
+O.con = "";
+function conShow(){
+  const el = $("ossOut"), c = O.con; el.hidden = !c;
+  el.textContent = c.length > 400000 ? "… (início omitido: use “Baixar tela inteira”)\n" + c.slice(-400000) : c;
+  el.scrollTop = el.scrollHeight; $("ossConDl").disabled = $("ossConClr").disabled = !c;
+}
+function conAdd(txt, j){
+  const l = O.lbl || {}, t = new Date().toLocaleTimeString("pt-BR");
+  const what = l.label === "comandos" && l.cmds.length ? l.cmds.filter((c) => c !== "lt all").join(" ; ") || "lt all" : l.label;
+  O.con += `${O.con ? "\n" : ""}===== ${t} · ${l.srv || ""} · ${l.node || ""} · ${what}${j && j.state === "error" ? " · ERRO" : ""} =====\n` + (txt || "").replace(/\s+$/, "") + "\n";
+  if (O.con.length > 8e6) O.con = O.con.slice(-6e6);
+  conShow();
+}
+$("ossConClr").onclick = () => { O.con = ""; conShow(); };
+$("ossConDl").onclick = () => offer([{ name: `moshell_${new Date().toISOString().slice(0, 16).replace(/\D/g, "")}.txt`, data: O.con }], $("ossMsg"));
 function answer(a){ call("/job/answer", { id: O.job, answer: a }); $("ossAsk").innerHTML = ""; }
 $("ossStop").onclick = () => O.job && call("/job/stop", { id: O.job });
 $("ossKill").onclick = () => O.job && call("/job/stop", { id: O.job, now: true });
@@ -4649,7 +4666,27 @@ function toKg(txt){
 $("ossAlt").onclick = () => { const n = needNode(); if (n) start({ node: n, cmds: lt(["alt"]) }, "alarmes (alt)"); };
 $("ossSt1").onclick = () => { const n = needNode(); if (n) start({ node: n, cmds: lt(["st cell"]) }, "st cell"); };
 $("ossSt2").onclick = () => { const n = needNode(); if (n) start({ node: n, cmds: lt(["st ri", "st rfport"]) }, "st ri / rfport"); };
-$("ossRun").onclick = () => { const n = needNode(); if (!n) return; const cmds = $("ossCmd").value.split(/;|\n/).map((c) => c.trim()).filter(Boolean); if (!cmds.length) return;
+// ---------- histórico dos comandos AMOS (fica neste navegador) ----------
+let HIST = load().cmdHist || [], hPos = -1;
+function histDraw(){
+  $("ossCmdHist").innerHTML = HIST.slice(0, 200).map((c) => `<option value="${escH(c)}">`).join("");
+  $("ossHistB").textContent = `Histórico (${HIST.length})`;
+  $("ossHistBox").innerHTML = HIST.length ? HIST.map((c, i) => `<div style="display:flex;gap:6px;align-items:center;font:12px var(--f-mono)"><button class="btn" data-hu="${i}" title="Colocar no campo">↵</button><button class="btn" data-hx="${i}" title="Executar de novo">▶</button><span style="flex:1;word-break:break-all">${escH(c)}</span><button class="btn" data-hd="${i}" aria-label="Apagar do histórico">✕</button></div>`).join("") + `<div class="row" style="margin:6px 0 0"><button class="btn" id="ossHistClr">Limpar histórico</button></div>` : `<span class="note" style="margin:0">Nenhum comando ainda.</span>`;
+  $("ossHistBox").querySelectorAll("[data-hu]").forEach((b) => b.onclick = () => { $("ossCmd").value = HIST[+b.dataset.hu]; $("ossCmd").focus(); });
+  $("ossHistBox").querySelectorAll("[data-hx]").forEach((b) => b.onclick = () => { $("ossCmd").value = HIST[+b.dataset.hx]; $("ossRun").click(); });
+  $("ossHistBox").querySelectorAll("[data-hd]").forEach((b) => b.onclick = () => { HIST.splice(+b.dataset.hd, 1); save({ cmdHist: HIST }); histDraw(); });
+  if ($("ossHistClr")) $("ossHistClr").onclick = () => { HIST = []; save({ cmdHist: HIST }); histDraw(); };
+}
+function histAdd(line){ line = line.trim(); if (!line) return; HIST = [line, ...HIST.filter((c) => c !== line)].slice(0, 300); save({ cmdHist: HIST }); hPos = -1; histDraw(); }
+$("ossHistB").onclick = () => { const on = $("ossHistBox").hidden; $("ossHistBox").hidden = !on; $("ossHistB").setAttribute("aria-expanded", String(on)); };
+$("ossCmd").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); if (!$("ossRun").disabled) $("ossRun").click(); return; }
+  if (e.key !== "ArrowUp" && e.key !== "ArrowDown" || !HIST.length) return;
+  e.preventDefault(); hPos = e.key === "ArrowUp" ? Math.min(HIST.length - 1, hPos + 1) : Math.max(-1, hPos - 1);
+  $("ossCmd").value = hPos < 0 ? "" : HIST[hPos];
+});
+histDraw();
+$("ossRun").onclick = () => { const n = needNode(); if (!n) return; const cmds = $("ossCmd").value.split(/;|\n/).map((c) => c.trim()).filter(Boolean); if (!cmds.length) return; histAdd($("ossCmd").value);
   const w = cmds.filter((c) => WRITE.test(c)); if (w.length) { confirmBox(w, () => start({ node: n, cmds: lt(cmds), confirmWrites: true }, "comandos")); return; }
   start({ node: n, cmds: lt(cmds) }, "comandos"); };
 $("ossToIn").onclick = () => toIn(O.out);
