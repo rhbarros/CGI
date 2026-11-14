@@ -11,7 +11,7 @@ import argparse, json, os, re, sys, threading, time, uuid
 from urllib.parse import urlparse, parse_qs
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.6"
+VERSION = "1.7"
 LOCAL_PORT = 8766
 LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "helper.log")
 
@@ -24,6 +24,8 @@ ASK_RE = re.compile(r"(\[y/n\]|\(y/n\)|\[yes/no\]|\(yes/no\)|y/n\]?|are you sure
 PWD_RE = re.compile(r"(password|senha)[^\n:]{0,40}:\s*$", re.I)
 USER_RE = re.compile(r"(user\s*name|username|login|user|usuario)[^\n:]{0,40}:\s*$", re.I)
 AUTH_FAIL_RE = re.compile(r"(permission denied|authentication (fail|error)|auth fail|access denied|login incorrect|incorrect (password|login|user)|wrong password|invalid (user|password|credential|login)|bad password|unable to (connect|login|log ?in|authenticate)|failed to (connect|login|log ?in|authenticate)|could not (connect|login|authenticate)|not authori[sz]ed|too many (authentication )?failures|connection (refused|closed|reset))", re.I)
+FOUND_RE = re.compile(r"ip contact\.*\s*ok\b", re.I)
+NOTFOUND_RE = re.compile(r"(ip contact\.*\s*not ok|unknown node|node\b[^\n]{0,60}\bnot found|no such node|(could not|unable to|cannot|failed to) resolve|not (found|defined) in (the )?(enm|oss|ipdatabase|database)|does not exist|invalid node|no route to host|host unreachable|name or service not known)", re.I)
 NODE_PWD_OK = {}  # no -> indice da senha que funcionou (so em memoria)
 
 
@@ -319,6 +321,10 @@ def paste_script(job, node, auth, out, p):
         S.chan.send(line + "\n")
         txt, r = S.read_until(amos_prompt(node), maxsec=per, idle=0.5, job=job, quiet=25)
         out.append(txt)
+        if r == "user" and auth.user:  # o no pediu login no meio do script: responde com usuario/senha do no e segue
+            while r in ("user", "pwd"):
+                auth.handle(r); txt, r = S.read_until(amos_prompt(node), maxsec=per, idle=0.5, job=job, quiet=25); out.append(txt)
+            if r == "amos": auth.verdict(txt)
         if r == "shell":
             raise RuntimeError("o AMOS fechou durante '%s'" % shown.strip())
         if r is None:
@@ -456,6 +462,93 @@ def run_job(job):
         job["out"] = txt; job["end"] = time.time(); job.pop("_secrets", None)
 
 
+def node_type(txt, asked_user=False):
+    """Tipo do no pelo modelo que o AMOS mostra: BB (RadioNode/Baseband), DUS (ERBS/CPP LTE) ou 3G (RBS/CPP WCDMA)."""
+    if re.search(r"MSRBS|RadioNode|Baseband", txt or "", re.I) or asked_user: return "BB"
+    if re.search(r"\bERBS_NODE_MODEL|\bERBS\b", txt or ""): return "DUS"
+    if re.search(r"\bRBS_NODE_MODEL", txt or ""): return "3G"
+    return ""
+
+
+def probe_job(job):
+    """Para cada no da lista, ve se ele abre no AMOS deste servidor (amos <no> / !amos <no>, lt root, q).
+    Nao altera nada no no. Se ja havia um AMOS aberto, ele continua aberto no fim."""
+    p = job["params"]; res = job["result"]; out = []
+    try:
+        use(job["server"])
+        with S.lock:
+            S.ensure(job)
+            open_tpl = (p.get("openCmd") or "amos {node}").strip(); switch_tpl = (p.get("switchCmd") or "!amos {node}").strip()
+            nodes = [n.strip() for n in p.get("nodes", []) if n and n.strip()]
+            job["total"] = len(nodes)
+            for node in nodes:
+                if job.get("stop"): job["log"].append("Parado pelo usuario."); break
+                job["step"] += 1
+                had = S.cur_node
+                auth = NodeAuth(job, node); auth.job = {"log": [], "params": p}  # sem poluir o log com cada senha
+                cmd = (switch_tpl if had else open_tpl).replace("{node}", node).replace("{no}", node)
+                job["log"].append("[%s] testando %s: %s" % (S.name or S.key, node, cmd))
+                S.chan.send(cmd + "\n"); txt = ""; asked = False
+                while True:
+                    t, r = S.read_until(amos_prompt(node), maxsec=p.get("openTimeout", 90), idle=0.8, job=job); txt += t
+                    if r == "user": asked = True
+                    try:
+                        if auth.handle(r): continue
+                    except RuntimeError:
+                        S.chan.send("\x03"); t, r = S.read_until(amos_prompt(node), maxsec=15, idle=0.6); txt += t
+                    break
+                out.append(txt); info = {"found": False, "type": "", "why": ""}
+                opened = r == "amos" and S.last_amos and S.last_amos.upper() == node.upper()
+                if r == "shell" or r is None:
+                    info["why"] = "o AMOS nao abriu" if r == "shell" else "sem resposta"
+                    if had: S.cur_node = None; S.depth = 0; S.lt_done = False; had = None
+                    if r is None: S.chan.send("\x03"); S.read_until(S.shell_done, maxsec=10, idle=0.5)
+                elif not opened:
+                    info["why"] = "a troca nao abriu o no"
+                else:
+                    nf = NOTFOUND_RE.search(txt)
+                    if nf and not asked:
+                        info["why"] = nf.group(0).strip()[:80]
+                    else:
+                        txt2 = ""
+                        if p.get("deep", True):
+                            S.chan.send("lt root\n"); since = ""
+                            while True:
+                                t, r2 = S.read_until(amos_prompt(node), maxsec=120, idle=0.6, job=job); txt2 += t
+                                if r2 == "user": asked = True
+                                try:
+                                    if auth.handle(r2): continue
+                                except RuntimeError:
+                                    S.chan.send("\x03"); t, r2 = S.read_until(amos_prompt(node), maxsec=15, idle=0.6); txt2 += t
+                                if r2 == "ask": S.chan.send("y\n"); continue
+                                break
+                            out.append(txt2)
+                        bad = NOTFOUND_RE.search(txt2) or (AUTH_FAIL_RE.search(txt2) and not asked)
+                        if FOUND_RE.search(txt) or asked or (txt2 and not bad):
+                            info["found"] = True; info["type"] = node_type(txt + txt2, asked)
+                            if auth.cur is not None and auth.verdict(txt + txt2) in ("fail", "retry"): info["why"] = "senha do no recusada"
+                            elif auth.bad and NODE_PWD_OK.get(node.upper()) is None: info["why"] = "senha do no recusada"
+                        else:
+                            info["why"] = (bad.group(0).strip()[:80] if bad else "sem contato com o no")
+                    # volta: um q fecha so este AMOS (o anterior, se havia, continua aberto)
+                    S.chan.send("q\n"); t, r3 = S.read_until(amos_prompt(had or node), maxsec=40, idle=0.6); out.append(t)
+                    if had and r3 != "amos":
+                        S.cur_node = None; S.depth = 0; S.lt_done = False
+                    if not had and r3 == "amos":  # ainda no AMOS: fecha mais um nivel
+                        S.chan.send("q\n"); S.read_until(amos_prompt(node), maxsec=30, idle=0.6)
+                res[node] = info
+                job["log"].append("[%s] %s: %s%s" % (S.name or S.key, node, "ENCONTRADO" if info["found"] else "nao esta aqui",
+                                  (" (" + info["type"] + ")" if info["type"] else "") + (" - " + info["why"] if info["why"] else "")))
+            job["state"] = "done"
+    except Exception as e:
+        job["state"] = "error"; job["error"] = str(e); job["log"].append("ERRO: " + str(e)); logf("probe erro: %s" % e)
+    finally:
+        txt = "".join(out)
+        for sec in (p.get("nodePwds") or []) + ([S._cred[3]] if getattr(_TL, "s", None) and S._cred else []):
+            if sec: txt = txt.replace(sec, "******")
+        job["out"] = txt; job["end"] = time.time()
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
@@ -498,7 +591,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._hdr(200, "text/plain; charset=utf-8"); self.wfile.write(j.get("out", "").encode("utf-8")); return
             since = int((q.get("since") or ["0"])[0])
             return self._json({"ok": True, "state": j["state"], "step": j["step"], "total": j["total"], "bytes": j.get("bytes", 0), "log": j["log"][since:], "logLen": len(j["log"]),
-                               "question": j.get("question", ""), "error": j.get("error", "")})
+                               "question": j.get("question", ""), "error": j.get("error", ""), "result": j.get("result")})
         self._json({"ok": False, "erro": "rota desconhecida"}, 404)
 
     def do_POST(self):
@@ -549,6 +642,15 @@ class Handler(BaseHTTPRequestHandler):
                 for k in [k for k, v in JOBS.items() if v is not job and v["state"] in ("done", "error") and time.time() - v.get("end", 0) > 1800]:
                     JOBS.pop(k, None)
                 threading.Thread(target=run_job, args=(job,), daemon=True).start()
+                return self._json({"ok": True, "id": jid})
+            if p == "/probe":
+                key = pick(d)
+                if key not in SESS: return self._json({"ok": False, "erro": "servidor nao conectado: faca o login"})
+                if busy(key): return self._json({"ok": False, "erro": "ja existe uma execucao em andamento neste servidor"})
+                jid = uuid.uuid4().hex[:10]
+                job = {"id": jid, "server": key, "params": d, "state": "running", "step": 0, "total": len(d.get("nodes", [])), "log": [], "result": {}, "start": time.time()}
+                JOBS[jid] = job
+                threading.Thread(target=probe_job, args=(job,), daemon=True).start()
                 return self._json({"ok": True, "id": jid})
             if p == "/job/answer":
                 j = JOBS.get(d.get("id"))

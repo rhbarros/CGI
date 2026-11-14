@@ -1,5 +1,9 @@
 # Scripts de backup antes da atividade
 
+Na aba 07, basta colar o **STATION ID** (ex.: `MGURA_0019`). A ferramenta lê o `CGI.zip` deste repositório
+(coluna A = regional, B = STATION ID, F = tecnologia, K = nó), lista os nós Ericsson do site (sem 2G), escolhe o script
+pela regional (`_3G` para nós 3G; `BACKUP_DUS` quando o nó é DUS/ERBS) e descobre sozinha em qual servidor (CVOA/CVOB/CVO) cada nó abre.
+
 Usados na aba **07 · Executar no OSS → Backup antes da atividade** da Ferramenta Ericsson RAN (index2.html).
 
 | Script | Uso |
