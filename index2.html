@@ -168,6 +168,7 @@ pre.s5pv .gap{color:var(--text3)}
   <button role="tab" id="t-xml" aria-selected="false" data-tab="xml"><span class="n">04</span>XML_ERICSSON</button>
   <button role="tab" id="t-s4g" aria-selected="false" data-tab="s4g"><span class="n">05</span>Script 4G</button>
   <button role="tab" id="t-kg" aria-selected="false" data-tab="kg"><span class="n">06</span>Ericsson KGET Analyzer</button>
+  <button role="tab" id="t-oss" aria-selected="false" data-tab="oss"><span class="n">07</span>Executar no OSS</button>
 </nav>
 
 <div class="wrap">
@@ -660,6 +661,73 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
         <div id="kgLibBody" style="display:flex;flex-direction:column;gap:11px;min-width:0"></div>
       </section>
     </div>
+  </div>
+  <!-- ================= EXECUTAR NO OSS (AMOS via helper local) ================= -->
+  <div id="p-oss" style="display:none;flex-direction:column;gap:13px">
+    <style>
+      #p-oss .oss-dot{width:10px;height:10px;border-radius:50%;background:var(--text3);display:inline-block}
+      #p-oss .oss-dot.on{background:var(--c3);box-shadow:0 0 8px var(--c3)} #p-oss .oss-dot.off{background:var(--c5)}
+      #p-oss .oss-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:10px}
+      #p-oss .oss-srv{display:grid;grid-template-columns:90px minmax(0,1fr) 80px;gap:6px;align-items:center}
+      #p-oss input[type=text],#p-oss input[type=password],#p-oss input[type=number],#p-oss select,#p-oss textarea{font:12px var(--f-mono);background:var(--bg4);border:1px solid var(--border2);color:var(--text);border-radius:7px;padding:8px 10px;min-width:0;width:100%}
+      #p-oss textarea{min-height:120px}
+      #p-oss .oss-log{background:var(--bg);border:1px solid var(--border2);border-radius:8px;padding:9px 12px;font:11.5px/1.5 var(--f-mono);max-height:220px;overflow:auto;white-space:pre-wrap;color:var(--text2)}
+      #p-oss .oss-log .er{color:var(--c5)} #p-oss .oss-log .ok{color:var(--c3)} #p-oss .oss-log .cmd{color:var(--c1)}
+      #p-oss .oss-out{background:var(--bg);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;font:11px/1.45 var(--f-mono);max-height:420px;overflow:auto;white-space:pre;color:var(--text)}
+      #p-oss .oss-ask{border:1px solid rgba(245,158,11,.5);background:rgba(245,158,11,.08);border-radius:9px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+      #p-oss .oss-prog{height:6px;border-radius:3px;background:var(--bg4);overflow:hidden} #p-oss .oss-prog span{display:block;height:100%;background:var(--c1);transition:width .3s}
+      #p-oss .oss-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:10px}
+      #p-oss .oss-act{background:var(--bg4);border:1px solid var(--border);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:7px}
+      #p-oss .oss-act b{font-size:13px} #p-oss .oss-act .note{margin:0}
+    </style>
+    <section class="panel">
+      <div class="ph"><span class="step">1</span><h2><span class="oss-dot" id="ossDot"></span> Executar no OSS <span class="note" id="ossSt" style="font-weight:400">verificando helper…</span></h2>
+        <p>Roda os comandos AMOS direto no nó pelo servidor do OSS (o mesmo que você usa no WinFiol) e joga as respostas nas outras abas. O navegador não abre SSH, então um <b>helper</b> pequeno no seu PC faz a ponte: <code>esta página → helper (127.0.0.1:8766) → servidor OSS (SSH 5022) → amos &lt;nó&gt;</code>.</p></div>
+      <div id="ossHelp" hidden>
+        <div class="row"><a class="btn primary" id="ossInstall" href="tools/Instalar_Helper_Ericsson.bat" download="Instalar_Helper_Ericsson.bat">Instalar neste PC (1ª vez)</a><a class="btn" id="ossStart" href="enmhelper://start">Iniciar helper</a><button class="btn" id="ossRetry">Verificar de novo</button></div>
+        <p class="note">Helper offline. <b>Primeira vez neste computador?</b> Clique em <b>Instalar neste PC</b>, abra o arquivo baixado e aguarde o “PRONTO” (se o Windows avisar sobre o arquivo, escolha <i>Mais informações → Executar assim mesmo</i>). Ele instala o Python se precisar e passa a iniciar sozinho com o Windows, sem janela. Já instalou? Clique em <b>Iniciar helper</b>. Se o Chrome/Edge perguntar se esta página pode acessar a <b>rede local</b>, clique em <b>Permitir</b>. As outras abas funcionam normalmente sem o helper.</p>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="ph"><span class="step">2</span><h2>Servidor e login</h2><p>Os endereços ficam guardados só neste navegador. Usuário e senha vão apenas para o helper, que guarda a senha só na memória (nunca em disco); aqui só o usuário é lembrado.</p></div>
+      <div class="oss-grid">
+        <div style="display:flex;flex-direction:column;gap:6px" id="ossSrvList"></div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <label class="note" style="margin:0">Servidor <select id="ossSrv"></select></label>
+          <div class="oss-grid" style="grid-template-columns:1fr 1fr"><input type="text" id="ossUser" placeholder="Usuário (ex.: T1234567)" autocomplete="username"><input type="password" id="ossPwd" placeholder="Senha" autocomplete="current-password"></div>
+          <div class="row" style="margin:0"><button class="btn primary" id="ossLogin">Conectar</button><button class="btn" id="ossLogout">Sair</button><span class="note" id="ossWho"></span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="ph"><span class="step">3</span><h2>Nó e ações</h2><p>Informe o nó como no AMOS (ex.: <code>4G-UBUR18</code>). Leituras rodam direto; qualquer comando de alteração (<code>set</code>, <code>crn</code>, <code>del</code>, <code>bl</code>, <code>deb</code>, <code>acc</code>, <code>run</code>…) só sai depois da sua confirmação, e as perguntas [y/n] do AMOS aparecem aqui para você responder.</p></div>
+      <div class="row" style="margin:0"><input type="text" id="ossNode" list="ossNodes" placeholder="Nó (ex.: 4G-UBUR18)" style="max-width:280px;text-transform:uppercase" autocomplete="off" spellcheck="false"><datalist id="ossNodes"></datalist><label class="note" style="margin:0"><input type="checkbox" id="ossLt" checked> rodar <code>lt all</code> antes</label></div>
+      <div class="oss-actions">
+        <div class="oss-act"><b>Rodada 1 → Entrada</b><span class="note">Roda os hget da aba 01, cola as respostas e processa (BULKLOAD/CDD).</span><button class="btn primary" id="ossR1">Coletar e processar</button></div>
+        <div class="oss-act"><b>KGET → KGET Analyzer</b><span class="note">Gera o kget do nó (pode levar alguns minutos) e abre a análise completa na aba 06.</span><button class="btn primary" id="ossKget">Gerar kget e analisar</button></div>
+        <div class="oss-act"><b>Alarmes e estado</b><span class="note">Alarmes ativos e estado de células, rádios e links.</span><div class="row" style="margin:0"><button class="btn" id="ossAlt">alt</button><button class="btn" id="ossSt1">st cell</button><button class="btn" id="ossSt2">st ri|rfport</button></div></div>
+      </div>
+      <h3 class="sub">Comandos AMOS</h3>
+      <div class="row" style="margin:0"><input type="text" id="ossCmd" placeholder="ex.: get EUtranCellFDD qRxLevMin  (vários: separe com ;)" spellcheck="false"><button class="btn" id="ossRun">Executar</button></div>
+      <h3 class="sub">Rodar script (.mos)</h3>
+      <div class="row" style="margin:0"><input type="file" id="ossFile" accept=".mos,.txt" multiple><span class="note" id="ossFileN"></span></div>
+      <textarea id="ossScript" spellcheck="false" placeholder="Cole o script .mos aqui ou escolha os arquivos acima (ex.: os scripts gerados nas abas 03 e 05). Vários arquivos rodam na ordem do nome."></textarea>
+      <div class="row" style="margin:0"><button class="btn" id="ossScan">Revisar alterações</button><span class="note" id="ossScanN"></span></div>
+      <div id="ossConfirm"></div>
+    </section>
+
+    <section class="panel">
+      <div class="ph"><span class="step">4</span><h2>Execução</h2></div>
+      <div class="oss-prog"><span id="ossBar" style="width:0"></span></div>
+      <div class="row" style="margin:0"><span class="note" id="ossProg">Nada em execução.</span><button class="btn" id="ossStop" disabled>Parar após o comando atual</button><button class="btn" id="ossKill" disabled>Parar agora (Ctrl-C)</button></div>
+      <div id="ossAsk"></div>
+      <div class="oss-log" id="ossLog"></div>
+      <div class="row" style="margin:0"><button class="btn" id="ossToIn" disabled>Enviar saída para a Entrada</button><button class="btn" id="ossToKg" disabled>Enviar saída para o KGET Analyzer</button><button class="btn" id="ossDl" disabled>Baixar saída (.txt)</button><button class="btn" id="ossLogDl">Exportar log (.txt)</button></div>
+      <pre class="oss-out" id="ossOut" hidden></pre>
+      <div id="ossMsg"></div>
+    </section>
   </div>
 </div>
 <footer class="app-footer" role="contentinfo">
@@ -2590,6 +2658,7 @@ function showTab(t){
   $("p-xml").style.display = t === "xml" ? "flex" : "none";
   $("p-s4g").style.display = t === "s4g" ? "flex" : "none";
   $("p-kg").style.display = t === "kg" ? "flex" : "none";
+  $("p-oss").style.display = t === "oss" ? "flex" : "none";
   try { localStorage.setItem(LSK + ":tab", t); } catch(e){}
   if (t === "doc") renderDoc();
 }
@@ -2979,7 +3048,7 @@ if (hist.length) { cur = hist[0]; $("raw").value = cur.raw || ""; }
 else { $("raw").value = SAMPLE.raw; process(true); $("procMsg").innerHTML = `<div class="msg ok">Exemplo ERCE91 carregado para mostrar o fluxo. Clique em “Começar nova apuração” para colar um site real.</div>`; }
 renderRead(); renderHist(); renderChip(); hsPull();
 let startTab = "in"; try { startTab = localStorage.getItem(LSK + ":tab") || "in"; } catch(e){}
-showTab(["doc","s5g","xml","s4g","kg"].includes(startTab) ? startTab : "in");
+showTab(["doc","s5g","xml","s4g","kg","oss"].includes(startTab) ? startTab : "in");
 
 // ================= Scripts 5G =================
 (function(){
@@ -4375,8 +4444,160 @@ function libFile(d){
   let t; $("kgLfQ").oninput = () => { clearTimeout(t); t = setTimeout(draw, 250); }; draw();
 }
 
+// Entrada vinda da aba 07 (Executar no OSS): carrega o kget direto no modo Site único
+window.KGload = (name, text) => {
+  const d = parseOne(name, text); KG.A = d; KG.aud = null; KG.h = null; KG.sec = "dash"; setMode("single");
+  $("kgMsg").innerHTML = `<div class="msg ok">kget de ${escH(K.summary(d).node)} recebido do OSS (${d.mos.length} MOs).</div>`;
+};
 window.KGopen = render;
 render();
+})();
+
+// ================= EXECUTAR NO OSS (AMOS via helper local) =================
+(function(){
+const HELPER = "http://127.0.0.1:8766", MINV = 1.0, OSK = LSK + ":oss";
+const WRITE = /^\s*(set|sete|crn|cr|del|rdel|bl|deb|acc|run|ldeb|lbl|lset|lcr|ldel|restart|confb\+?|trun|upgrade|cvms|cvmk|cvrm|cvset)\b/i;
+const O = { online: false, logged: false, job: null, out: "", outName: "", logLen: 0, log: [], busy: false, files: [], after: null };
+const load = () => { try { return JSON.parse(localStorage.getItem(OSK) || "{}"); } catch (e) { return {}; } };
+const save = (o) => { try { localStorage.setItem(OSK, JSON.stringify({ ...load(), ...o })); } catch (e) {} };
+const cfg = load();
+const servers = cfg.servers || [{ name: "CVOA", host: "", port: 5022 }, { name: "CVOB", host: "", port: 5022 }, { name: "CVO", host: "", port: 5022 }];
+function drawServers(){
+  $("ossSrvList").innerHTML = `<span class="note" style="margin:0">Endereços dos servidores (preencha uma vez)</span>` + servers.map((s, i) => `<div class="oss-srv"><input type="text" data-sv="${i}" data-k="name" value="${escH(s.name)}" aria-label="Nome"><input type="text" data-sv="${i}" data-k="host" value="${escH(s.host)}" placeholder="IP (ex.: 10.x.x.x)" aria-label="IP do ${escH(s.name)}"><input type="number" data-sv="${i}" data-k="port" value="${escH(s.port)}" aria-label="Porta"></div>`).join("");
+  $("ossSrvList").querySelectorAll("input").forEach((el) => el.onchange = () => { const s = servers[+el.dataset.sv]; s[el.dataset.k] = el.dataset.k === "port" ? +el.value || 5022 : el.value.trim(); save({ servers }); drawSel(); });
+  drawSel();
+}
+function drawSel(){ const cur = load().srv ?? 0; $("ossSrv").innerHTML = servers.map((s, i) => `<option value="${i}" ${i === cur ? "selected" : ""}>${escH(s.name)}${s.host ? " · " + escH(s.host) + ":" + s.port : " (sem IP)"}</option>`).join(""); }
+$("ossSrv").onchange = () => save({ srv: +$("ossSrv").value });
+$("ossUser").value = cfg.user || "";
+drawServers();
+
+// ---------- helper ----------
+function call(path, body){
+  const o = body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
+  return fetch(HELPER + path, o).then((r) => path.startsWith("/job/out") ? r.text() : r.json(), () => { throw new Error("helper offline"); });
+}
+function log(t, cls){ O.log.push(t); const el = $("ossLog"); const d = document.createElement("div"); if (cls) d.className = cls; d.textContent = t; el.appendChild(d); el.scrollTop = el.scrollHeight; }
+function status(){
+  call("/").then((s) => {
+    O.online = true; O.logged = s.logged; $("ossDot").className = "oss-dot on"; $("ossHelp").hidden = true;
+    $("ossSt").textContent = `helper v${s.version} OK` + (s.logged ? ` · conectado em ${s.host} como ${s.user}` : " · não conectado") + (+s.version < MINV ? " · versão antiga: rode o instalador de novo" : "");
+    $("ossWho").textContent = s.logged ? `prompt: ${s.prompt}` : "";
+    btns();
+  }).catch(() => { O.online = false; O.logged = false; $("ossDot").className = "oss-dot off"; $("ossSt").textContent = "helper offline"; $("ossHelp").hidden = false; btns(); });
+}
+function btns(){
+  const can = O.online && O.logged && !O.busy;
+  ["ossR1", "ossKget", "ossAlt", "ossSt1", "ossSt2", "ossRun", "ossScan"].forEach((id) => $(id).disabled = !can);
+  $("ossLogin").disabled = !O.online || O.busy; $("ossLogout").disabled = !O.online || !O.logged;
+  $("ossStop").disabled = !O.busy; $("ossKill").disabled = !O.busy;
+  const has = !!O.out; ["ossToIn", "ossToKg", "ossDl"].forEach((id) => $(id).disabled = !has);
+}
+$("ossRetry").onclick = status;
+$("ossStart").onclick = () => setTimeout(status, 2500);
+$("ossLogin").onclick = () => {
+  const s = servers[+$("ossSrv").value]; const user = $("ossUser").value.trim(), pwd = $("ossPwd").value;
+  if (!s || !s.host) { $("ossMsg").innerHTML = `<div class="msg warn">Preencha o IP do servidor ${escH(s ? s.name : "")} na lista à esquerda.</div>`; return; }
+  if (!user || !pwd) { $("ossMsg").innerHTML = `<div class="msg warn">Informe usuário e senha.</div>`; return; }
+  save({ user, srv: +$("ossSrv").value }); $("ossLogin").disabled = true; log(`Conectando em ${s.name} (${s.host}:${s.port}) como ${user}...`, "cmd");
+  call("/login", { host: s.host, port: s.port, user, pwd }).then((r) => {
+    $("ossPwd").value = "";
+    if (r.ok) { log(`Conectado. Prompt: ${r.prompt}`, "ok"); $("ossMsg").innerHTML = ""; } else { log("Falha no login: " + r.erro, "er"); $("ossMsg").innerHTML = `<div class="msg bad">Falha no login: ${escH(r.erro)}</div>`; }
+    status();
+  }).catch((e) => { log(String(e.message || e), "er"); status(); });
+};
+$("ossLogout").onclick = () => call("/logout", {}).then(() => { log("Desconectado."); status(); });
+
+// ---------- nós conhecidos ----------
+function nodes(){ const set = new Set(); try { (typeof hist !== "undefined" ? hist : []).forEach((h) => h && h.node && set.add(h.node)); } catch (e) {} try { if (cur && cur.node) set.add(cur.node); } catch (e) {} (load().nodes || []).forEach((n) => set.add(n)); return [...set]; }
+function drawNodes(){ $("ossNodes").innerHTML = nodes().map((n) => `<option value="${escH(n)}">`).join(""); }
+drawNodes();
+const node = () => $("ossNode").value.trim().toUpperCase();
+function needNode(){ const n = node(); if (!/^[\w.\-]{3,}$/.test(n)) { $("ossMsg").innerHTML = `<div class="msg warn">Informe o nó (ex.: 4G-UBUR18).</div>`; return null; } const l = load().nodes || []; if (!l.includes(n)) save({ nodes: [n, ...l].slice(0, 40) }); drawNodes(); return n; }
+
+// ---------- execução ----------
+function start(body, label, after){
+  if (O.busy) return;
+  O.busy = true; O.out = ""; O.outName = label; O.after = after || null; O.logLen = 0; $("ossOut").hidden = true; $("ossAsk").innerHTML = ""; $("ossMsg").innerHTML = ""; btns();
+  log(`▶ ${label} em ${body.node || ""}`, "cmd");
+  call("/job", body).then((r) => {
+    if (!r.ok) { O.busy = false; btns(); log("Não iniciou: " + r.erro, "er"); return; }
+    O.job = r.id; poll();
+  }).catch((e) => { O.busy = false; btns(); log(String(e.message || e), "er"); });
+}
+function poll(){
+  call("/job?id=" + O.job + "&since=" + O.logLen).then((j) => {
+    j.log.forEach((t) => log(t, /^ERRO/.test(t) ? "er" : /> /.test(t) ? "cmd" : ""));
+    O.logLen = j.logLen;
+    const pct = j.total ? Math.min(100, Math.round(j.step / j.total * 100)) : 0; $("ossBar").style.width = pct + "%";
+    $("ossProg").textContent = `${j.state === "ask" ? "Aguardando sua resposta" : j.state === "running" ? "Executando" : j.state === "done" ? "Concluído" : "Erro"} · passo ${j.step}/${j.total} · ${(j.bytes / 1024).toFixed(0)} KB recebidos`;
+    if (j.state === "ask") {
+      if (!$("ossAskBox")) { $("ossAsk").innerHTML = `<div class="oss-ask" id="ossAskBox"><b>O AMOS está perguntando:</b><pre class="oss-out" style="max-height:140px">${escH(j.question)}</pre><div class="row" style="margin:0"><button class="btn primary" id="ossYes">Sim (y)</button><button class="btn" id="ossNo">Não (n)</button></div></div>`;
+        $("ossYes").onclick = () => answer("y"); $("ossNo").onclick = () => answer("n"); }
+    } else $("ossAsk").innerHTML = "";
+    if (j.state === "running" || j.state === "ask") { setTimeout(poll, j.state === "ask" ? 600 : 800); return; }
+    call("/job/out?id=" + O.job).then((txt) => {
+      O.out = txt; O.busy = false; btns();
+      $("ossOut").hidden = false; $("ossOut").textContent = txt.length > 200000 ? "… (mostrando o final; baixe a saída completa)\n" + txt.slice(-200000) : txt;
+      if (j.state === "error") { $("ossMsg").innerHTML = `<div class="msg bad">${escH(j.error)}</div>`; return; }
+      if (O.after) O.after(txt);
+    });
+  }).catch((e) => { log(String(e.message || e), "er"); O.busy = false; btns(); });
+}
+function answer(a){ call("/job/answer", { id: O.job, answer: a }); $("ossAsk").innerHTML = ""; }
+$("ossStop").onclick = () => O.job && call("/job/stop", { id: O.job });
+$("ossKill").onclick = () => O.job && call("/job/stop", { id: O.job, now: true });
+const lt = (cmds) => ($("ossLt").checked ? ["lt all"] : []).concat(cmds);
+
+// Rodada 1 → Entrada (usa os mesmos comandos da aba 01)
+$("ossR1").onclick = () => { const n = needNode(); if (!n) return;
+  const cmds = $("cmds").textContent.split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("#"));
+  start({ node: n, cmds: lt(cmds) }, "Rodada 1 (hget)", toIn); };
+function toIn(txt){
+  $("raw").value = txt; showTab("in"); $("bProc").click();
+  $("ossMsg").innerHTML = `<div class="msg ok">Respostas coladas e processadas na aba 01 · Entrada.</div>`;
+}
+$("ossKget").onclick = () => { const n = needNode(); if (!n) return; start({ node: n, cmds: ["kget"], timeout: 3600 }, "kget", toKg); };
+function toKg(txt){
+  const n = node() || "kget"; if (!window.KGload) { $("ossMsg").innerHTML = `<div class="msg bad">KGET Analyzer indisponível.</div>`; return; }
+  try { window.KGload(`${n}_kget.log`, txt); showTab("kg"); } catch (e) { $("ossMsg").innerHTML = `<div class="msg bad">${escH(e.message || e)}</div>`; }
+}
+$("ossAlt").onclick = () => { const n = needNode(); if (n) start({ node: n, cmds: lt(["alt"]) }, "alarmes (alt)"); };
+$("ossSt1").onclick = () => { const n = needNode(); if (n) start({ node: n, cmds: lt(["st cell"]) }, "st cell"); };
+$("ossSt2").onclick = () => { const n = needNode(); if (n) start({ node: n, cmds: lt(["st ri", "st rfport"]) }, "st ri / rfport"); };
+$("ossRun").onclick = () => { const n = needNode(); if (!n) return; const cmds = $("ossCmd").value.split(/;|\n/).map((c) => c.trim()).filter(Boolean); if (!cmds.length) return;
+  const w = cmds.filter((c) => WRITE.test(c)); if (w.length) { confirmBox(w, () => start({ node: n, cmds: lt(cmds), confirmWrites: true }, "comandos")); return; }
+  start({ node: n, cmds: lt(cmds) }, "comandos"); };
+$("ossToIn").onclick = () => toIn(O.out);
+$("ossToKg").onclick = () => toKg(O.out);
+$("ossDl").onclick = () => offer([{ name: `${node() || "saida"}_${(O.outName || "amos").replace(/\W+/g, "_")}.txt`, data: O.out }], $("ossMsg"));
+$("ossLogDl").onclick = () => offer([{ name: `log_execucao_oss_${new Date().toISOString().slice(0, 16).replace(/\D/g, "")}.txt`, data: O.log.join("\n") }], $("ossMsg"));
+
+// ---------- scripts ----------
+$("ossFile").onchange = async (e) => { const fs = [...e.target.files].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })); O.files = [];
+  for (const f of fs) O.files.push({ name: f.name, text: await f.text() });
+  $("ossScript").value = O.files.map((f) => `// ===== ${f.name} =====\n${f.text}`).join("\n"); $("ossFileN").textContent = `${O.files.length} arquivo(s)`; $("ossScanN").textContent = ""; $("ossConfirm").innerHTML = ""; };
+$("ossScript").oninput = () => { O.files = []; $("ossFileN").textContent = ""; $("ossConfirm").innerHTML = ""; };
+function confirmBox(writes, go){
+  $("ossConfirm").innerHTML = `<div class="oss-ask"><b>Confirme as alterações em ${escH(node())}</b><span class="note" style="margin:0">${writes.length} comando(s) de alteração. Revise antes de rodar no nó:</span><pre class="oss-out" style="max-height:200px">${escH(writes.slice(0, 200).join("\n"))}${writes.length > 200 ? "\n…" : ""}</pre>
+    <label class="note" style="margin:0"><input type="checkbox" id="ossOk"> Conferi o nó e os comandos e quero executar</label><div class="row" style="margin:0"><button class="btn primary" id="ossGo" disabled>Executar no nó</button><button class="btn" id="ossCancel">Cancelar</button></div></div>`;
+  $("ossOk").onchange = () => $("ossGo").disabled = !$("ossOk").checked;
+  $("ossCancel").onclick = () => $("ossConfirm").innerHTML = "";
+  $("ossGo").onclick = () => { $("ossConfirm").innerHTML = ""; go(); };
+}
+$("ossScan").onclick = () => { const n = needNode(); if (!n) return;
+  const parts = O.files.length ? O.files : [{ name: `script_${n}.mos`, text: $("ossScript").value }];
+  if (!parts.some((p) => p.text.trim())) { $("ossScanN").textContent = "Nenhum script."; return; }
+  const writes = parts.flatMap((p) => p.text.split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("//") && WRITE.test(l)).map((l) => (parts.length > 1 ? p.name + ": " : "") + l));
+  $("ossScanN").textContent = `${parts.length} arquivo(s) · ${writes.length} comando(s) de alteração`;
+  confirmBox(writes.length ? writes : ["(o script não tem comandos de alteração reconhecidos; será executado com run)"], () => runScripts(n, parts.slice()));
+};
+function runScripts(n, parts){
+  const p = parts.shift(); if (!p) return;
+  start({ node: n, cmds: [], upload: { name: p.name.replace(/[^\w.\-]/g, "_"), text: p.text }, confirmWrites: true, timeout: 3600 }, `script ${p.name}`, () => { if (parts.length) setTimeout(() => runScripts(n, parts), 400); });
+}
+
+status(); setInterval(() => { if (!O.busy) status(); }, 15000);
 })();
 
 </script>

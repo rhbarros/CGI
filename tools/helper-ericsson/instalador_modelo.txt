@@ -1,0 +1,126 @@
+@echo off
+rem ==========================================================================
+rem  Instalador do Helper Ericsson (Ferramenta Ericsson RAN <-> OSS/AMOS)
+rem  Rode UMA VEZ em cada computador. Depois o helper inicia sozinho com o
+rem  Windows, escondido (sem janela). Para remover:  Instalar_Helper_Ericsson.bat remover
+rem  ARQUIVO GERADO por tools/gerar_instalador.py - edite o modelo, nao este.
+rem ==========================================================================
+title Instalador do Helper Ericsson
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$f='%~f0'; $acao='%~1'; $c=[IO.File]::ReadAllText($f); iex $c.Substring($c.IndexOf('#'+'POWERSHELL#')+12)"
+echo.
+pause
+exit /b
+#POWERSHELL#
+$ErrorActionPreference = 'Stop'
+$dir  = Join-Path $env:LOCALAPPDATA 'Ericsson_Helper'
+$py_file = Join-Path $dir 'ericsson_helper.py'
+$lnk  = Join-Path ([Environment]::GetFolderPath('Startup')) 'Ericsson Helper.lnk'
+$reg  = 'HKCU:\Software\Classes\enmhelper'
+
+function Stop-Helper {
+  Get-CimInstance Win32_Process -Filter "Name like 'python%' or Name like 'py%'" -ErrorAction SilentlyContinue |
+    Where-Object { $_.CommandLine -like '*ericsson_helper.py*' } |
+    ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force } catch {} }
+}
+
+function Find-Python {
+  foreach ($c in @('py', 'python')) {
+    try {
+      $p = (& $c -c "import sys;print(sys.executable)" 2>$null | Select-Object -First 1)
+      if ($LASTEXITCODE -eq 0 -and $p -and (Test-Path $p.Trim())) { return $p.Trim() }
+    } catch {}
+  }
+  $g = Get-ChildItem -Path "$env:LOCALAPPDATA\Programs\Python\Python3*\python.exe", "$env:ProgramFiles\Python3*\python.exe" -ErrorAction SilentlyContinue |
+       Sort-Object FullName -Descending | Select-Object -First 1
+  if ($g) { return $g.FullName }
+  return $null
+}
+
+Write-Host ''
+Write-Host '=== Helper Ericsson - Ferramenta Ericsson RAN ===' -ForegroundColor Cyan
+
+if ($acao -eq 'remover') {
+  Stop-Helper
+  Remove-Item $lnk -Force -ErrorAction SilentlyContinue
+  Remove-Item $reg -Recurse -Force -ErrorAction SilentlyContinue
+  Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue
+  Write-Host 'Helper removido deste computador.' -ForegroundColor Green
+  return
+}
+
+# 1) Python
+$py = Find-Python
+if (-not $py) {
+  Write-Host 'Python nao encontrado. Instalando pelo winget (pode levar 1-2 min)...' -ForegroundColor Yellow
+  try {
+    winget install -e --id Python.Python.3.12 --scope user --silent --accept-package-agreements --accept-source-agreements | Out-Host
+  } catch {}
+  $py = Find-Python
+}
+if (-not $py) {
+  Write-Host ''
+  Write-Host 'Nao consegui instalar o Python automaticamente.' -ForegroundColor Red
+  Write-Host 'Instale em https://www.python.org/downloads/ (marque "Add python.exe to PATH")'
+  Write-Host 'e rode este instalador de novo.'
+  return
+}
+$pyw = Join-Path (Split-Path $py) 'pythonw.exe'
+if (-not (Test-Path $pyw)) { $pyw = $py }
+Write-Host "Python: $py"
+
+# 1b) paramiko (SSH ate o servidor OSS) - obrigatorio
+$oldEap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+& $py -m pip install --user --disable-pip-version-check -q paramiko *> $null
+& $py -c "import paramiko" *> $null
+$okParamiko = ($LASTEXITCODE -eq 0)
+$ErrorActionPreference = $oldEap
+if ($okParamiko) { Write-Host 'paramiko (SSH): OK' } else {
+  Write-Host 'Nao consegui instalar o paramiko (biblioteca SSH). Verifique a internet/proxy e rode de novo,' -ForegroundColor Red
+  Write-Host 'ou rode manualmente:  python -m pip install --user paramiko'
+  return
+}
+
+# 2) Copia o helper (embutido neste arquivo)
+Stop-Helper
+New-Item -ItemType Directory -Force -Path $dir | Out-Null
+$code = @'
+__HELPER__
+'@
+[IO.File]::WriteAllText($py_file, $code, (New-Object Text.UTF8Encoding($false)))
+Write-Host "Helper copiado para $dir"
+
+# 3) Inicia sozinho com o Windows (atalho na pasta Inicializar, sem janela)
+$ws = New-Object -ComObject WScript.Shell
+$s = $ws.CreateShortcut($lnk)
+$s.TargetPath = $pyw
+$s.Arguments = '"' + $py_file + '"'
+$s.WorkingDirectory = $dir
+$s.WindowStyle = 7
+$s.Description = 'Helper Ericsson (Ferramenta Ericsson RAN)'
+$s.Save()
+Write-Host 'Inicializacao automatica: OK'
+
+# 4) Link enmhelper:// (botao "Iniciar helper" da pagina, caso ele tenha sido fechado)
+foreach ($k in @($reg, "$reg\shell", "$reg\shell\open", "$reg\shell\open\command")) {
+  if (-not (Test-Path $k)) { New-Item -Path $k | Out-Null }
+}
+Set-ItemProperty -Path $reg -Name '(default)' -Value 'URL:Helper Ericsson'
+Set-ItemProperty -Path $reg -Name 'URL Protocol' -Value ''
+Set-ItemProperty -Path "$reg\shell\open\command" -Name '(default)' -Value ('"' + $pyw + '" "' + $py_file + '" "%1"')
+Write-Host 'Botao "Iniciar helper" da pagina: OK'
+
+# 5) Liga agora e testa
+Start-Process -FilePath $pyw -ArgumentList ('"' + $py_file + '"') -WorkingDirectory $dir -WindowStyle Hidden
+$ok = $false
+for ($i = 0; $i -lt 10 -and -not $ok; $i++) {
+  Start-Sleep -Milliseconds 700
+  try { $r = Invoke-RestMethod -Uri 'http://127.0.0.1:8766/' -TimeoutSec 2; $ok = $true } catch {}
+}
+Write-Host ''
+if ($ok) {
+  Write-Host ("PRONTO! Helper v" + $r.version + " rodando. Ele vai iniciar sozinho sempre que o Windows ligar.") -ForegroundColor Green
+  Write-Host 'Pode fechar esta janela e voltar para a Ferramenta Ericsson RAN.'
+} else {
+  Write-Host 'Instalado, mas o helper nao respondeu. Veja o arquivo:' -ForegroundColor Yellow
+  Write-Host (Join-Path $dir 'helper.log')
+}
