@@ -725,7 +725,7 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
       </details>
       <div class="oss-actions">
         <div class="oss-act"><b>Rodada 1 → Entrada</b><span class="note">Roda os hget da aba 01, cola as respostas e processa (BULKLOAD/CDD).</span><button class="btn primary" id="ossR1">Coletar e processar</button></div>
-        <div class="oss-act"><b>KGET → KGET Analyzer</b><span class="note">Gera o kget do nó (pode levar alguns minutos) e abre a análise completa na aba 06.</span><button class="btn primary" id="ossKget">Gerar kget e analisar</button></div>
+        <div class="oss-act"><b>KGET → KGET Analyzer</b><span class="note">Roda <code>dcgk ~/dcgk</code> no nó (pode levar alguns minutos), traz o pacote gerado e abre a análise completa na aba 06.</span><button class="btn primary" id="ossKget">Gerar kget e analisar</button></div>
         <div class="oss-act"><b>Alarmes e estado</b><span class="note">Alarmes ativos e estado de células, rádios e links.</span><div class="row" style="margin:0"><button class="btn" id="ossAlt">alt</button><button class="btn" id="ossSt1">st cell</button><button class="btn" id="ossSt2">st ri|rfport</button></div></div>
       </div>
       <h3 class="sub">Comandos AMOS</h3>
@@ -4482,13 +4482,14 @@ window.KGload = (name, text) => {
   const d = parseOne(name, text); KG.A = d; KG.aud = null; KG.h = null; KG.sec = "dash"; setMode("single");
   $("kgMsg").innerHTML = `<div class="msg ok">kget de ${escH(K.summary(d).node)} recebido do OSS (${d.mos.length} MOs).</div>`;
 };
+window.KGloadFiles = async (files) => { KG.sec = "dash"; if (KG.mode !== "single") setMode("single"); await gotA(files); };
 window.KGopen = render;
 render();
 })();
 
 // ================= EXECUTAR NO OSS (AMOS via helper local) =================
 (function(){
-const HELPER = "http://127.0.0.1:8766", MINV = 1.8, OSK = LSK + ":oss";
+const HELPER = "http://127.0.0.1:8766", MINV = 1.9, OSK = LSK + ":oss";
 const WRITE = /^\s*(set|sete|crn|cr|del|rdel|bl|deb|acc|run|ldeb|lbl|lset|lcr|ldel|restart|confb\+?|trun|upgrade|cvms|cvmk|cvrm|cvset)\b/i;
 const O = { online: false, logged: false, job: null, out: "", outName: "", logLen: 0, log: [], busy: false, files: [], after: null };
 const load = () => { try { return JSON.parse(localStorage.getItem(OSK) || "{}"); } catch (e) { return {}; } };
@@ -4519,7 +4520,7 @@ drawServers();
 // ---------- helper ----------
 function call(path, body){
   const o = body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
-  return fetch(HELPER + path, o).then((r) => path.startsWith("/job/out") ? r.text() : r.json(), () => { throw new Error("helper offline"); });
+  return fetch(HELPER + path, o).then((r) => path.startsWith("/job/out") ? r.text() : path.startsWith("/job/file") ? r.arrayBuffer() : r.json(), () => { throw new Error("helper offline"); });
 }
 function log(t, cls){ O.log.push(t); const el = $("ossLog"); const d = document.createElement("div"); if (cls) d.className = cls; d.textContent = t; el.appendChild(d); el.scrollTop = el.scrollHeight; }
 const keyOf = (s) => s && s.host ? `${s.host}:${+s.port || 5022}` : "";
@@ -4609,7 +4610,7 @@ function poll(){
       O.out = txt; O.busy = false; btns(); status();
       $("ossOut").hidden = false; $("ossOut").textContent = txt.length > 200000 ? "… (mostrando o final; baixe a saída completa)\n" + txt.slice(-200000) : txt;
       if (j.state === "error") { $("ossMsg").innerHTML = `<div class="msg bad">${escH(j.error)}</div>`; return; }
-      if (O.after) O.after(txt);
+      if (O.after) O.after(txt, j);
     });
   }).catch((e) => { log(String(e.message || e), "er"); O.busy = false; btns(); });
 }
@@ -4626,7 +4627,21 @@ function toIn(txt){
   $("raw").value = txt; showTab("in"); $("bProc").click();
   $("ossMsg").innerHTML = `<div class="msg ok">Respostas coladas e processadas na aba 01 · Entrada.</div>`;
 }
-$("ossKget").onclick = () => { const n = needNode(); if (!n) return; start({ node: n, cmds: ["kget"], timeout: 3600 }, "kget", toKg); };
+// KGET: roda "dcgk ~/dcgk" no nó, o helper copia o pacote gerado (.zip com o dcg_k.log.gz) e a aba 06 abre direto
+$("ossKget").onclick = () => { const n = needNode(); if (!n) return; start({ node: n, cmds: ["dcgk ~/dcgk"], fetchDir: ["~/dcgk", "/home/shared/{user}/dcgk"], timeout: 5400 }, "dcgk ~/dcgk", toKgDcgk); };
+async function toKgDcgk(txt, j){
+  const fs = (j && j.files) || [];
+  if (!fs.length) { $("ossMsg").innerHTML = `<div class="msg bad">O dcgk terminou, mas não achei o arquivo gerado em ~/dcgk nem em /home/shared/(seu usuário)/dcgk para trazer. Veja a saída abaixo; se o pacote foi salvo em outra pasta, carregue o .zip direto na aba 06.</div>`; return; }
+  try {
+    const files = [];
+    for (let i = 0; i < fs.length; i++) files.push(new File([await call(`/job/file?id=${O.job}&n=${i}`)], fs[i].name));
+    O.kfiles = files;
+    if (!window.KGloadFiles) throw new Error("KGET Analyzer indisponível");
+    showTab("kg"); await window.KGloadFiles(files);
+    $("ossMsg").innerHTML = `<div class="msg ok">dcgk de ${escH(node())} trazido do servidor (${fs.map((f) => escH(f.name) + " · " + (f.size / 1048576).toFixed(1) + " MB").join(", ")}) e aberto na aba 06. <button class="btn" id="ossKDl">Baixar o pacote</button></div>`;
+    $("ossKDl").onclick = async () => offer(await Promise.all(O.kfiles.map(async (f) => ({ name: f.name, data: new Uint8Array(await f.arrayBuffer()) }))), $("ossMsg"));
+  } catch (e) { $("ossMsg").innerHTML = `<div class="msg bad">${escH(e.message || e)}</div>`; }
+}
 function toKg(txt){
   const n = node() || "kget"; if (!window.KGload) { $("ossMsg").innerHTML = `<div class="msg bad">KGET Analyzer indisponível.</div>`; return; }
   try { window.KGload(`${n}_kget.log`, txt); showTab("kg"); } catch (e) { $("ossMsg").innerHTML = `<div class="msg bad">${escH(e.message || e)}</div>`; }

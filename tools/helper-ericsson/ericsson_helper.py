@@ -7,11 +7,11 @@
 #       python ericsson_helper.py --port 8766
 #
 # Usuario e senha chegam da pagina e ficam SO na memoria deste processo (nunca em disco).
-import argparse, json, os, re, sys, threading, time, uuid
+import argparse, json, os, re, shlex, sys, threading, time, uuid
 from urllib.parse import urlparse, parse_qs
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.8"
+VERSION = "1.9"
 LOCAL_PORT = 8766
 LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "helper.log")
 
@@ -116,6 +116,27 @@ class Session:
     def _after_shell(self):
         self.chan.send("export TERM=dumb PAGER=cat LESS= 2>/dev/null; stty -echoctl 2>/dev/null\n")
         self.read_until(self.shell_done, maxsec=10, idle=0.6)
+
+    def transport(self):
+        c = self.client or (SESS.get(getattr(self, "lane_of", "") or "") or Session()).client
+        t = c.get_transport() if c else None
+        if not t or not t.is_active(): raise RuntimeError("conexao SSH indisponivel para copiar o arquivo")
+        return t
+
+    def run_exec(self, cmd, maxsec=600, limit=400 * 1024 * 1024):
+        """Roda um comando num canal separado (sem pty) e devolve os bytes da saida (ex.: cat de um .zip)."""
+        ch = self.transport().open_session(); ch.settimeout(30); ch.exec_command(cmd)
+        buf, t0 = [], time.time(); n = 0
+        while time.time() - t0 < maxsec:
+            try: d = ch.recv(1 << 20)
+            except Exception: d = None
+            if d is None:
+                if ch.exit_status_ready() and not ch.recv_ready(): break
+                continue
+            if not d: break
+            buf.append(d); n += len(d)
+            if n > limit: ch.close(); raise RuntimeError("arquivo maior que %d MB" % (limit >> 20))
+        ch.close(); return b"".join(buf)
 
     def open_lane(self, main):
         """Abre mais um terminal no mesmo servidor (outro canal na mesma conexao SSH, como outra aba do WinFiol)."""
@@ -380,6 +401,51 @@ def paste_script(job, node, auth, out, p):
         if line.strip().lower() == "lt all" and r == "amos": S.lt_done = True
 
 
+def home_path(p):
+    """'~/dcgk/x' -> "$HOME"/'dcgk/x' (com aspas seguras)."""
+    p = p.strip()
+    if p.startswith("~/"): return '"$HOME"/' + shlex.quote(p[2:])
+    if p == "~": return '"$HOME"'
+    return shlex.quote(p)
+
+
+def fetch_dirs(p):
+    """Pastas onde o dcgk grava. {user} vira o usuario do servidor (ex.: /home/shared/{user}/dcgk)."""
+    v = p.get("fetchDir") or []
+    ds = [v] if isinstance(v, str) else list(v)
+    out = []
+    for d in ds:
+        d = (d or "").replace("{user}", S.user or "").strip()
+        if d and d not in out: out.append(d)
+    return out
+
+
+def fetch_files(job, node, dirs, mark, text):
+    """Depois do dcgk: acha os arquivos novos do no nas pastas e copia para a pagina."""
+    found = []
+    for m in re.finditer(r"((?:~|/)[\w.@/\-]+\.(?:zip|gz|log|txt|tgz|tar))", text or ""):
+        x = m.group(1)
+        if node.upper() in x.upper() and x not in found: found.append(x)
+    lst = []
+    for x in S.run_exec("find %s -maxdepth 2 -type f -newer %s 2>/dev/null" % (" ".join(home_path(d) for d in dirs), home_path(mark)), 60).decode("utf-8", "ignore").split():
+        if not any(os.path.basename(x) == os.path.basename(y) for y in lst): lst.append(x)
+    d = " ou ".join(dirs)
+    mine = [x for x in lst if node.upper() in os.path.basename(x).upper()] or lst
+    for x in mine:
+        if x not in found and not any(os.path.basename(x) == os.path.basename(f) for f in found): found.append(x)
+    zips = [x for x in found if x.lower().endswith(".zip")]
+    pick = zips[:3] if zips else found[:6]
+    if not pick:
+        job["log"].append("Nenhum arquivo novo do no em %s." % d); return
+    job["files"] = []
+    for x in pick:
+        job["log"].append("Copiando %s para a pagina..." % x)
+        data = S.run_exec("cat %s" % home_path(x), 900)
+        if not data: job["log"].append("(vazio ou sem permissao: %s)" % x); continue
+        job["files"].append({"name": os.path.basename(x), "path": x, "data": data})
+        job["log"].append("Arquivo recebido: %s (%.1f MB)." % (os.path.basename(x), len(data) / 1048576.0))
+
+
 def run_job(job):
     """Executa um job: abre o AMOS no no, roda os comandos um a um e fecha."""
     p = job["params"]; node = p.get("node", "").strip(); out = []
@@ -450,6 +516,12 @@ def run_job(job):
                 else:
                     S.cur_node = None
                     raise RuntimeError("o AMOS nao abriu em %s. Ultimas linhas: %s" % (node, txt.strip()[-400:]))
+            mark = None
+            dirs = fetch_dirs(p) if p.get("fetchDir") else []
+            if dirs:
+                mark = "~/.enmhelper/mark_" + job["id"]
+                try: S.run_exec("mkdir -p ~/.enmhelper && touch %s" % home_path(mark), 30)
+                except Exception as e: job["log"].append("Aviso: nao preparei a copia do arquivo (%s)." % e); mark = None
             if p.get("paste"):
                 paste_script(job, node, auth, out, p)
                 cmds = []
@@ -488,6 +560,11 @@ def run_job(job):
                     if r is None:
                         raise RuntimeError("tempo esgotado esperando o fim de '%s'" % c)
                     break
+            if mark and not job.get("stop"):
+                try: fetch_files(job, node, dirs, mark, "".join(out))
+                except Exception as e: job["log"].append("Nao consegui copiar o arquivo do servidor: %s" % e)
+                try: S.run_exec("rm -f %s" % home_path(mark), 20)
+                except Exception: pass
             if not keep:
                 close_amos(job, out)
             job["state"] = "done"; job["log"].append("Concluido." + (" AMOS continua aberto em %s." % node if keep and S.cur_node else ""))
@@ -638,14 +715,19 @@ class Handler(BaseHTTPRequestHandler):
             first = next((x for x in ss if x["logged"]), {})
             return self._json({"ok": True, "app": "ericsson-helper", "version": VERSION, "sessions": ss, "logged": any(x["logged"] for x in ss),
                                "host": first.get("host", ""), "user": first.get("user", ""), "prompt": first.get("prompt", ""), "curNode": first.get("curNode", ""), "depth": first.get("depth", 0), "busy": busy()})
-        if u.path in ("/job", "/job/out"):
+        if u.path in ("/job", "/job/out", "/job/file"):
             j = JOBS.get((q.get("id") or [""])[0])
             if not j: return self._json({"ok": False, "erro": "job nao encontrado"}, 404)
+            if u.path == "/job/file":
+                fs = j.get("files") or []; n = int((q.get("n") or ["0"])[0])
+                if n >= len(fs): return self._json({"ok": False, "erro": "arquivo nao encontrado"}, 404)
+                self._hdr(200, "application/octet-stream"); self.wfile.write(fs[n]["data"]); return
             if u.path == "/job/out":
                 self._hdr(200, "text/plain; charset=utf-8"); self.wfile.write(j.get("out", "").encode("utf-8")); return
             since = int((q.get("since") or ["0"])[0])
             return self._json({"ok": True, "state": j["state"], "step": j["step"], "total": j["total"], "bytes": j.get("bytes", 0), "log": j["log"][since:], "logLen": len(j["log"]),
-                               "question": j.get("question", ""), "error": j.get("error", ""), "result": j.get("result")})
+                               "question": j.get("question", ""), "error": j.get("error", ""), "result": j.get("result"),
+                               "files": [{"name": f["name"], "path": f["path"], "size": len(f["data"])} for f in (j.get("files") or [])]})
         self._json({"ok": False, "erro": "rota desconhecida"}, 404)
 
     def do_POST(self):
