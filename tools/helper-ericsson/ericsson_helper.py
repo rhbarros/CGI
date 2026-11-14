@@ -11,7 +11,7 @@ import argparse, json, os, re, shlex, sys, threading, time, uuid
 from urllib.parse import urlparse, parse_qs
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "2.0"
+VERSION = "2.1"
 LOCAL_PORT = 8766
 LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "helper.log")
 
@@ -70,7 +70,9 @@ class Session:
                     s = clean(d.decode("utf-8", errors="ignore"))
                     if keep: parts.append(s)
                     total += len(s); tail = (tail + s)[-600:]; last = time.time(); got = True
-                    if job is not None: job["bytes"] = job.get("bytes", 0) + len(s)
+                    if job is not None:
+                        job["bytes"] = job.get("bytes", 0) + len(s)
+                        if "_live" in job: job["_live"].append(s)  # tela ao vivo na pagina
             except ConnectionError:
                 raise
             except Exception:
@@ -449,6 +451,7 @@ def fetch_files(job, node, dirs, mark, text):
 def run_job(job):
     """Executa um job: abre o AMOS no no, roda os comandos um a um e fecha."""
     p = job["params"]; node = p.get("node", "").strip(); out = []
+    job["_live"] = []  # tudo o que chega do servidor, para a pagina mostrar ao vivo
     try:
         use(job["server"])
         with S.lock:
@@ -585,7 +588,7 @@ def run_job(job):
             if sec: txt = txt.replace(sec, "******")
         for sec in job.get("_secrets", []):
             if sec: job["log"] = [l.replace(sec, "******") for l in job["log"]]
-        job["out"] = txt; job["end"] = time.time(); job.pop("_secrets", None)
+        job["out"] = txt; job["end"] = time.time(); job["_masked"] = job.pop("_secrets", None) or []
 
 
 def node_type(txt, asked_user=False):
@@ -715,6 +718,14 @@ class Handler(BaseHTTPRequestHandler):
             first = next((x for x in ss if x["logged"]), {})
             return self._json({"ok": True, "app": "ericsson-helper", "version": VERSION, "sessions": ss, "logged": any(x["logged"] for x in ss),
                                "host": first.get("host", ""), "user": first.get("user", ""), "prompt": first.get("prompt", ""), "curNode": first.get("curNode", ""), "depth": first.get("depth", 0), "busy": busy()})
+        if u.path == "/job/live":
+            j = JOBS.get((q.get("id") or [""])[0])
+            if not j: return self._json({"ok": False, "erro": "job nao encontrado"}, 404)
+            frm = int((q.get("from") or ["0"])[0])
+            txt = "".join(j.get("_live") or [])
+            for sec in list(j.get("_secrets") or []) + list(j["params"].get("nodePwds") or []) + list(j.get("_masked") or []):
+                if sec: txt = txt.replace(sec, "******")
+            return self._json({"ok": True, "len": len(txt), "text": txt[frm:frm + 400000] if frm <= len(txt) else txt[-200000:], "from": frm if frm <= len(txt) else max(0, len(txt) - 200000)})
         if u.path in ("/job", "/job/out", "/job/file"):
             j = JOBS.get((q.get("id") or [""])[0])
             if not j: return self._json({"ok": False, "erro": "job nao encontrado"}, 404)

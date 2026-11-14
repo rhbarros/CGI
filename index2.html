@@ -735,9 +735,6 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
         <div class="oss-act"><b>KGET → KGET Analyzer</b><span class="note">Roda <code>dcgk ~/dcgk</code> no nó (pode levar alguns minutos), traz o pacote gerado e abre a análise completa na aba 06.</span><button class="btn primary" id="ossKget">Gerar kget e analisar</button></div>
         <div class="oss-act"><b>Alarmes e estado</b><span class="note">Alarmes ativos e estado de células, rádios e links.</span><div class="row" style="margin:0"><button class="btn" id="ossAlt">alt</button><button class="btn" id="ossSt1">st cell</button><button class="btn" id="ossSt2">st ri|rfport</button></div></div>
       </div>
-      <h3 class="sub">Comandos AMOS</h3>
-      <div class="row" style="margin:0"><input type="text" id="ossCmd" list="ossCmdHist" autocomplete="off" placeholder="ex.: get EUtranCellFDD qRxLevMin  (vários: separe com ;) · ↑ ↓ = histórico · Enter executa" spellcheck="false"><datalist id="ossCmdHist"></datalist><button class="btn" id="ossRun">Executar</button><button class="btn" id="ossHistB" aria-expanded="false">Histórico</button></div>
-      <div id="ossHistBox" hidden style="max-height:220px;overflow:auto;border:1px solid var(--bg4);border-radius:6px;padding:6px"></div>
       <h3 class="sub">Rodar script (.mos)</h3>
       <div class="row" style="margin:0"><input type="file" id="ossFile" accept=".mos,.txt" multiple><span class="note" id="ossFileN"></span></div>
       <textarea id="ossScript" spellcheck="false" placeholder="Cole o script .mos aqui ou escolha os arquivos acima (ex.: os scripts gerados nas abas 03 e 05). Vários arquivos rodam na ordem do nome."></textarea>
@@ -768,6 +765,9 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
       <div class="oss-log" id="ossLog"></div>
       <div class="row" style="margin:0"><button class="btn" id="ossToIn" disabled>Enviar saída para a Entrada</button><button class="btn" id="ossToKg" disabled>Enviar saída para o KGET Analyzer</button><button class="btn" id="ossDl" disabled>Baixar saída (.txt)</button><button class="btn" id="ossLogDl">Exportar log (.txt)</button><button class="btn" id="ossConDl" disabled>Baixar tela inteira (.txt)</button><button class="btn" id="ossConClr" disabled>Limpar tela</button></div>
       <pre class="oss-out" id="ossOut" hidden></pre>
+      <h3 class="sub" id="ossCmdH">Comandos AMOS <span class="note" id="ossCmdTab" style="margin:0;font-weight:400"></span></h3>
+      <div class="row" style="margin:0"><input type="text" id="ossCmd" list="ossCmdHist" autocomplete="off" placeholder="ex.: get EUtranCellFDD qRxLevMin  (vários: separe com ;) · ↑ ↓ = histórico · Enter executa" spellcheck="false"><datalist id="ossCmdHist"></datalist><button class="btn" id="ossRun">Executar</button><button class="btn" id="ossHistB" aria-expanded="false">Histórico</button></div>
+      <div id="ossHistBox" hidden style="max-height:220px;overflow:auto;border:1px solid var(--bg4);border-radius:6px;padding:6px"></div>
       <div id="ossMsg"></div>
     </section>
   </div>
@@ -4497,7 +4497,7 @@ render();
 
 // ================= EXECUTAR NO OSS (AMOS via helper local) =================
 (function(){
-const HELPER = "http://127.0.0.1:8766", MINV = 2.0, OSK = LSK + ":oss";
+const HELPER = "http://127.0.0.1:8766", MINV = 2.1, OSK = LSK + ":oss";
 const WRITE = /^\s*(set|sete|crn|cr|del|rdel|bl|deb|acc|run|ldeb|lbl|lset|lcr|ldel|restart|confb\+?|trun|upgrade|cvms|cvmk|cvrm|cvset)\b/i;
 const O = { online: false, logged: false, job: null, out: "", outName: "", logLen: 0, log: [], busy: false, files: [], after: null };
 const load = () => { try { return JSON.parse(localStorage.getItem(OSK) || "{}"); } catch (e) { return {}; } };
@@ -4609,6 +4609,7 @@ function tabsDraw(){
   $("ossTabs").querySelectorAll("[data-tx]").forEach((b) => b.onclick = () => tabClose(+b.dataset.tx));
   $("ossTabAdd").onclick = () => { const tb = newTab({ srv: T().srv }); TABS.push(tb); tabGo(TABS.length - 1); $("ossNode").focus(); };
   $("ossTabName").textContent = `· ${tabName(T())} (${(servers[T().srv] || {}).name || ""})`;
+  $("ossCmdTab").textContent = `→ ${T().node || "informe o nó no bloco 3"} · ${(servers[T().srv] || {}).name || ""}`;
 }
 function tabShow(){
   const tb = T();
@@ -4638,8 +4639,8 @@ act = Math.min(TABS.length - 1, load().tabAct || 0);
 function start(body, label, after){
   const tb = T(); if (tb.busy) return;
   const s = servers[tb.srv];
-  tb.busy = true; tb.out = ""; tb.outName = label; tb.after = after || null; tb.logLen = 0; tb.tlog = []; tb.lbl = { label, node: body.node || "", srv: s ? s.name : "", cmds: body.cmds || [] }; tb.kg = null; tb.ask = null;
-  askDraw(tb); setMsg(tb, ""); btns(); tabsDraw();
+  tb.busy = true; tb.out = ""; tb.outName = label; tb.after = after || null; tb.logLen = 0; tb.tlog = []; tb.lbl = { label, node: body.node || "", srv: s ? s.name : "", cmds: body.cmds || [] }; tb.kg = null; tb.ask = null; tb.live = ""; tb.liveLen = 0; tb.liveHead = "";
+  askDraw(tb); setMsg(tb, ""); btns(); tabsDraw(); if (isAct(tb)) conShow();
   log(`[${tabName(tb)}] ▶ ${label} em ${body.node || ""} (${s ? s.name : "?"})`, "cmd");
   if (body.node) Object.assign(body, nodeCreds(), nodeOpts());
   body.server = keyOf(s); body.lane = laneOf(tb);
@@ -4672,7 +4673,7 @@ function kgProg(tb, j){
   if (isAct(tb)) $("ossKget").textContent = j.state === "running" || j.state === "ask" ? `Gerando kget… ${pct}%` : "Gerar kget e analisar";
 }
 function kgNext(tb, j){
-  if (j.state === "running" || j.state === "ask") return pollAsk(tb, j);
+  if (j.state === "running" || j.state === "ask") { liveGet(tb); return pollAsk(tb, j); }
   const K = tb.kg; tb.kg = null;
   if (j.state === "done" && K && K.tRun) kgSaveT((Date.now() - K.tRun) / 1000);
   const after = tb.after;
@@ -4686,7 +4687,7 @@ function poll(tb){
     if (tb.lbl && tb.lbl.label === "dcgk ~/dcgk") { kgProg(tb, j); return kgNext(tb, j); }
     const pct = j.total ? Math.min(100, Math.round(j.step / j.total * 100)) : 0;
     setProg(tb, `${j.state === "ask" ? "Aguardando sua resposta" : j.state === "running" ? "Executando" : j.state === "done" ? "Concluído" : "Erro"} · ${pct}% · passo ${j.step}/${j.total} · ${(j.bytes / 1024).toFixed(0)} KB recebidos`, pct);
-    if (j.state === "running" || j.state === "ask") return pollAsk(tb, j);
+    if (j.state === "running" || j.state === "ask") { liveGet(tb); return pollAsk(tb, j); }
     pollEnd(tb, j);
   }).catch((e) => { log(String(e.message || e), "er"); tb.busy = false; tb.kg = null; if (isAct(tb)) $("ossKget").textContent = "Gerar kget e analisar"; btns(); tabsDraw(); });
 }
@@ -4712,16 +4713,33 @@ function pollEnd(tb, j){
     if (tb.after) tb.after(txt, j, tb);
   });
 }
+// saída parcial enquanto o comando roda (helper 2.1+)
+function liveGet(tb){
+  if (tb.liveBusy) return; tb.liveBusy = true; const id = tb.job;
+  call(`/job/live?id=${id}&from=${tb.liveLen || 0}`).then((r) => {
+    if (!r || !r.ok || tb.job !== id || !tb.busy) return;
+    if (r.from !== (tb.liveLen || 0)) tb.live = "";
+    tb.live = (tb.live || "") + r.text; tb.liveLen = r.from + r.text.length;
+    if (tb.live.length > 2e6) tb.live = tb.live.slice(-1.5e6);
+    if (isAct(tb)) conShow();
+  }).catch(() => {}).finally(() => { tb.liveBusy = false; });
+}
 // ---------- tela do moshell: junta a saída de todos os comandos da aba (como no WinFiol) ----------
+function conHead(tb, state){ const l = tb.lbl || {}, t = new Date().toLocaleTimeString("pt-BR");
+  const what = l.label === "comandos" && l.cmds.length ? l.cmds.filter((c) => c !== "lt all").join(" ; ") || "lt all" : l.label;
+  return `===== ${t} · ${l.srv || ""} · ${l.node || ""} · ${what}${state || ""} =====\n`; }
 function conShow(){
-  const el = $("ossOut"), c = T().con; el.hidden = !c;
-  el.textContent = c.length > 400000 ? "… (início omitido: use “Baixar tela inteira”)\n" + c.slice(-400000) : c;
-  el.scrollTop = el.scrollHeight; $("ossConDl").disabled = $("ossConClr").disabled = !c;
+  const tb = T(), el = $("ossOut");
+  const stick = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+  let c = tb.con;
+  if (tb.busy) c += (c ? "\n" : "") + (tb.liveHead || (tb.liveHead = conHead(tb, " · executando…"))) + (tb.live || "");
+  el.hidden = false; $("ossConDl").disabled = $("ossConClr").disabled = !tb.con;
+  el.textContent = !c ? `Tela do moshell (${tabName(tb)}) — digite um comando AMOS abaixo e tecle Enter.` : c.length > 400000 ? "… (início omitido: use “Baixar tela inteira”)\n" + c.slice(-400000) : c;
+  if (stick || tb.busy) el.scrollTop = el.scrollHeight;
 }
 function conAdd(tb, txt, j){
-  const l = tb.lbl || {}, t = new Date().toLocaleTimeString("pt-BR");
-  const what = l.label === "comandos" && l.cmds.length ? l.cmds.filter((c) => c !== "lt all").join(" ; ") || "lt all" : l.label;
-  tb.con += `${tb.con ? "\n" : ""}===== ${t} · ${l.srv || ""} · ${l.node || ""} · ${what}${j && j.state === "error" ? " · ERRO" : ""} =====\n` + (txt || "").replace(/\s+$/, "") + "\n";
+  tb.live = ""; tb.liveLen = 0; tb.liveHead = "";
+  tb.con += `${tb.con ? "\n" : ""}` + conHead(tb, j && j.state === "error" ? " · ERRO" : "") + (txt || "").replace(/\s+$/, "") + "\n";
   if (tb.con.length > 8e6) tb.con = tb.con.slice(-6e6);
   if (isAct(tb)) conShow();
 }
@@ -4783,7 +4801,7 @@ $("ossCmd").addEventListener("keydown", (e) => {
   $("ossCmd").value = hPos < 0 ? "" : HIST[hPos];
 });
 histDraw(); tabShow();
-$("ossRun").onclick = () => { const n = needNode(); if (!n) return; const cmds = $("ossCmd").value.split(/;|\n/).map((c) => c.trim()).filter(Boolean); if (!cmds.length) return; histAdd($("ossCmd").value);
+$("ossRun").onclick = () => { const n = needNode(); if (!n) return; const cmds = $("ossCmd").value.split(/;|\n/).map((c) => c.trim()).filter(Boolean); if (!cmds.length) return; histAdd($("ossCmd").value); $("ossCmd").value = ""; $("ossCmd").focus();
   const w = cmds.filter((c) => WRITE.test(c)); if (w.length) { confirmBox(w, () => start({ node: n, cmds: lt(cmds), confirmWrites: true }, "comandos")); return; }
   start({ node: n, cmds: lt(cmds) }, "comandos"); };
 $("ossToIn").onclick = () => toIn(T().out);
