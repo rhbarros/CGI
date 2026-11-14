@@ -683,6 +683,8 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
     <section class="panel">
       <div class="ph"><span class="step">1</span><h2><span class="oss-dot" id="ossDot"></span> Executar no OSS <span class="note" id="ossSt" style="font-weight:400">verificando helper…</span></h2>
         <p>Roda os comandos AMOS direto no nó pelo servidor do OSS (o mesmo que você usa no WinFiol) e joga as respostas nas outras abas. O navegador não abre SSH, então um <b>helper</b> pequeno no seu PC faz a ponte: <code>esta página → helper (127.0.0.1:8766) → servidor OSS (SSH 5022) → amos &lt;nó&gt;</code>.</p></div>
+      <div id="ossUpd" class="msg warn" hidden style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><span id="ossUpdT">O helper deste PC é de uma versão antiga.</span><a class="btn primary" href="tools/Instalar_Helper_Ericsson.bat" download="Instalar_Helper_Ericsson.bat">Atualizar helper</a><span class="note" style="margin:0">Abra o arquivo baixado e aguarde o “PRONTO”; ele substitui o helper antigo.</span></div>
+      <p class="note" style="margin:0">Instalador: <a href="tools/Instalar_Helper_Ericsson.bat" download="Instalar_Helper_Ericsson.bat" style="color:var(--c1)">Instalar_Helper_Ericsson.bat</a> (para instalar ou atualizar a qualquer momento) · versão atual: <b id="ossCurV"></b></p>
       <div id="ossHelp" hidden>
         <div class="row"><a class="btn primary" id="ossInstall" href="tools/Instalar_Helper_Ericsson.bat" download="Instalar_Helper_Ericsson.bat">Instalar neste PC (1ª vez)</a><a class="btn" id="ossStart" href="enmhelper://start">Iniciar helper</a><button class="btn" id="ossRetry">Verificar de novo</button></div>
         <p class="note">Helper offline. <b>Primeira vez neste computador?</b> Clique em <b>Instalar neste PC</b>, abra o arquivo baixado e aguarde o “PRONTO” (se o Windows avisar sobre o arquivo, escolha <i>Mais informações → Executar assim mesmo</i>). Ele instala o Python se precisar e passa a iniciar sozinho com o Windows, sem janela. Já instalou? Clique em <b>Iniciar helper</b>. Se o Chrome/Edge perguntar se esta página pode acessar a <b>rede local</b>, clique em <b>Permitir</b>. As outras abas funcionam normalmente sem o helper.</p>
@@ -4475,7 +4477,7 @@ function drawServers(){
 }
 function drawSel(){ const cur = load().srv ?? 0; $("ossSrv").innerHTML = servers.map((s, i) => `<option value="${i}" ${i === cur ? "selected" : ""}>${escH(s.name)}${s.host ? " · " + escH(s.host) + ":" + s.port : " (sem IP)"}</option>`).join(""); }
 $("ossSrv").onchange = () => save({ srv: +$("ossSrv").value });
-$("ossUser").value = cfg.user || "";
+$("ossUser").value = cfg.user || ""; $("ossCurV").textContent = MINV.toFixed(1);
 // credenciais do no (so neste navegador, se "lembrar" estiver marcado)
 $("ossNUser").value = cfg.nodeUser || ""; $("ossNPwds").value = (cfg.nodePwds || []).join("\n"); $("ossNRem").checked = cfg.nodeRemember !== false;
 const nodeCreds = () => ({ nodeUser: $("ossNUser").value.trim(), nodePwds: $("ossNPwds").value.split("\n").map((x) => x.trim()).filter(Boolean) });
@@ -4494,10 +4496,11 @@ function log(t, cls){ O.log.push(t); const el = $("ossLog"); const d = document.
 function status(){
   call("/").then((s) => {
     O.online = true; O.logged = s.logged; $("ossDot").className = "oss-dot on"; $("ossHelp").hidden = true;
-    $("ossSt").textContent = `helper v${s.version} OK` + (s.logged ? ` · conectado em ${s.host} como ${s.user}` : " · não conectado") + (+s.version < MINV ? " · versão antiga: rode o instalador de novo" : "");
+    const old = +s.version < MINV; $("ossUpd").hidden = !old; $("ossUpdT").textContent = `O helper deste PC é a versão ${s.version}; a atual é ${MINV.toFixed(1)}.`;
+    $("ossSt").textContent = `helper v${s.version} OK` + (s.logged ? ` · conectado em ${s.host} como ${s.user}` : " · não conectado") + (old ? " · versão antiga" : "");
     $("ossWho").textContent = s.logged ? `prompt: ${s.prompt}` : "";
     btns();
-  }).catch(() => { O.online = false; O.logged = false; $("ossDot").className = "oss-dot off"; $("ossSt").textContent = "helper offline"; $("ossHelp").hidden = false; btns(); });
+  }).catch(() => { $("ossUpd").hidden = true; O.online = false; O.logged = false; $("ossDot").className = "oss-dot off"; $("ossSt").textContent = "helper offline"; $("ossHelp").hidden = false; btns(); });
 }
 function btns(){
   const can = O.online && O.logged && !O.busy;
