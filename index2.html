@@ -4906,7 +4906,8 @@ function g2Parts(){
   t.split("\n").forEach((l) => { const m = l.match(/^\s*\/\/\s*=+\s*(DESCOBRIR|TG|CELULAS)\s*=+/i); if (m) { cur = m[1].toUpperCase(); return; } l = l.trim(); if (l && !l.startsWith("//")) P[cur].push(l); });
   return P;
 }
-$("bkDef").innerHTML = bkNames.map((n) => `<option ${n === (load().bkDef || "BACKUP_TLE") ? "selected" : ""}>${n}</option>`).join("");
+$("bkDef").innerHTML = bkNames.concat(BKP.BACKUP_2G ? ["BACKUP_2G"] : []).map((n) => `<option value="${n}" ${n === (load().bkDef || "BACKUP_TLE") ? "selected" : ""}>${n === "BACKUP_2G" ? "BACKUP_2G (2G · eaw no BSC)" : n}</option>`).join("");
+const bkDefSc = () => $("bkDef").value === "BACKUP_2G" ? "BACKUP_TLE" : $("bkDef").value;  // 2G não serve de padrão para nó AMOS
 $("bkDef").onchange = () => save({ bkDef: $("bkDef").value });
 $("bkView").onclick = () => { const on = $("bkPrev").hidden; $("bkPrev").hidden = !on; $("bkPrev").textContent = BKP[$("bkDef").value] || ""; $("bkView").textContent = on ? "Ocultar script" : "Ver script"; };
 $("bkDef").addEventListener("change", () => { if (!$("bkPrev").hidden) $("bkPrev").textContent = BKP[$("bkDef").value] || ""; });
@@ -4948,7 +4949,7 @@ function cgiParse(text, when){
   const eri = new Set(rows.map((r) => r[3])); const other = Object.entries(oth).filter(([st]) => !eri.has(st)).map(([st, v]) => st + ":" + [...v].join("/")).join("\n");
   const g2s = Object.values(g2).map((g) => [g.st, g.site, g.bsc, g.reg, [...g.cells].sort().join(",")].join("|")).join("\n");
   try { localStorage.setItem(CGK, JSON.stringify({ when, t: Date.now(), rows: rows.map((r) => r.join("|")).join("\n"), other, bsc: [...bsc].join(","), g2: g2s })); } catch (e) {}
-  CGI.bsc = bsc; g2Index(g2s); cgiIndex(rows, when, other);
+  CGI.bsc = bsc; g2Index(g2s); CGI.noG2 = false; cgiIndex(rows, when, other);
 }
 async function cgiFromBytes(name, u8){
   let text, when = name;
@@ -4961,8 +4962,8 @@ async function cgiFromBytes(name, u8){
   cgiParse(text, when);
 }
 function cgiLoad(force){
-  if (CGI.map && !force) return Promise.resolve(true);
-  if (force !== true) { try { const c = JSON.parse(localStorage.getItem(CGK) || "null"); if (c && c.rows && Date.now() - c.t < 7 * 864e5 && (c.g2 != null || force === "cache")) { CGI.bsc = new Set((c.bsc || "").split(",").filter(Boolean)); g2Index(c.g2 || ""); cgiIndex(c.rows.split("\n").map((l) => l.split("|")), c.when, c.other); return Promise.resolve(true); } } catch (e) {} }
+  if (CGI.map && !force && !(CGI.noG2 && force !== "cache")) return Promise.resolve(true);  // base antiga sem o 2G: baixa de novo
+  if (force !== true) { try { const c = JSON.parse(localStorage.getItem(CGK) || "null"); if (c && c.rows && Date.now() - c.t < 7 * 864e5 && (c.g2 != null || force === "cache")) { CGI.bsc = new Set((c.bsc || "").split(",").filter(Boolean)); g2Index(c.g2 || ""); CGI.noG2 = c.g2 == null; cgiIndex(c.rows.split("\n").map((l) => l.split("|")), c.when, c.other); return Promise.resolve(true); } } catch (e) {} }
   if (force === "cache") return Promise.resolve(false);
   if (CGI.loading) return CGI.loading;
   cgiShow("Base CGI: baixando CGI.zip do GitHub (≈7 MB)...");
@@ -5053,7 +5054,7 @@ function bkInfo(){
   $("bkZip").disabled = BK.running || !BK.rows.some((r) => r.out); $("bkDetect").disabled = BK.running || !BK.rows.length || !O.online; $("bkAddList").disabled = BK.running;
 }
 $("bkOk").onchange = bkInfo;
-$("bkAdd").onclick = () => { const r = { node: (node() || ""), srv: +$("ossSrv").value || 0, script: $("bkDef").value, reg: "", tec: "", typ: "", auto: true, note: "", st: "", out: "", err: "" };
+$("bkAdd").onclick = () => { const r = { node: (node() || ""), srv: +$("ossSrv").value || 0, script: bkDefSc(), reg: "", tec: "", typ: "", auto: true, note: "", st: "", out: "", err: "" };
   if (r.node) bkApplyCgi(r); BK.rows.push(r); bkSave(); bkDraw(); };
 $("bkAddList").onclick = async () => {
   const lines = $("bkPaste").value.split("\n").map((l) => l.trim()).filter(Boolean); if (!lines.length) return;
@@ -5070,7 +5071,7 @@ $("bkAddList").onclick = async () => {
     else if (g2l.length && CGI.g2site && CGI.g2site[N]) return;
     list.forEach((nn) => {
       const r = { node: nn, srv: -1, script: sc || "", reg: "", tec: "", typ: "", auto: !sc, note: "", st: "", out: "", err: "" };
-      bkApplyCgi(r); if (!r.script) r.script = r.auto ? "" : $("bkDef").value;
+      bkApplyCgi(r); if (!r.script) r.script = r.auto ? "" : bkDefSc();
       if (stn) r.sta = n.toUpperCase();
       if (stn) r.note = `STATION ${n.toUpperCase()}` + (r.note && !/^outros nós/.test(r.note) ? " · " + r.note : "");
       if (sv !== undefined) r.srv = sv; else if (w[r.node] && servers.some((s) => s.name === w[r.node] && s.host)) { r.srv = servers.findIndex((s) => s.name === w[r.node]); r.note = (r.note ? r.note + " · " : "") + "servidor já conhecido"; }
