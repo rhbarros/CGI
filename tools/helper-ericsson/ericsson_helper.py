@@ -11,7 +11,7 @@ import argparse, json, os, re, shlex, sys, threading, time, uuid
 from urllib.parse import urlparse, parse_qs
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "2.1"
+VERSION = "2.2"
 LOCAL_PORT = 8766
 LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "helper.log")
 
@@ -50,7 +50,7 @@ class Session:
     def __init__(self):
         self.client = None; self.chan = None; self.prompt = ""; self.host = ""; self.user = ""
         self.lock = threading.Lock(); self.banner = ""
-        self.cur_node = None; self.lt_done = False; self.last_amos = ""; self.depth = 0
+        self.cur_node = None; self.lt_done = False; self.last_amos = ""; self.depth = 0; self.mml_node = None
         self.key = ""; self.name = ""; self.port = 0; self._cred = None
 
     # ---------- leitura ----------
@@ -165,7 +165,7 @@ class Session:
             if self.client: self.client.close()
         except Exception:
             pass
-        self.client = self.chan = None; self.prompt = ""; self.cur_node = None; self.lt_done = False; self.depth = 0
+        self.client = self.chan = None; self.prompt = ""; self.cur_node = None; self.lt_done = False; self.depth = 0; self.mml_node = None
 
     def forget(self):
         self.logout(); self._cred = None
@@ -185,7 +185,7 @@ class Session:
 
     def info(self):
         return {"key": self.key, "name": self.name, "host": self.host, "port": self.port, "user": self.user, "logged": self.logged, "prompt": self.prompt,
-                "curNode": (self.cur_node or "") if self.logged else "", "depth": self.depth, "busy": any(j["state"] in ("running", "ask") and j.get("server") == self.key for j in JOBS.values())}
+                "curNode": (self.cur_node or self.mml_node or "") if self.logged else "", "depth": self.depth, "busy": any(j["state"] in ("running", "ask") and j.get("server") == self.key for j in JOBS.values())}
 
     @property
     def logged(self):
@@ -591,6 +591,89 @@ def run_job(job):
         job["out"] = txt; job["end"] = time.time(); job["_masked"] = job.pop("_secrets", None) or []
 
 
+# ---------------- 2G Ericsson: MML no BSC via eaw ----------------
+MML_RE = re.compile(r"(^|\s)<\s*$")
+
+
+def mml_prompt():
+    def done(tail):
+        last = tail.rstrip("\n").split("\n")[-1]
+        if S.prompt and last.strip() == S.prompt.strip(): return "shell"
+        if MML_RE.search(last): return "mml"
+        if PWD_RE.search(last): return "pwd"
+        if USER_RE.search(last): return "user"
+        if ASK_RE.search(tail[-200:]): return "ask"
+        if SHELL_RE.match(last): return "shell"
+        return None
+    return done
+
+
+def close_mml(job=None, out=None):
+    if not getattr(S, "mml_node", None): return
+    S.chan.send("exit;\n"); t, r = S.read_until(mml_prompt(), maxsec=20, idle=0.6, job=job)
+    if out is not None: out.append(t)
+    if r != "shell":
+        S.chan.send("\x04"); t, r = S.read_until(S.shell_done, maxsec=15, idle=0.6, job=job)
+        if out is not None: out.append(t)
+    S.mml_node = None
+
+
+def run_mml(job):
+    """2G: abre o BSC com eaw (prompt '<'), roda os comandos MML um a um."""
+    p = job["params"]; node = p.get("node", "").strip(); out = []
+    job["_live"] = []
+    try:
+        use(job["server"])
+        with S.lock:
+            S.ensure(job)
+            if getattr(S, "cur_node", None): close_amos(job, out)
+            cmds = [c.strip() for c in p.get("cmds", []) if c.strip() and not c.strip().startswith("//")]
+            cmds = [c if c.endswith(";") or c.lower() in ("exit", "quit") else c + ";" for c in cmds]
+            job["total"] = len(cmds) + 1
+            cur = getattr(S, "mml_node", None)
+            if cur and cur.upper() == node.upper():
+                job["log"].append("eaw ja aberto em %s." % node)
+                S.chan.send("\n"); txt, r = S.read_until(mml_prompt(), maxsec=15, idle=0.5, job=job); out.append(txt)
+                if r != "mml": S.mml_node = None; cur = None
+            elif cur:
+                job["log"].append("Saindo de %s (exit;) para abrir %s." % (cur, node)); close_mml(job, out); cur = None
+            if not cur or not S.mml_node:
+                cmd = (p.get("openCmd") or "eaw {node}").replace("{node}", node).replace("{no}", node)
+                job["log"].append("Abrindo %s: %s" % (node, cmd))
+                S.chan.send(cmd + "\n")
+                txt, r = S.read_until(mml_prompt(), maxsec=p.get("openTimeout", 120), idle=1.0, job=job); out.append(txt)
+                if r != "mml":
+                    if r in ("pwd", "user"): S.chan.send("\x03")
+                    raise RuntimeError("o eaw nao abriu %s. Ultimas linhas: %s" % (node, txt.strip()[-400:]))
+                S.mml_node = node
+            job["step"] = 1
+            for c in cmds:
+                if job.get("stop"): job["log"].append("Parado pelo usuario."); break
+                job["step"] += 1; job["log"].append("%s< %s" % (node, c))
+                S.chan.send(c + "\n")
+                while True:
+                    txt, r = S.read_until(mml_prompt(), maxsec=p.get("timeout", 1800), idle=0.8, job=job); out.append(txt)
+                    if r == "ask":
+                        job["state"] = "ask"; job["question"] = txt.strip()[-300:]; job["answer"] = None; t0 = time.time()
+                        while job["answer"] is None and time.time() - t0 < 900 and not job.get("stop"): time.sleep(0.2)
+                        ans = job["answer"] if job["answer"] is not None else "n"
+                        job["log"].append("Resposta: " + ans); job["state"] = "running"; job["question"] = ""
+                        S.chan.send(ans + "\n"); continue
+                    if r == "shell":
+                        S.mml_node = None; raise RuntimeError("o eaw fechou durante '%s'" % c)
+                    if r is None: raise RuntimeError("tempo esgotado esperando o fim de '%s'" % c)
+                    break
+            if not p.get("keepOpen", True): close_mml(job, out)
+            job["state"] = "done"; job["log"].append("Concluido." + (" eaw continua aberto em %s." % node if S.mml_node else ""))
+    except Exception as e:
+        job["state"] = "error"; job["error"] = str(e); job["log"].append("ERRO: " + str(e)); logf("mml erro: %s" % e)
+        try:
+            if S.logged and getattr(S, "mml_node", None): close_mml(None, out)
+        except Exception: pass
+    finally:
+        job["out"] = "".join(out); job["end"] = time.time()
+
+
 def node_type(txt, asked_user=False):
     """Tipo do no pelo modelo que o AMOS mostra: BB (RadioNode/Baseband), DUS (ERBS/CPP LTE) ou 3G (RBS/CPP WCDMA)."""
     if re.search(r"MSRBS|RadioNode|Baseband", txt or "", re.I) or asked_user: return "BB"
@@ -768,7 +851,9 @@ class Handler(BaseHTTPRequestHandler):
                     key = lk
                 if busy(key): return self._json({"ok": False, "erro": "ha uma execucao em andamento neste terminal"})
                 use(key)
-                with S.lock: close_amos()
+                with S.lock:
+                    close_amos()
+                    if getattr(S, "mml_node", None): close_mml()
                 return self._json({"ok": True})
             if p == "/logout":
                 keys = [d["key"]] if d.get("key") else list(SESS.keys())
@@ -796,7 +881,7 @@ class Handler(BaseHTTPRequestHandler):
                 JOBS[jid] = job
                 for k in [k for k, v in JOBS.items() if v is not job and v["state"] in ("done", "error") and time.time() - v.get("end", 0) > 1800]:
                     JOBS.pop(k, None)
-                threading.Thread(target=run_job, args=(job,), daemon=True).start()
+                threading.Thread(target=run_mml if d.get("mode") == "mml" else run_job, args=(job,), daemon=True).start()
                 return self._json({"ok": True, "id": jid})
             if p == "/probe":
                 key = pick(d)

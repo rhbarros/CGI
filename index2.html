@@ -742,6 +742,7 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
         <div class="oss-grid" style="margin-top:8px">
           <label class="note" style="margin:0">Abrir o primeiro nó <input type="text" id="ossOpenT" spellcheck="false"></label>
           <label class="note" style="margin:0">Trocar para outro nó (com um já aberto) <input type="text" id="ossSwT" spellcheck="false"></label>
+          <label class="note" style="margin:0">Abrir BSC no servidor 2G (MML, prompt &lt;) <input type="text" id="ossMmlT" spellcheck="false"></label>
           <label class="note" style="margin:0;align-self:end"><input type="checkbox" id="ossKeep"> manter o nó aberto entre as ações</label>
         </div>
         <p class="note" style="margin:6px 0 0"><code>{no}</code> é trocado pelo nome do nó. Com o nó aberto, as ações seguintes no mesmo site reaproveitam a sessão e o <code>lt all</code> já carregado; para outro site o helper digita o comando de troca (padrão <code>!amos {no}</code>, que abre o novo nó dentro da sessão atual) e, se não funcionar, fecha e abre de novo. Ao fechar, ele sai de todas as sessões empilhadas; depois de 5 trocas seguidas, fecha tudo e reabre limpo.</p>
@@ -4514,7 +4515,7 @@ render();
 
 // ================= EXECUTAR NO OSS (AMOS via helper local) =================
 (function(){
-const HELPER = "http://127.0.0.1:8766", MINV = 2.1, OSK = LSK + ":oss";
+const HELPER = "http://127.0.0.1:8766", MINV = 2.2, OSK = LSK + ":oss";
 const WRITE = /^\s*(set|sete|crn|cr|del|rdel|bl|deb|acc|run|ldeb|lbl|lset|lcr|ldel|restart|confb\+?|trun|upgrade|cvms|cvmk|cvrm|cvset)\b/i;
 const O = { online: false, logged: false, job: null, out: "", outName: "", logLen: 0, log: [], busy: false, files: [], after: null };
 const load = () => { try { return JSON.parse(localStorage.getItem(OSK) || "{}"); } catch (e) { return {}; } };
@@ -4534,6 +4535,7 @@ function drawServers(){
 const OWNPW = {};
 function drawOwnPw(){
   const own = servers.map((s, i) => ({ s, i })).filter(({ s }) => s.user && s.host);
+  const sig = own.map(({ s, i }) => i + s.name + s.user).join("|"); if (sig === drawOwnPw.sig) return; drawOwnPw.sig = sig;  // não recria (perderia o foco)
   $("ossOwnPw").innerHTML = own.map(({ s, i }) => `<div class="oss-grid" style="grid-template-columns:1fr 1fr"><input type="text" value="${escH(s.name)} · ${escH(s.user)}" disabled aria-label="Servidor"><input type="password" data-own="${i}" value="${escH(OWNPW[i] || "")}" placeholder="Senha do ${escH(s.name)} (${escH(s.user)})" autocomplete="off"></div>`).join("");
   $("ossOwnPw").querySelectorAll("[data-own]").forEach((el) => el.oninput = () => { OWNPW[+el.dataset.own] = el.value; });
 }
@@ -4549,6 +4551,9 @@ $("ossNShow").onclick = () => { const on = $("ossNPwds").style.webkitTextSecurit
 saveCreds();
 // abrir / trocar de no
 $("ossOpenT").value = cfg.openCmd || "amos {no}"; $("ossSwT").value = (!cfg.switchCmd || cfg.switchCmd === "!{no}") ? "!amos {no}" : cfg.switchCmd; $("ossKeep").checked = cfg.keepOpen !== false;
+$("ossMmlT").value = cfg.mmlOpen || "eaw {no}"; $("ossMmlT").onchange = () => save({ mmlOpen: $("ossMmlT").value.trim() || "eaw {no}" });
+// MML: comando de impressão termina em P (RLSTP, ALLIP, RXMOP...); o resto altera o BSC e pede confirmação
+const mmlWrite = (c) => { const code = c.trim().split(/[:;\s]/)[0]; return !!code && !/P$/i.test(code) && !/^(exit|quit)$/i.test(code); };
 const nodeOpts = () => ({ openCmd: $("ossOpenT").value.trim() || "amos {no}", switchCmd: $("ossSwT").value.trim() || "!amos {no}", keepOpen: $("ossKeep").checked });
 ["ossOpenT", "ossSwT", "ossKeep"].forEach((id) => $(id).onchange = () => save(nodeOpts()));
 drawServers();
@@ -4584,8 +4589,10 @@ function status(){
 function btns(){
   const tb = TABS && TABS.length ? T() : { busy: false, out: "", curNode: "" };
   O.busy = tb.busy; O.out = tb.out; O.curNode = tb.curNode;
-  const can = O.online && O.logged && !O.busy;
-  ["ossR1", "ossKget", "ossAlt", "ossSt1", "ossSt2", "ossRun", "ossScan"].forEach((id) => $(id).disabled = !can);
+  const can = O.online && O.logged && !O.busy, g2 = is2g(selSrv());
+  ["ossR1", "ossKget", "ossAlt", "ossSt1", "ossSt2", "ossRun", "ossScan"].forEach((id) => $(id).disabled = !can || (g2 && ["ossR1", "ossKget", "ossSt2", "ossScan"].includes(id)));
+  $("ossAlt").textContent = g2 ? "ALLIP;" : "alt"; $("ossSt1").textContent = g2 ? "RLSTP:CELL=ALL;" : "st cell";
+  $("ossCmd").placeholder = g2 ? "MML no BSC (eaw), ex.: RLSTP:CELL=ALL;  ALLIP;  · ↑ ↓ = histórico · Enter executa" : "ex.: get EUtranCellFDD qRxLevMin  (vários: separe com ;) · ↑ ↓ = histórico · Enter executa";
   $("ossLogin").disabled = !O.online; $("ossLoginAll").disabled = !O.online;
   $("ossLogout").disabled = !O.online || !SS.some((x) => x.key === keyOf(selSrv())); $("ossLogoutAll").disabled = !O.online || !SS.length;
   $("ossClose").disabled = !(O.online && O.logged && !O.busy && O.curNode);
@@ -4608,7 +4615,7 @@ async function loginList(list){
       if (r.ok) log(`${s.name} conectado. Prompt: ${r.prompt}`, "ok"); else { log(`${s.name}: falha no login: ${r.erro}`, "er"); bad.push(`${s.name}: ${r.erro}`); }
     } catch (e) { log(String(e.message || e), "er"); bad.push(`${s.name}: ${e.message || e}`); }
   }
-  $("ossPwd").value = ""; list.forEach((s) => { delete OWNPW[servers.indexOf(s)]; }); drawOwnPw();
+  $("ossPwd").value = ""; list.forEach((s) => { delete OWNPW[servers.indexOf(s)]; }); $("ossOwnPw").querySelectorAll("[data-own]").forEach((el) => { if (OWNPW[+el.dataset.own] == null) el.value = ""; });
   if (bad.length) $("ossMsg").innerHTML = `<div class="msg bad">${bad.map(escH).join("<br>")}</div>`;
   status();
 }
@@ -4675,6 +4682,7 @@ function start(body, label, after){
   askDraw(tb); setMsg(tb, ""); btns(); tabsDraw(); if (isAct(tb)) conShow();
   log(`[${tabName(tb)}] ▶ ${label} em ${body.node || ""} (${s ? s.name : "?"})`, "cmd");
   if (body.node) Object.assign(body, nodeCreds(), nodeOpts());
+  if (is2g(s)) { body.mode = "mml"; body.openCmd = $("ossMmlT").value.trim() || "eaw {no}"; body.cmds = (body.cmds || []).filter((c) => c !== "lt all"); tb.lbl.cmds = body.cmds; }
   body.server = keyOf(s); body.lane = laneOf(tb);
   call("/job", body).then((r) => {
     if (!r.ok) { tb.busy = false; btns(); tabsDraw(); log(`[${tabName(tb)}] Não iniciou: ` + r.erro, "er"); if (isAct(tb)) $("ossKget").textContent = "Gerar kget e analisar"; return; }
@@ -4810,8 +4818,8 @@ function toKg(txt){
   const n = node() || "kget"; if (!window.KGload) { $("ossMsg").innerHTML = `<div class="msg bad">KGET Analyzer indisponível.</div>`; return; }
   try { window.KGload(`${n}_kget.log`, txt); showTab("kg"); } catch (e) { $("ossMsg").innerHTML = `<div class="msg bad">${escH(e.message || e)}</div>`; }
 }
-$("ossAlt").onclick = () => { const n = needNode(); if (n) start({ node: n, cmds: lt(["alt"]) }, "alarmes (alt)"); };
-$("ossSt1").onclick = () => { const n = needNode(); if (n) start({ node: n, cmds: lt(["st cell"]) }, "st cell"); };
+$("ossAlt").onclick = () => { const n = needNode(); if (!n) return; if (is2g(selSrv())) return start({ node: n, cmds: ["ALLIP;"] }, "comandos"); start({ node: n, cmds: lt(["alt"]) }, "alarmes (alt)"); };
+$("ossSt1").onclick = () => { const n = needNode(); if (!n) return; if (is2g(selSrv())) return start({ node: n, cmds: ["RLSTP:CELL=ALL;"] }, "comandos"); start({ node: n, cmds: lt(["st cell"]) }, "st cell"); };
 $("ossSt2").onclick = () => { const n = needNode(); if (n) start({ node: n, cmds: lt(["st ri", "st rfport"]) }, "st ri / rfport"); };
 // ---------- histórico dos comandos AMOS (fica neste navegador) ----------
 let HIST = load().cmdHist || [], hPos = -1;
@@ -4834,8 +4842,8 @@ $("ossCmd").addEventListener("keydown", (e) => {
 });
 histDraw(); tabShow();
 $("ossRun").onclick = () => { const n = needNode(); if (!n) return; const cmds = $("ossCmd").value.split(/;|\n/).map((c) => c.trim()).filter(Boolean); if (!cmds.length) return; histAdd($("ossCmd").value); $("ossCmd").value = ""; $("ossCmd").focus();
-  const w = cmds.filter((c) => WRITE.test(c)); if (w.length) { confirmBox(w, () => start({ node: n, cmds: lt(cmds), confirmWrites: true }, "comandos")); return; }
-  start({ node: n, cmds: lt(cmds) }, "comandos"); };
+  const g2 = is2g(selSrv()); const w = cmds.filter((c) => g2 ? mmlWrite(c) : WRITE.test(c)); if (w.length) { confirmBox(w, () => start({ node: n, cmds: g2 ? cmds : lt(cmds), confirmWrites: true }, "comandos")); return; }
+  start({ node: n, cmds: g2 ? cmds : lt(cmds) }, "comandos"); };
 $("ossToIn").onclick = () => toIn(T().out);
 $("ossToKg").onclick = () => toKg(T().out);
 $("ossDl").onclick = () => offer([{ name: `${node() || "saida"}_${(T().outName || "amos").replace(/\W+/g, "_")}.txt`, data: T().out }], $("ossMsg"));
