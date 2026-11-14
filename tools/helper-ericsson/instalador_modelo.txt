@@ -51,17 +51,38 @@ if ($acao -eq 'remover') {
 # 1) Python
 $py = Find-Python
 if (-not $py) {
-  Write-Host 'Python nao encontrado. Instalando pelo winget (pode levar 1-2 min)...' -ForegroundColor Yellow
+  Write-Host 'Python nao encontrado. Instalando pelo winget (fonte winget, sem a Microsoft Store)...' -ForegroundColor Yellow
+  $oldEap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
   try {
-    winget install -e --id Python.Python.3.12 --scope user --silent --accept-package-agreements --accept-source-agreements | Out-Host
+    winget install -e --id Python.Python.3.12 --source winget --scope user --silent --accept-package-agreements --accept-source-agreements | Out-Host
   } catch {}
+  $ErrorActionPreference = $oldEap
+  $py = Find-Python
+}
+if (-not $py) {
+  Write-Host 'winget nao instalou. Baixando o instalador oficial do python.org...' -ForegroundColor Yellow
+  $oldEap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+  try {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    $wc = New-Object Net.WebClient
+    $wc.Proxy = [Net.WebRequest]::GetSystemWebProxy(); $wc.Proxy.Credentials = [Net.CredentialCache]::DefaultNetworkCredentials
+    $arch = if ([Environment]::Is64BitOperatingSystem) { 'amd64' } else { '' }
+    $url = if ($arch) { 'https://www.python.org/ftp/python/3.12.7/python-3.12.7-amd64.exe' } else { 'https://www.python.org/ftp/python/3.12.7/python-3.12.7.exe' }
+    $exe = Join-Path $env:TEMP 'python-3.12.7-instalador.exe'
+    $wc.DownloadFile($url, $exe)
+    Write-Host 'Instalando o Python (so para este usuario, sem administrador; 1-2 min)...'
+    $pr = Start-Process -FilePath $exe -ArgumentList '/quiet InstallAllUsers=0 PrependPath=1 Include_pip=1 Include_launcher=0 Include_test=0 Shortcuts=0' -Wait -PassThru
+    Remove-Item $exe -Force -ErrorAction SilentlyContinue
+  } catch { Write-Host ('Download/instalacao falhou: ' + $_.Exception.Message) -ForegroundColor Yellow }
+  $ErrorActionPreference = $oldEap
   $py = Find-Python
 }
 if (-not $py) {
   Write-Host ''
-  Write-Host 'Nao consegui instalar o Python automaticamente.' -ForegroundColor Red
-  Write-Host 'Instale em https://www.python.org/downloads/ (marque "Add python.exe to PATH")'
-  Write-Host 'e rode este instalador de novo.'
+  Write-Host 'Nao consegui instalar o Python automaticamente (a rede da empresa bloqueou os downloads).' -ForegroundColor Red
+  Write-Host 'Instale o Python 3 por uma destas opcoes e rode este instalador de novo:'
+  Write-Host '  - Portal de software da empresa (Company Portal / Central de Software), se houver'
+  Write-Host '  - https://www.python.org/downloads/  (marque "Add python.exe to PATH")'
   return
 }
 $pyw = Join-Path (Split-Path $py) 'pythonw.exe'
@@ -70,13 +91,27 @@ Write-Host "Python: $py"
 
 # 1b) paramiko (SSH ate o servidor OSS) - obrigatorio
 $oldEap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-& $py -m pip install --user --disable-pip-version-check -q paramiko *> $null
 & $py -c "import paramiko" *> $null
 $okParamiko = ($LASTEXITCODE -eq 0)
+if (-not $okParamiko) {
+  Write-Host 'Instalando paramiko (biblioteca SSH)...'
+  & $py -m ensurepip --user *> $null
+  & $py -m pip install --user --disable-pip-version-check -q paramiko *> $null
+  & $py -c "import paramiko" *> $null; $okParamiko = ($LASTEXITCODE -eq 0)
+}
+if (-not $okParamiko) {
+  # rede corporativa: proxy do Windows e certificado interceptado
+  $px = $null; try { $p = [Net.WebRequest]::GetSystemWebProxy().GetProxy([Uri]'https://pypi.org'); if ($p.Host -ne 'pypi.org') { $px = $p.AbsoluteUri } } catch {}
+  $args2 = @('-m','pip','install','--user','--disable-pip-version-check','-q','--trusted-host','pypi.org','--trusted-host','files.pythonhosted.org','paramiko')
+  if ($px) { $args2 += @('--proxy', $px); Write-Host "Tentando pelo proxy $px..." }
+  & $py @args2 *> $null
+  & $py -c "import paramiko" *> $null; $okParamiko = ($LASTEXITCODE -eq 0)
+}
 $ErrorActionPreference = $oldEap
 if ($okParamiko) { Write-Host 'paramiko (SSH): OK' } else {
-  Write-Host 'Nao consegui instalar o paramiko (biblioteca SSH). Verifique a internet/proxy e rode de novo,' -ForegroundColor Red
-  Write-Host 'ou rode manualmente:  python -m pip install --user paramiko'
+  Write-Host 'Nao consegui instalar o paramiko (biblioteca SSH): a rede bloqueou o pip.' -ForegroundColor Red
+  Write-Host 'Rode manualmente num Prompt de Comando e depois este instalador de novo:'
+  Write-Host ('  "' + $py + '" -m pip install --user paramiko')
   return
 }
 
