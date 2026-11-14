@@ -719,7 +719,36 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
     </section>
 
     <section class="panel">
-      <div class="ph"><span class="step">3</span><h2>Nó e ações</h2><p>Informe o nó como no AMOS (ex.: <code>4G-UBUR18</code>). Leituras rodam direto; qualquer comando de alteração (<code>set</code>, <code>crn</code>, <code>del</code>, <code>bl</code>, <code>deb</code>, <code>acc</code>, <code>run</code>…) só sai depois da sua confirmação, e as perguntas [y/n] do AMOS aparecem aqui para você responder.</p></div>
+      <div class="ph"><span class="step">BACKUP</span><h2>Backup antes da atividade</h2><p>Roda os scripts BACKUP_*.mos (dcgk, cvget do último backup, alarmes, estado, VSWR, interferência…) em vários sites. Sites em <b>servidores diferentes rodam ao mesmo tempo</b>, e no mesmo servidor também (até 6, cada um num terminal próprio, como abas do WinFiol). As senhas dos scripts são preenchidas na hora pelo helper (<code>{{SENHA_NO}}</code> = senha do nó que funcionou; <code>{{SENHA_OSS}}</code> = sua senha do servidor) e aparecem como ****** na saída.</p></div>
+      <div class="row" style="margin:0"><label class="note" style="margin:0">Script padrão <select id="bkDef"></select></label><button class="btn" id="bkView">Ver script</button><button class="btn" id="bkAdd">+ Adicionar site</button></div>
+      <pre class="oss-out" id="bkPrev" hidden style="max-height:260px"></pre>
+      <textarea id="bkPaste" spellcheck="false" style="min-height:70px" placeholder="Cole o STATION ID, um por linha (ex.: MGURA_0019). A CGI mostra os nós Ericsson do site (4G-UBUR18, MG4118…), a regional escolhe o script (_3G para os nós 3G) e o servidor (CVOA/CVOB/CVO) é descoberto sozinho.&#10;Também aceita o nome do nó (4G-UBUR18). Opcional: forçar servidor e script. Ex.: 4G-UBUR18 CVOA BACKUP_TLE"></textarea>
+      <div class="row" style="margin:0"><button class="btn" id="bkAddList">Adicionar lista</button><button class="btn" id="bkDetect">Detectar servidores</button><button class="btn" id="bkClear">Limpar fila</button><span class="note" id="bkInfo"></span></div>
+      <div class="row" style="margin:0;align-items:center"><span class="note" style="margin:0" id="bkCgi">Base CGI: não carregada</span><button class="btn" id="bkCgiUpd">Atualizar base CGI</button><label class="note" style="margin:0">ou carregar o arquivo <input type="file" id="bkCgiFile" accept=".zip,.csv"></label></div>
+      <div class="tablebox"><table id="bkTbl"></table></div>
+      <label class="note" style="margin:0"><input type="checkbox" id="bkOk"> Os scripts de backup só leem a configuração e salvam arquivos no servidor (<code>confb+</code>, <code>dcgk</code>, <code>cvget</code>, <code>lga</code>). Conferi a fila e quero executar.</label>
+      <div class="row" style="margin:0;align-items:center"><label class="note" style="margin:0">Sites ao mesmo tempo em cada servidor <select id="bkPar" style="width:auto;display:inline-block"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option></select></label><span class="note" style="margin:0">cada site extra abre outro terminal no mesmo servidor, como outra aba do WinFiol</span></div>
+      <div id="bkProgBox" hidden><div class="oss-prog"><span id="bkBar" style="width:0"></span></div><span class="note" style="margin:0" id="bkProg"></span></div>
+      <div class="row" style="margin:0"><button class="btn primary" id="bkGo" disabled>Iniciar backup</button><button class="btn" id="bkStop" disabled>Parar a fila</button><button class="btn" id="bkZip" disabled>Baixar de novo (.zip por STATION ID)</button></div>
+      <div id="bkMsg"></div><div id="bkDlMsg"></div>
+    </section>
+
+    <section class="panel">
+      <div class="ph"><span class="step">3</span><h2>Execução <span class="note" id="ossTabName" style="margin:0;font-weight:400"></span></h2></div>
+      <div class="oss-prog"><span id="ossBar" style="width:0"></span></div>
+      <div class="row" style="margin:0"><span class="note" id="ossProg">Nada em execução.</span><button class="btn" id="ossStop" disabled>Parar após o comando atual</button><button class="btn" id="ossKill" disabled>Parar agora (Ctrl-C)</button></div>
+      <div id="ossAsk"></div>
+      <div class="oss-log" id="ossLog"></div>
+      <div class="row" style="margin:0"><button class="btn" id="ossToIn" disabled>Enviar saída para a Entrada</button><button class="btn" id="ossToKg" disabled>Enviar saída para o KGET Analyzer</button><button class="btn" id="ossDl" disabled>Baixar saída (.txt)</button><button class="btn" id="ossLogDl">Exportar log (.txt)</button><button class="btn" id="ossConDl" disabled>Baixar tela inteira (.txt)</button><button class="btn" id="ossConClr" disabled>Limpar tela</button></div>
+      <pre class="oss-out" id="ossOut" hidden></pre>
+      <h3 class="sub" id="ossCmdH">Comandos AMOS <span class="note" id="ossCmdTab" style="margin:0;font-weight:400"></span></h3>
+      <div class="row" style="margin:0"><input type="text" id="ossCmd" list="ossCmdHist" autocomplete="off" placeholder="ex.: get EUtranCellFDD qRxLevMin  (vários: separe com ;) · ↑ ↓ = histórico · Enter executa" spellcheck="false"><datalist id="ossCmdHist"></datalist><button class="btn" id="ossRun">Executar</button><button class="btn" id="ossHistB" aria-expanded="false">Histórico</button></div>
+      <div id="ossHistBox" hidden style="max-height:220px;overflow:auto;border:1px solid var(--bg4);border-radius:6px;padding:6px"></div>
+      <div id="ossMsg"></div>
+    </section>
+
+    <section class="panel">
+      <div class="ph"><span class="step">4</span><h2>Nó e ações</h2><p>Informe o nó como no AMOS (ex.: <code>4G-UBUR18</code>). Leituras rodam direto; qualquer comando de alteração (<code>set</code>, <code>crn</code>, <code>del</code>, <code>bl</code>, <code>deb</code>, <code>acc</code>, <code>run</code>…) só sai depois da sua confirmação, e as perguntas [y/n] do AMOS aparecem aqui para você responder.</p></div>
       <div class="oss-tabs" id="ossTabs" role="tablist" aria-label="Abas do moshell"></div>
       <div class="row" style="margin:0"><input type="text" id="ossNode" list="ossNodes" placeholder="Nó (ex.: 4G-UBUR18)" style="max-width:280px;text-transform:uppercase" autocomplete="off" spellcheck="false"><datalist id="ossNodes"></datalist><label class="note" style="margin:0"><input type="checkbox" id="ossLt" checked> rodar <code>lt all</code> antes</label><span class="note" id="ossCur" style="margin:0"></span><button class="btn" id="ossClose" disabled>Fechar AMOS do nó</button></div>
       <details><summary>Como abrir e trocar de nó</summary>
@@ -740,35 +769,6 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
       <textarea id="ossScript" spellcheck="false" placeholder="Cole o script .mos aqui ou escolha os arquivos acima (ex.: os scripts gerados nas abas 03 e 05). Vários arquivos rodam na ordem do nome."></textarea>
       <div class="row" style="margin:0"><button class="btn" id="ossScan">Revisar alterações</button><span class="note" id="ossScanN"></span></div>
       <div id="ossConfirm"></div>
-    </section>
-
-    <section class="panel">
-      <div class="ph"><span class="step">BACKUP</span><h2>Backup antes da atividade</h2><p>Roda os scripts BACKUP_*.mos (dcgk, cvget do último backup, alarmes, estado, VSWR, interferência…) em vários sites. Sites em <b>servidores diferentes rodam ao mesmo tempo</b>, e no mesmo servidor também (até 6, cada um num terminal próprio, como abas do WinFiol). As senhas dos scripts são preenchidas na hora pelo helper (<code>{{SENHA_NO}}</code> = senha do nó que funcionou; <code>{{SENHA_OSS}}</code> = sua senha do servidor) e aparecem como ****** na saída.</p></div>
-      <div class="row" style="margin:0"><label class="note" style="margin:0">Script padrão <select id="bkDef"></select></label><button class="btn" id="bkView">Ver script</button><button class="btn" id="bkAdd">+ Adicionar site</button></div>
-      <pre class="oss-out" id="bkPrev" hidden style="max-height:260px"></pre>
-      <textarea id="bkPaste" spellcheck="false" style="min-height:70px" placeholder="Cole o STATION ID, um por linha (ex.: MGURA_0019). A CGI mostra os nós Ericsson do site (4G-UBUR18, MG4118…), a regional escolhe o script (_3G para os nós 3G) e o servidor (CVOA/CVOB/CVO) é descoberto sozinho.&#10;Também aceita o nome do nó (4G-UBUR18). Opcional: forçar servidor e script. Ex.: 4G-UBUR18 CVOA BACKUP_TLE"></textarea>
-      <div class="row" style="margin:0"><button class="btn" id="bkAddList">Adicionar lista</button><button class="btn" id="bkDetect">Detectar servidores</button><button class="btn" id="bkClear">Limpar fila</button><span class="note" id="bkInfo"></span></div>
-      <div class="row" style="margin:0;align-items:center"><span class="note" style="margin:0" id="bkCgi">Base CGI: não carregada</span><button class="btn" id="bkCgiUpd">Atualizar base CGI</button><label class="note" style="margin:0">ou carregar o arquivo <input type="file" id="bkCgiFile" accept=".zip,.csv"></label></div>
-      <div class="tablebox"><table id="bkTbl"></table></div>
-      <label class="note" style="margin:0"><input type="checkbox" id="bkOk"> Os scripts de backup só leem a configuração e salvam arquivos no servidor (<code>confb+</code>, <code>dcgk</code>, <code>cvget</code>, <code>lga</code>). Conferi a fila e quero executar.</label>
-      <div class="row" style="margin:0;align-items:center"><label class="note" style="margin:0">Sites ao mesmo tempo em cada servidor <select id="bkPar" style="width:auto;display:inline-block"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option></select></label><span class="note" style="margin:0">cada site extra abre outro terminal no mesmo servidor, como outra aba do WinFiol</span></div>
-      <div id="bkProgBox" hidden><div class="oss-prog"><span id="bkBar" style="width:0"></span></div><span class="note" style="margin:0" id="bkProg"></span></div>
-      <div class="row" style="margin:0"><button class="btn primary" id="bkGo" disabled>Iniciar backup</button><button class="btn" id="bkStop" disabled>Parar a fila</button><button class="btn" id="bkZip" disabled>Baixar de novo (.zip por STATION ID)</button></div>
-      <div id="bkMsg"></div><div id="bkDlMsg"></div>
-    </section>
-
-    <section class="panel">
-      <div class="ph"><span class="step">4</span><h2>Execução <span class="note" id="ossTabName" style="margin:0;font-weight:400"></span></h2></div>
-      <div class="oss-prog"><span id="ossBar" style="width:0"></span></div>
-      <div class="row" style="margin:0"><span class="note" id="ossProg">Nada em execução.</span><button class="btn" id="ossStop" disabled>Parar após o comando atual</button><button class="btn" id="ossKill" disabled>Parar agora (Ctrl-C)</button></div>
-      <div id="ossAsk"></div>
-      <div class="oss-log" id="ossLog"></div>
-      <div class="row" style="margin:0"><button class="btn" id="ossToIn" disabled>Enviar saída para a Entrada</button><button class="btn" id="ossToKg" disabled>Enviar saída para o KGET Analyzer</button><button class="btn" id="ossDl" disabled>Baixar saída (.txt)</button><button class="btn" id="ossLogDl">Exportar log (.txt)</button><button class="btn" id="ossConDl" disabled>Baixar tela inteira (.txt)</button><button class="btn" id="ossConClr" disabled>Limpar tela</button></div>
-      <pre class="oss-out" id="ossOut" hidden></pre>
-      <h3 class="sub" id="ossCmdH">Comandos AMOS <span class="note" id="ossCmdTab" style="margin:0;font-weight:400"></span></h3>
-      <div class="row" style="margin:0"><input type="text" id="ossCmd" list="ossCmdHist" autocomplete="off" placeholder="ex.: get EUtranCellFDD qRxLevMin  (vários: separe com ;) · ↑ ↓ = histórico · Enter executa" spellcheck="false"><datalist id="ossCmdHist"></datalist><button class="btn" id="ossRun">Executar</button><button class="btn" id="ossHistB" aria-expanded="false">Histórico</button></div>
-      <div id="ossHistBox" hidden style="max-height:220px;overflow:auto;border:1px solid var(--bg4);border-radius:6px;padding:6px"></div>
-      <div id="ossMsg"></div>
     </section>
   </div>
 </div>
@@ -4609,7 +4609,7 @@ function tabsDraw(){
   $("ossTabs").querySelectorAll("[data-tx]").forEach((b) => b.onclick = () => tabClose(+b.dataset.tx));
   $("ossTabAdd").onclick = () => { const tb = newTab({ srv: T().srv }); TABS.push(tb); tabGo(TABS.length - 1); $("ossNode").focus(); };
   $("ossTabName").textContent = `· ${tabName(T())} (${(servers[T().srv] || {}).name || ""})`;
-  $("ossCmdTab").textContent = `→ ${T().node || "informe o nó no bloco 3"} · ${(servers[T().srv] || {}).name || ""}`;
+  $("ossCmdTab").textContent = `→ ${T().node || "informe o nó no bloco 4, abaixo"} · ${(servers[T().srv] || {}).name || ""}`;
 }
 function tabShow(){
   const tb = T();
