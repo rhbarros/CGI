@@ -1,0 +1,85 @@
+$password = {{SENHA_NO}}
+uv username=rbs
+l+
+y
+s+
+y
+gs+
+y
+confb+
+y
+st cell
+y
+lt all
+y
+st nrcell
+y
+alt
+y
+lh mp ue print -admitted
+{{SENHA_NO}}
+y
+lga 10d
+{{SENHA_OSS}}
+y
+hget AntennaUnitGroup=.*,AntennaNearUnit=.*,RetSubUnit=.* userLabel|iuantAntennaModelNumber|electrical|maxTilt|minTilt|operationalState
+y
+hget . tilt
+y
+hget FieldReplaceableUnit=AIR-.*,Transceiver=1 availabilityStatus|operationalState
+y
+hget AntennaUnitGroup=[1,2,3,4,5,6,7,8,9],AntennaNearUnit=1,RetSubUnit=1  operationalState|availabilityStatus|electricalAntennaTilt|maxTilt|minTilt|tiltChangeStatus
+y
+st ru-
+y
+lst fdd
+y
+lst sector
+y
+lst near
+y
+st cell
+y
+st nr
+y
+hget trx operationalState|abisTrxRslState|abisTrxcOmlState
+y
+hget AlarmPort=(1$|2|3|4|5|6|7|8) activeExternalAlarm|administrativeState|alarmslogan|normallyOpen|perceivedSeverity|userLabel
+y
+hget rfPort=(A|B|C|D) vswrValue|dlFrequency
+y
+lh ru fui get vswr
+y
+lh ru fui get vswr 2
+y
+lh ru fui get vswr 3
+y
+lh ru fui get vswr 4
+y
+pmr -m 2 -r 206 | egrep Int_RadioRecInterferencePwr
+y
+pmr -m 2 -r 106 | egrep Int_RadioRecInterferencePwr
+y
+pmxet . Int_BranchDeltaSinrDistr[0-2] -m 0.5
+y
+sdi
+{{SENHA_NO}}
+y
+get SupportUnit availabilityStatus
+y
+lst SupportUnit
+y
+dcgk ~/dcgk
+y
+get BrmBackupLabelStore=1 lastCreatedBackup > $lastBkp
+y
+y
+cvget $lastBkp ~/rncbkp
+l-
+l+
+st cell
+y
+lh mp ue print -admitted
+y
+alt
+l-

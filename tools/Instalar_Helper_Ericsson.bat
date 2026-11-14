@@ -132,7 +132,7 @@ import argparse, json, os, re, sys, threading, time, uuid
 from urllib.parse import urlparse, parse_qs
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.5"
+VERSION = "1.6"
 LOCAL_PORT = 8766
 LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "helper.log")
 
@@ -172,7 +172,7 @@ class Session:
         self.key = ""; self.name = ""; self.port = 0; self._cred = None
 
     # ---------- leitura ----------
-    def read_until(self, done, maxsec=60, idle=0.35, job=None, keep=True):
+    def read_until(self, done, maxsec=60, idle=0.35, job=None, keep=True, quiet=0):
         """Le do canal ate done(tail) ser verdade e o canal ficar quieto por `idle` s."""
         parts, tail, t0, last = [], "", time.time(), time.time()
         total = 0
@@ -198,6 +198,8 @@ class Session:
             r = done(tail)
             if r and time.time() - last >= idle:
                 return "".join(parts), r
+            if quiet and time.time() - last >= quiet:
+                return "".join(parts), "quiet"  # sem saida nova e sem prompt conhecido: segue (como alguem digitando)
             if not got:
                 time.sleep(0.05)
         return "".join(parts), None
@@ -394,6 +396,57 @@ def close_amos(job=None, out=None):
     S.cur_node = None; S.lt_done = False; S.depth = 0
 
 
+def paste_script(job, node, auth, out, p):
+    """Envia um script linha a linha, como colar no WinFiol: cada linha sai quando o AMOS volta ao prompt,
+    pergunta algo (a linha seguinte do script responde) ou fica quieto. {{SENHA_NO}} e {{SENHA_OSS}} sao
+    trocados aqui e mascarados na saida e no log."""
+    text = p.get("paste") or ""
+    pw_node = None
+    if "{{SENHA_NO}}" in text:
+        idx = NODE_PWD_OK.get(node.upper())
+        if idx is None and auth.pwds:
+            job["log"].append("Descobrindo a senha do no %s (lt all) para preencher {{SENHA_NO}}..." % node)
+            S.chan.send("lt all\n"); since = ""; retries = 0
+            while True:
+                txt, r = S.read_until(amos_prompt(node), maxsec=900, idle=0.6, job=job); out.append(txt); since += txt
+                if auth.handle(r): continue
+                if r == "amos":
+                    v = auth.verdict(since)
+                    if v == "retry" and retries < len(auth.pwds): retries += 1; since = ""; S.chan.send("lt all\n"); continue
+                    if v in ("fail", "retry"): raise RuntimeError("nenhuma senha do no funcionou em %s; {{SENHA_NO}} nao pode ser preenchida." % node)
+                    S.lt_done = True
+                break
+            idx = NODE_PWD_OK.get(node.upper())
+            if idx is None and auth.pwds:
+                idx = NODE_PWD_OK.get("*", 0)
+                job["log"].append("O no nao pediu senha; usando a senha %d para {{SENHA_NO}}." % (idx + 1))
+        if idx is None or not auth.pwds:
+            raise RuntimeError("o script usa {{SENHA_NO}} e nao ha senhas do no cadastradas na aba 07.")
+        pw_node = auth.pwds[idx]
+    pw_oss = S._cred[3] if (S._cred and "{{SENHA_OSS}}" in text) else None
+    job["_secrets"] = [x for x in (pw_node, pw_oss) if x] + list(auth.pwds)
+    lines = text.replace("\r\n", "\n").split("\n")
+    while lines and not lines[-1].strip(): lines.pop()
+    job["total"] = job.get("step", 0) + len(lines); per = p.get("timeout", 1800)
+    for raw in lines:
+        if job.get("stop"):
+            job["log"].append("Parado pelo usuario."); break
+        line = raw.rstrip()
+        shown = line.replace("{{SENHA_NO}}", "******").replace("{{SENHA_OSS}}", "******")
+        if pw_node: line = line.replace("{{SENHA_NO}}", pw_node)
+        if pw_oss: line = line.replace("{{SENHA_OSS}}", pw_oss)
+        job["step"] += 1
+        if shown.strip(): job["log"].append("%s> %s" % (node, shown.strip()))
+        S.chan.send(line + "\n")
+        txt, r = S.read_until(amos_prompt(node), maxsec=per, idle=0.8, job=job, quiet=25)
+        out.append(txt)
+        if r == "shell":
+            raise RuntimeError("o AMOS fechou durante '%s'" % shown.strip())
+        if r is None:
+            raise RuntimeError("tempo esgotado em '%s'" % shown.strip())
+        if line.strip().lower() == "lt all" and r == "amos": S.lt_done = True
+
+
 def run_job(job):
     """Executa um job: abre o AMOS no no, roda os comandos um a um e fecha."""
     p = job["params"]; node = p.get("node", "").strip(); out = []
@@ -464,6 +517,9 @@ def run_job(job):
                 else:
                     S.cur_node = None
                     raise RuntimeError("o AMOS nao abriu em %s. Ultimas linhas: %s" % (node, txt.strip()[-400:]))
+            if p.get("paste"):
+                paste_script(job, node, auth, out, p)
+                cmds = []
             job["step"] = 1
             for c in cmds:
                 if job.get("stop"):
@@ -512,7 +568,12 @@ def run_job(job):
         except Exception:
             pass
     finally:
-        job["out"] = "".join(out); job["end"] = time.time()
+        txt = "".join(out)
+        for sec in job.get("_secrets", []):
+            if sec: txt = txt.replace(sec, "******")
+        for sec in job.get("_secrets", []):
+            if sec: job["log"] = [l.replace(sec, "******") for l in job["log"]]
+        job["out"] = txt; job["end"] = time.time(); job.pop("_secrets", None)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -598,7 +659,8 @@ class Handler(BaseHTTPRequestHandler):
                 if busy(key):
                     return self._json({"ok": False, "erro": "ja existe uma execucao em andamento neste servidor"})
                 cmds = d.get("cmds", [])
-                writes = [c for c in cmds if WRITE_RE.match(c)] + (["run " + d["upload"]["name"]] if d.get("upload") else [])
+                writes = [c for c in cmds if WRITE_RE.match(c)] + (["run " + d["upload"]["name"]] if d.get("upload") else []) + \
+                         [l.strip() for l in (d.get("paste") or "").split("\n") if WRITE_RE.match(l)]
                 if writes and not d.get("confirmWrites"):
                     return self._json({"ok": False, "needConfirm": True, "writes": writes[:50], "erro": "comandos de alteracao precisam de confirmacao"})
                 jid = uuid.uuid4().hex[:10]
