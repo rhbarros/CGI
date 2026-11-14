@@ -4587,33 +4587,73 @@ function needNode(){ const n = node(); if (!/^[\w.\-]{3,}$/.test(n)) { $("ossMsg
 // ---------- execução ----------
 function start(body, label, after){
   if (O.busy) return;
-  O.busy = true; O.out = ""; O.outName = label; O.after = after || null; O.logLen = 0; O.lbl = { label, node: body.node || "", srv: selSrv() ? selSrv().name : "", cmds: body.cmds || [] }; $("ossAsk").innerHTML = ""; $("ossMsg").innerHTML = ""; btns();
+  O.busy = true; O.out = ""; O.outName = label; O.after = after || null; O.logLen = 0; O.lbl = { label, node: body.node || "", srv: selSrv() ? selSrv().name : "", cmds: body.cmds || [] }; O.kg = null; $("ossAsk").innerHTML = ""; $("ossMsg").innerHTML = ""; btns();
   log(`▶ ${label} em ${body.node || ""}`, "cmd");
   if (body.node) Object.assign(body, nodeCreds(), nodeOpts());
   body.server = keyOf(selSrv()); log(`Servidor: ${selSrv().name}`);
   call("/job", body).then((r) => {
-    if (!r.ok) { O.busy = false; btns(); log("Não iniciou: " + r.erro, "er"); return; }
+    if (!r.ok) { O.busy = false; btns(); log("Não iniciou: " + r.erro, "er"); $("ossKget").textContent = "Gerar kget e analisar"; return; }
     O.job = r.id; poll();
   }).catch((e) => { O.busy = false; btns(); log(String(e.message || e), "er"); });
+}
+// ---------- percentual do KGET (dcgk): o dcgk é um comando só, então a estimativa usa as fases e o tempo das execuções anteriores ----------
+const KGK = OSK + ":dcgkT";
+function kgAvg(){ try { const a = JSON.parse(localStorage.getItem(KGK) || "[]"); return a.length ? a.reduce((x, y) => x + y, 0) / a.length : 300; } catch (e) { return 300; } }
+function kgSaveT(sec){ try { const a = JSON.parse(localStorage.getItem(KGK) || "[]"); a.push(Math.round(sec)); localStorage.setItem(KGK, JSON.stringify(a.slice(-8))); } catch (e) {} }
+function kgProg(j){
+  const K = O.kg || (O.kg = { t0: Date.now(), tRun: 0, exp: kgAvg() });
+  const L = O.log.slice(-60).join("\n");
+  if (!K.tRun && /> dcgk/.test(L)) K.tRun = Date.now();
+  if (/Copiando /.test(L)) K.copy = true; if (/Arquivo recebido/.test(L)) K.got = true;
+  const now = Date.now(), el = (now - K.t0) / 1000;
+  let pct, fase, rest = 0;
+  if (j.state === "done" || j.state === "error") { pct = j.state === "done" ? 98 : 100; fase = j.state === "done" ? "Abrindo no KGET Analyzer" : "Erro"; }
+  else if (K.got) { pct = 96; fase = "Pacote recebido"; }
+  else if (K.copy) { pct = 92; fase = "Copiando o pacote do servidor"; }
+  else if (!K.tRun) { pct = Math.min(5, 1 + el); fase = "Abrindo o AMOS no nó"; }
+  else { const t = (now - K.tRun) / 1000, f = t / K.exp;
+    pct = f < 1 ? 5 + Math.round(f * 84) : Math.min(91, 89 + Math.round((f - 1) * 4)); rest = Math.max(0, Math.round(K.exp - t)); fase = "dcgk coletando no nó"; }
+  if (j.state === "ask") fase = "Aguardando sua resposta";
+  pct = Math.max(K.last || 0, Math.floor(pct)); K.last = pct;
+  $("ossBar").style.width = pct + "%";
+  const mmss = (x) => x >= 60 ? `${Math.floor(x / 60)} min ${String(Math.round(x % 60)).padStart(2, "0")} s` : `${Math.round(x)} s`;
+  $("ossProg").textContent = `KGET ${pct}% · ${fase} · ${mmss(el)} decorridos` + (rest ? ` · faltam ~${mmss(rest)} (estimativa)` : "") + ` · ${(j.bytes / 1024).toFixed(0)} KB recebidos`;
+  $("ossKget").textContent = j.state === "running" || j.state === "ask" ? `Gerando kget… ${pct}%` : "Gerar kget e analisar";
+}
+function kgNext(j){
+  if (j.state === "running" || j.state === "ask") return pollAsk(j);
+  const K = O.kg; O.kg = null;
+  if (j.state === "done" && K && K.tRun) kgSaveT((Date.now() - K.tRun) / 1000);
+  const after = O.after;
+  O.after = async (txt, jj) => { if (after) await after(txt, jj); if (jj.state === "done") { $("ossBar").style.width = "100%"; $("ossProg").textContent = $("ossProg").textContent.replace(/^KGET \d+% · [^·]+/, "KGET 100% · Concluído e aberto na aba 06 "); } };
+  return pollEnd(j);
 }
 function poll(){
   call("/job?id=" + O.job + "&since=" + O.logLen).then((j) => {
     j.log.forEach((t) => log(t, /^ERRO/.test(t) ? "er" : /> /.test(t) ? "cmd" : ""));
     O.logLen = j.logLen;
     const pct = j.total ? Math.min(100, Math.round(j.step / j.total * 100)) : 0; $("ossBar").style.width = pct + "%";
+    if (O.lbl && O.lbl.label === "dcgk ~/dcgk") { kgProg(j); return kgNext(j); }
     $("ossProg").textContent = `${j.state === "ask" ? "Aguardando sua resposta" : j.state === "running" ? "Executando" : j.state === "done" ? "Concluído" : "Erro"} · passo ${j.step}/${j.total} · ${(j.bytes / 1024).toFixed(0)} KB recebidos`;
-    if (j.state === "ask") {
-      if (!$("ossAskBox")) { $("ossAsk").innerHTML = `<div class="oss-ask" id="ossAskBox"><b>O AMOS está perguntando:</b><pre class="oss-out" style="max-height:140px">${escH(j.question)}</pre><div class="row" style="margin:0"><button class="btn primary" id="ossYes">Sim (y)</button><button class="btn" id="ossNo">Não (n)</button></div></div>`;
-        $("ossYes").onclick = () => answer("y"); $("ossNo").onclick = () => answer("n"); }
-    } else $("ossAsk").innerHTML = "";
-    if (j.state === "running" || j.state === "ask") { setTimeout(poll, j.state === "ask" ? 600 : 800); return; }
-    call("/job/out?id=" + O.job).then((txt) => {
-      O.out = txt; O.busy = false; btns(); status();
-      conAdd(txt, j);
-      if (j.state === "error") { $("ossMsg").innerHTML = `<div class="msg bad">${escH(j.error)}</div>`; return; }
-      if (O.after) O.after(txt, j);
-    });
-  }).catch((e) => { log(String(e.message || e), "er"); O.busy = false; btns(); });
+    if (j.state === "running" || j.state === "ask") return pollAsk(j);
+    pollEnd(j);
+  }).catch((e) => { log(String(e.message || e), "er"); O.busy = false; O.kg = null; $("ossKget").textContent = "Gerar kget e analisar"; btns(); });
+}
+function pollAsk(j){
+  if (j.state === "ask") {
+    if (!$("ossAskBox")) { $("ossAsk").innerHTML = `<div class="oss-ask" id="ossAskBox"><b>O AMOS está perguntando:</b><pre class="oss-out" style="max-height:140px">${escH(j.question)}</pre><div class="row" style="margin:0"><button class="btn primary" id="ossYes">Sim (y)</button><button class="btn" id="ossNo">Não (n)</button></div></div>`;
+      $("ossYes").onclick = () => answer("y"); $("ossNo").onclick = () => answer("n"); }
+  } else $("ossAsk").innerHTML = "";
+  setTimeout(poll, j.state === "ask" ? 600 : 800);
+}
+function pollEnd(j){
+  $("ossAsk").innerHTML = "";
+  call("/job/out?id=" + O.job).then((txt) => {
+    O.out = txt; O.busy = false; btns(); status();
+    conAdd(txt, j);
+    if (j.state === "error") { $("ossMsg").innerHTML = `<div class="msg bad">${escH(j.error)}</div>`; return; }
+    if (O.after) O.after(txt, j);
+  });
 }
 // ---------- tela do moshell: junta a saída de todos os comandos (como no WinFiol) ----------
 O.con = "";
