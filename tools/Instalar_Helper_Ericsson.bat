@@ -132,7 +132,7 @@ import argparse, json, os, re, sys, threading, time, uuid
 from urllib.parse import urlparse, parse_qs
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.3"
+VERSION = "1.4"
 LOCAL_PORT = 8766
 LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "helper.log")
 
@@ -144,6 +144,7 @@ ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07]*\x07|\x1b[=>()][0-9A
 ASK_RE = re.compile(r"(\[y/n\]|\(y/n\)|\[yes/no\]|\(yes/no\)|y/n\]?|are you sure[^\n]*|continue\?)\s*[:?]?\s*$", re.I)
 PWD_RE = re.compile(r"(password|senha)[^\n:]{0,40}:\s*$", re.I)
 USER_RE = re.compile(r"(user\s*name|username|login|user|usuario)[^\n:]{0,40}:\s*$", re.I)
+AUTH_FAIL_RE = re.compile(r"(permission denied|authentication (fail|error)|auth fail|access denied|login incorrect|incorrect (password|login|user)|wrong password|invalid (user|password|credential|login)|bad password|unable to (connect|login|log ?in|authenticate)|failed to (connect|login|log ?in|authenticate)|could not (connect|login|authenticate)|not authori[sz]ed|too many (authentication )?failures|connection (refused|closed|reset))", re.I)
 NODE_PWD_OK = {}  # no -> indice da senha que funcionou (so em memoria)
 
 
@@ -294,7 +295,7 @@ class NodeAuth:
         self.user = (p.get("nodeUser") or "").strip(); self.pwds = [x for x in (p.get("nodePwds") or []) if x]
         first = NODE_PWD_OK.get(node.upper(), NODE_PWD_OK.get("*"))
         self.order = ([first] if first is not None and first < len(self.pwds) else []) + [i for i in range(len(self.pwds)) if i != first]
-        self.tries = 0; self.cur = None
+        self.tries = 0; self.cur = None; self.bad = set()
 
     def handle(self, r):
         if r == "user":
@@ -303,6 +304,8 @@ class NodeAuth:
             self.job["log"].append("O no pediu usuario: enviando '%s'." % self.user)
             S.chan.send(self.user + "\n"); return True
         if r == "pwd":
+            if self.cur is not None:  # pediu senha de novo: a anterior foi recusada
+                self.bad.add(self.cur); self.job["log"].append("Senha %d recusada pelo no." % (self.cur + 1)); self.cur = None
             if self.tries >= len(self.order):
                 raise RuntimeError("o no pediu senha e nenhuma das %d senhas cadastradas funcionou." % len(self.pwds) if self.pwds else
                                    "o no pediu senha e nenhuma foi cadastrada na aba 07 (Credenciais do no).")
@@ -311,10 +314,23 @@ class NodeAuth:
             S.chan.send(self.pwds[self.cur] + "\n"); return True
         return False
 
+    def verdict(self, txt):
+        """Chamado quando o prompt do AMOS volta. O moshell volta ao prompt mesmo quando a senha falha,
+        entao so conta como aceita se nao houver mensagem de falha depois da senha."""
+        if self.cur is None:
+            return "fail" if (self.bad and AUTH_FAIL_RE.search(txt or "")) else "none"
+        m = AUTH_FAIL_RE.search(txt or "")
+        if m:
+            line = [l for l in (txt or "").split("\n") if AUTH_FAIL_RE.search(l)][:1]
+            self.bad.add(self.cur); self.job["log"].append("Senha %d recusada pelo no (%s)." % (self.cur + 1, (line[0].strip()[:120] if line else m.group(0))))
+            self.cur = None
+            return "retry" if self.tries < len(self.order) else "fail"
+        NODE_PWD_OK[self.node.upper()] = self.cur; NODE_PWD_OK["*"] = self.cur
+        self.job["log"].append("Senha %d aceita pelo no." % (self.cur + 1)); self.cur = None
+        return "ok"
+
     def ok(self):
-        if self.cur is not None:
-            NODE_PWD_OK[self.node.upper()] = self.cur; NODE_PWD_OK["*"] = self.cur
-            self.job["log"].append("Senha %d aceita pelo no." % (self.cur + 1)); self.cur = None
+        return self.verdict("")
 
 
 def close_amos(job=None, out=None):
@@ -392,8 +408,10 @@ def run_job(job):
                         out.append(txt)
                         if auth.handle(r): continue
                         break
+                if r == "amos" and auth.verdict(txt) in ("fail", "retry"):
+                    raise RuntimeError("o no recusou a senha ao abrir o AMOS em %s." % node)
                 if r == "amos":
-                    auth.ok(); S.depth = (S.depth + 1) if (switching and S.cur_node) else 1; S.cur_node = node; S.lt_done = False
+                    S.depth = (S.depth + 1) if (switching and S.cur_node) else 1; S.cur_node = node; S.lt_done = False
                     if S.depth > 1: job["log"].append("AMOS de %s aberto dentro da sessao anterior (nivel %d)." % (node, S.depth))
                 else:
                     S.cur_node = None
@@ -403,13 +421,21 @@ def run_job(job):
                 if job.get("stop"):
                     job["log"].append("Parado pelo usuario."); break
                 job["step"] += 1; job["log"].append("%s> %s" % (node, c))
-                S.chan.send(c + "\n")
-                if c.strip().lower() == "lt all": S.lt_done = True
+                S.chan.send(c + "\n"); since = ""; retries = 0
                 while True:
                     txt, r = S.read_until(amos_prompt(node), maxsec=p.get("timeout", 1800), idle=0.6, job=job)
-                    out.append(txt)
+                    out.append(txt); since += txt
                     if auth.handle(r): continue
-                    if r == "amos": auth.ok()
+                    if r == "amos":
+                        v = auth.verdict(since)
+                        if v == "retry" and retries < len(auth.pwds):
+                            retries += 1; since = ""
+                            job["log"].append("O no recusou a senha e voltou ao prompt: repetindo '%s' com a proxima senha." % c)
+                            S.chan.send(c + "\n"); continue
+                        if v in ("fail", "retry"):
+                            msg = [l.strip() for l in since.split("\n") if AUTH_FAIL_RE.search(l)][:1]
+                            raise RuntimeError("o no recusou todas as %d senhas cadastradas%s." % (len(auth.pwds), (": " + msg[0][:160]) if msg else ""))
+                        if c.strip().lower() == "lt all" and not AUTH_FAIL_RE.search(since): S.lt_done = True
                     if r == "ask":
                         job["state"] = "ask"; job["question"] = txt.strip()[-300:]; job["answer"] = None
                         t0 = time.time()
