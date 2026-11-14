@@ -699,6 +699,13 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
           <div class="row" style="margin:0"><button class="btn primary" id="ossLogin">Conectar</button><button class="btn" id="ossLogout">Sair</button><span class="note" id="ossWho"></span></div>
         </div>
       </div>
+      <h3 class="sub">Credenciais do nó (BB a partir da 5212)</h3>
+      <p class="note" style="margin:0">Se, ao abrir o AMOS ou no <code>lt all</code>, o nó pedir usuário e senha, o helper responde sozinho e testa as senhas abaixo em ordem até uma funcionar (a que funcionou é tentada primeiro na próxima vez). Elas não ficam no código nem no GitHub: só neste navegador, se você marcar “lembrar”.</p>
+      <div class="oss-grid" style="grid-template-columns:minmax(0,200px) minmax(0,1fr)">
+        <input type="text" id="ossNUser" placeholder="Usuário do nó" autocomplete="off" spellcheck="false">
+        <textarea id="ossNPwds" placeholder="Senhas do nó, uma por linha" spellcheck="false" style="min-height:96px;-webkit-text-security:disc"></textarea>
+      </div>
+      <div class="row" style="margin:0"><label class="note" style="margin:0"><input type="checkbox" id="ossNRem" checked> lembrar neste navegador</label><button class="btn" id="ossNShow">Mostrar senhas</button><span class="note" id="ossNInfo"></span></div>
     </section>
 
     <section class="panel">
@@ -4454,7 +4461,7 @@ render();
 
 // ================= EXECUTAR NO OSS (AMOS via helper local) =================
 (function(){
-const HELPER = "http://127.0.0.1:8766", MINV = 1.0, OSK = LSK + ":oss";
+const HELPER = "http://127.0.0.1:8766", MINV = 1.1, OSK = LSK + ":oss";
 const WRITE = /^\s*(set|sete|crn|cr|del|rdel|bl|deb|acc|run|ldeb|lbl|lset|lcr|ldel|restart|confb\+?|trun|upgrade|cvms|cvmk|cvrm|cvset)\b/i;
 const O = { online: false, logged: false, job: null, out: "", outName: "", logLen: 0, log: [], busy: false, files: [], after: null };
 const load = () => { try { return JSON.parse(localStorage.getItem(OSK) || "{}"); } catch (e) { return {}; } };
@@ -4469,6 +4476,13 @@ function drawServers(){
 function drawSel(){ const cur = load().srv ?? 0; $("ossSrv").innerHTML = servers.map((s, i) => `<option value="${i}" ${i === cur ? "selected" : ""}>${escH(s.name)}${s.host ? " · " + escH(s.host) + ":" + s.port : " (sem IP)"}</option>`).join(""); }
 $("ossSrv").onchange = () => save({ srv: +$("ossSrv").value });
 $("ossUser").value = cfg.user || "";
+// credenciais do no (so neste navegador, se "lembrar" estiver marcado)
+$("ossNUser").value = cfg.nodeUser || ""; $("ossNPwds").value = (cfg.nodePwds || []).join("\n"); $("ossNRem").checked = cfg.nodeRemember !== false;
+const nodeCreds = () => ({ nodeUser: $("ossNUser").value.trim(), nodePwds: $("ossNPwds").value.split("\n").map((x) => x.trim()).filter(Boolean) });
+function saveCreds(){ const c = nodeCreds(); const rem = $("ossNRem").checked; save({ nodeRemember: rem, nodeUser: rem ? c.nodeUser : "", nodePwds: rem ? c.nodePwds : [] }); $("ossNInfo").textContent = `${c.nodePwds.length} senha(s)` + (rem ? " · guardadas neste navegador" : " · só nesta sessão"); }
+["ossNUser", "ossNPwds"].forEach((id) => $(id).onchange = saveCreds); $("ossNRem").onchange = saveCreds;
+$("ossNShow").onclick = () => { const on = $("ossNPwds").style.webkitTextSecurity !== "none"; $("ossNPwds").style.webkitTextSecurity = on ? "none" : "disc"; $("ossNShow").textContent = on ? "Ocultar senhas" : "Mostrar senhas"; };
+saveCreds();
 drawServers();
 
 // ---------- helper ----------
@@ -4519,6 +4533,7 @@ function start(body, label, after){
   if (O.busy) return;
   O.busy = true; O.out = ""; O.outName = label; O.after = after || null; O.logLen = 0; $("ossOut").hidden = true; $("ossAsk").innerHTML = ""; $("ossMsg").innerHTML = ""; btns();
   log(`▶ ${label} em ${body.node || ""}`, "cmd");
+  if (body.node) Object.assign(body, nodeCreds());
   call("/job", body).then((r) => {
     if (!r.ok) { O.busy = false; btns(); log("Não iniciou: " + r.erro, "er"); return; }
     O.job = r.id; poll();

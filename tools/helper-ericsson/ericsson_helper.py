@@ -11,7 +11,7 @@ import argparse, json, os, re, sys, threading, time, uuid
 from urllib.parse import urlparse, parse_qs
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.0"
+VERSION = "1.1"
 LOCAL_PORT = 8766
 LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "helper.log")
 
@@ -21,7 +21,9 @@ LOCAL_ORIGIN = re.compile(r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$")
 WRITE_RE = re.compile(r"^\s*(set|sete|crn|cr|del|rdel|bl|deb|acc|run|ldeb|lbl|lset|lcr|ldel|restart|rbs|confb\+?|trun|pol|upgrade|cvms|cvmk|cvrm|cvset)\b", re.I)
 ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07]*\x07|\x1b[=>()][0-9A-Za-z]?")
 ASK_RE = re.compile(r"(\[y/n\]|\(y/n\)|\[yes/no\]|\(yes/no\)|y/n\]?|are you sure[^\n]*|continue\?)\s*[:?]?\s*$", re.I)
-PWD_RE = re.compile(r"(password|senha)\s*:\s*$", re.I)
+PWD_RE = re.compile(r"(password|senha)[^\n:]{0,40}:\s*$", re.I)
+USER_RE = re.compile(r"(user\s*name|username|login|user|usuario)[^\n:]{0,40}:\s*$", re.I)
+NODE_PWD_OK = {}  # no -> indice da senha que funcionou (so em memoria)
 
 
 def logf(msg):
@@ -154,11 +156,42 @@ def amos_prompt(node):
         last = tail.rstrip("\n").split("\n")[-1]
         if S.prompt and last.strip() == S.prompt.strip(): return "shell"
         if pat.match(last): return "amos"
-        if ASK_RE.search(tail[-200:]): return "ask"
         if PWD_RE.search(last): return "pwd"
+        if USER_RE.search(last): return "user"
+        if ASK_RE.search(tail[-200:]): return "ask"
         if re.search(r"[\$#]\s*$", last): return "shell"
         return None
     return done
+
+
+class NodeAuth:
+    """Responde usuario/senha do no quando o AMOS pede (nos a partir da 5212). Nunca grava nem loga a senha."""
+    def __init__(self, job, node):
+        p = job["params"]; self.job = job; self.node = node
+        self.user = (p.get("nodeUser") or "").strip(); self.pwds = [x for x in (p.get("nodePwds") or []) if x]
+        first = NODE_PWD_OK.get(node.upper(), NODE_PWD_OK.get("*"))
+        self.order = ([first] if first is not None and first < len(self.pwds) else []) + [i for i in range(len(self.pwds)) if i != first]
+        self.tries = 0; self.cur = None
+
+    def handle(self, r):
+        if r == "user":
+            if not self.user:
+                raise RuntimeError("o no pediu usuario e nenhum foi informado na aba 07 (Credenciais do no).")
+            self.job["log"].append("O no pediu usuario: enviando '%s'." % self.user)
+            S.chan.send(self.user + "\n"); return True
+        if r == "pwd":
+            if self.tries >= len(self.order):
+                raise RuntimeError("o no pediu senha e nenhuma das %d senhas cadastradas funcionou." % len(self.pwds) if self.pwds else
+                                   "o no pediu senha e nenhuma foi cadastrada na aba 07 (Credenciais do no).")
+            self.cur = self.order[self.tries]; self.tries += 1
+            self.job["log"].append("O no pediu senha: tentando a senha %d de %d." % (self.cur + 1, len(self.pwds)))
+            S.chan.send(self.pwds[self.cur] + "\n"); return True
+        return False
+
+    def ok(self):
+        if self.cur is not None:
+            NODE_PWD_OK[self.node.upper()] = self.cur; NODE_PWD_OK["*"] = self.cur
+            self.job["log"].append("Senha %d aceita pelo no." % (self.cur + 1)); self.cur = None
 
 
 def run_job(job):
@@ -182,10 +215,13 @@ def run_job(job):
             job["total"] = len(cmds) + 1
             job["log"].append("Abrindo AMOS em %s..." % node)
             S.chan.send("amos %s\n" % node)
-            txt, r = S.read_until(amos_prompt(node), maxsec=p.get("openTimeout", 240), idle=0.8, job=job)
-            out.append(txt)
-            if r == "pwd":
-                raise RuntimeError("o AMOS pediu senha do no. Abra o AMOS uma vez pelo WinFiol para gravar a senha e tente de novo.")
+            auth = NodeAuth(job, node)
+            while True:
+                txt, r = S.read_until(amos_prompt(node), maxsec=p.get("openTimeout", 240), idle=0.8, job=job)
+                out.append(txt)
+                if auth.handle(r): continue
+                break
+            if r == "amos": auth.ok()
             if r != "amos":
                 raise RuntimeError("o AMOS nao abriu em %s. Ultimas linhas: %s" % (node, txt.strip()[-400:]))
             job["step"] = 1
@@ -197,6 +233,8 @@ def run_job(job):
                 while True:
                     txt, r = S.read_until(amos_prompt(node), maxsec=p.get("timeout", 1800), idle=0.6, job=job)
                     out.append(txt)
+                    if auth.handle(r): continue
+                    if r == "amos": auth.ok()
                     if r == "ask":
                         job["state"] = "ask"; job["question"] = txt.strip()[-300:]; job["answer"] = None
                         t0 = time.time()
