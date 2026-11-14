@@ -4541,7 +4541,7 @@ function drawOwnPw(){
   $("ossOwnPw").innerHTML = own.map(({ s, i }) => `<div class="oss-grid" style="grid-template-columns:1fr 1fr"><input type="text" value="${escH(s.name)} · ${escH(s.user)}" disabled aria-label="Servidor"><input type="password" data-own="${i}" value="${escH(OWNPW[i] || "")}" placeholder="Senha do ${escH(s.name)} (${escH(s.user)})" autocomplete="off"></div>`).join("");
   $("ossOwnPw").querySelectorAll("[data-own]").forEach((el) => el.oninput = () => { OWNPW[+el.dataset.own] = el.value; });
 }
-function drawSel(){ const cur = load().srv ?? 0; $("ossSrv").innerHTML = servers.map((s, i) => `<option value="${i}" ${i === cur ? "selected" : ""}>${escH(s.name)}${s.host ? " · " + escH(s.host) + ":" + s.port : " (sem IP)"}</option>`).join(""); }
+function drawSel(){ const cur = TABS && TABS.length ? T().srv : load().srv ?? 0; $("ossSrv").innerHTML = servers.map((s, i) => `<option value="${i}" ${i === cur ? "selected" : ""}>${escH(s.name)}${s.host ? " · " + escH(s.host) + ":" + s.port : " (sem IP)"}</option>`).join(""); }
 $("ossSrv").onchange = () => save({ srv: +$("ossSrv").value });
 $("ossUser").value = cfg.user || ""; $("oss2gUser").value = cfg.user2g || "";
 $("oss2gUser").onchange = () => save({ user2g: $("oss2gUser").value.trim() }); $("ossCurV").textContent = MINV.toFixed(1);
@@ -4675,7 +4675,20 @@ function setMsg(tb, h){ tb.msg = h; if (isAct(tb)) $("ossMsg").innerHTML = h; }
 function setProg(tb, txt, bar){ tb.prog = txt; if (bar != null) tb.bar = bar; if (isAct(tb)) { $("ossProg").textContent = txt; $("ossBar").style.width = tb.bar + "%"; } }
 // as entradas da aba ativa ficam guardadas nela
 $("ossNode").addEventListener("input", () => { T().node = node(); tabsDraw(); });
-$("ossNode").addEventListener("change", () => { T().node = node(); tabsSave(); tabsDraw(); });
+$("ossNode").addEventListener("change", () => { const tb = T(); tb.node = node(); autoSrv(tb); tabsSave(); tabsDraw();
+  if (tb.node && !(CGI.bsc && CGI.bsc.size)) cgiLoad(CGI.map ? true : undefined).then((ok) => { if (ok) { autoSrv(tb); tabsDraw(); } }); });
+// BSC (lista da CGI ou nome começando com BSC) -> servidor 2G; nó 3G/4G numa aba 2G -> volta para o servidor do nó
+function isBsc(n){ n = String(n || "").toUpperCase(); return !!n && ((CGI.bsc && CGI.bsc.has(n)) || /^BSC/.test(n)); }
+function autoSrv(tb){
+  const n = tb.node; if (!n) return;
+  const set = (i, why) => { if (i < 0 || i === tb.srv) return; tb.srv = i; if (isAct(tb)) { $("ossSrv").value = String(i); save({ srv: i }); status(); setMsg(tb, `<div class="msg">${escH(n)} ${why}: esta aba agora usa o servidor <b>${escH(servers[i].name)}</b>.</div>`); } };
+  const g = servers.findIndex((s) => is2g(s) && s.host);
+  if (isBsc(n)) return set(g, "é BSC (2G)");
+  if (is2g(servers[tb.srv]) && CGI.map && cgiFind(n)) {
+    const w = where()[cgiFind(n).node]; const wi = w ? servers.findIndex((s) => s.name === w && s.host) : -1;
+    set(wi >= 0 ? wi : servers.findIndex((s) => s.host && !is2g(s) && SS.some((x) => x.key === keyOf(s) && x.logged)), "é nó 3G/4G/5G");
+  }
+}
 $("ossSrv").addEventListener("change", () => { T().srv = +$("ossSrv").value; tabsSave(); tabsDraw(); });
 (load().tabs || [{ id: 0, srv: load().srv ?? 0, node: "" }]).forEach((o) => TABS.push(newTab(o)));
 act = Math.min(TABS.length - 1, load().tabAct || 0);
@@ -4683,6 +4696,7 @@ act = Math.min(TABS.length - 1, load().tabAct || 0);
 // ---------- execução ----------
 function start(body, label, after){
   const tb = T(); if (tb.busy) return;
+  if (body.node) { tb.node = body.node; autoSrv(tb); }  // BSC sempre vai para o 2G
   const s = servers[tb.srv];
   tb.busy = true; tb.out = ""; tb.outName = label; tb.after = after || null; tb.logLen = 0; tb.tlog = []; tb.lbl = { label, node: body.node || "", srv: s ? s.name : "", cmds: body.cmds || [] }; tb.kg = null; tb.ask = null; tb.live = ""; tb.liveLen = 0; tb.liveHead = "";
   askDraw(tb); setMsg(tb, ""); btns(); tabsDraw(); if (isAct(tb)) conShow();
@@ -4905,19 +4919,21 @@ function cgiIndex(rows, when, other){
 function cgiShow(msg){ $("bkCgi").textContent = msg || (CGI.map ? `Base CGI: ${Object.keys(CGI.map).length.toLocaleString("pt-BR")} sites Ericsson · ${CGI.when}` : "Base CGI: não carregada"); }
 function cgiParse(text, when){
   const lines = text.split("\n"); const H = lines[0].replace(/\r$/, "").split(";").map((h) => h.trim().toUpperCase());
-  const iR = H.indexOf("REGIONAL"), iS = H.indexOf("SITE"), iT = H.indexOf("TECNO"), iV = H.indexOf("VENDOR"), iST = H.indexOf("STATION ID");
+  const iR = H.indexOf("REGIONAL"), iS = H.indexOf("SITE"), iT = H.indexOf("TECNO"), iV = H.indexOf("VENDOR"), iST = H.indexOf("STATION ID"), iB = H.indexOf("BSC/RNC");
+  const bsc = new Set();
   if (iR < 0 || iS < 0) throw new Error("o arquivo não tem as colunas REGIONAL e SITE");
   const acc = {}, oth = {};
   for (let k = 1; k < lines.length; k++) { const c = lines[k].split(";"); if (c.length <= iS) continue;
     if (iV >= 0 && (c[iV] || "").trim().toUpperCase() !== "ERICSSON") { const st = iST >= 0 ? (c[iST] || "").trim().toUpperCase() : ""; if (st) (oth[st] = oth[st] || new Set()).add((c[iV] || "?").trim().toUpperCase()); continue; }
+    if (iB >= 0 && iT >= 0 && (c[iT] || "").trim().toUpperCase() === "2G" && c[iB]) bsc.add(c[iB].trim().toUpperCase());
     const site = (c[iS] || "").trim().toUpperCase(); if (!site) continue;
     const a = acc[site] || (acc[site] = [site, (c[iR] || "").trim().toUpperCase(), new Set(), iST >= 0 ? (c[iST] || "").trim().toUpperCase() : ""]);
     if (iT >= 0 && c[iT]) a[2].add(c[iT].trim().toUpperCase()); }
   const rows = Object.values(acc).map((a) => [a[0], a[1], [...a[2]].sort().join("/"), a[3]]);
   if (!rows.length) throw new Error("nenhum site Ericsson encontrado no arquivo");
   const eri = new Set(rows.map((r) => r[3])); const other = Object.entries(oth).filter(([st]) => !eri.has(st)).map(([st, v]) => st + ":" + [...v].join("/")).join("\n");
-  try { localStorage.setItem(CGK, JSON.stringify({ when, t: Date.now(), rows: rows.map((r) => r.join("|")).join("\n"), other })); } catch (e) {}
-  cgiIndex(rows, when, other);
+  try { localStorage.setItem(CGK, JSON.stringify({ when, t: Date.now(), rows: rows.map((r) => r.join("|")).join("\n"), other, bsc: [...bsc].join(",") })); } catch (e) {}
+  CGI.bsc = bsc; cgiIndex(rows, when, other);
 }
 async function cgiFromBytes(name, u8){
   let text, when = name;
@@ -4931,7 +4947,7 @@ async function cgiFromBytes(name, u8){
 }
 function cgiLoad(force){
   if (CGI.map && !force) return Promise.resolve(true);
-  if (force !== true) { try { const c = JSON.parse(localStorage.getItem(CGK) || "null"); if (c && c.rows && Date.now() - c.t < 7 * 864e5) { cgiIndex(c.rows.split("\n").map((l) => l.split("|")), c.when, c.other); return Promise.resolve(true); } } catch (e) {} }
+  if (force !== true) { try { const c = JSON.parse(localStorage.getItem(CGK) || "null"); if (c && c.rows && Date.now() - c.t < 7 * 864e5 && (c.bsc != null || force === "cache")) { CGI.bsc = new Set((c.bsc || "").split(",").filter(Boolean)); cgiIndex(c.rows.split("\n").map((l) => l.split("|")), c.when, c.other); return Promise.resolve(true); } } catch (e) {} }
   if (force === "cache") return Promise.resolve(false);
   if (CGI.loading) return CGI.loading;
   cgiShow("Base CGI: baixando CGI.zip do GitHub (≈7 MB)...");
