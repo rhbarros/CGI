@@ -738,7 +738,7 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
     </section>
 
     <section class="panel">
-      <div class="ph"><span class="step">BACKUP</span><h2>Backup antes da atividade</h2><p>Roda os scripts BACKUP_*.mos (dcgk, cvget do último backup, alarmes, estado, VSWR, interferência…) em vários sites. Sites em <b>servidores diferentes rodam ao mesmo tempo</b>; no mesmo servidor, um depois do outro. As senhas dos scripts são preenchidas na hora pelo helper (<code>{{SENHA_NO}}</code> = senha do nó que funcionou; <code>{{SENHA_OSS}}</code> = sua senha do servidor) e aparecem como ****** na saída.</p></div>
+      <div class="ph"><span class="step">BACKUP</span><h2>Backup antes da atividade</h2><p>Roda os scripts BACKUP_*.mos (dcgk, cvget do último backup, alarmes, estado, VSWR, interferência…) em vários sites. Sites em <b>servidores diferentes rodam ao mesmo tempo</b>, e no mesmo servidor também (até 6, cada um num terminal próprio, como abas do WinFiol). As senhas dos scripts são preenchidas na hora pelo helper (<code>{{SENHA_NO}}</code> = senha do nó que funcionou; <code>{{SENHA_OSS}}</code> = sua senha do servidor) e aparecem como ****** na saída.</p></div>
       <div class="row" style="margin:0"><label class="note" style="margin:0">Script padrão <select id="bkDef"></select></label><button class="btn" id="bkView">Ver script</button><button class="btn" id="bkAdd">+ Adicionar site</button></div>
       <pre class="oss-out" id="bkPrev" hidden style="max-height:260px"></pre>
       <textarea id="bkPaste" spellcheck="false" style="min-height:70px" placeholder="Cole o STATION ID, um por linha (ex.: MGURA_0019). A CGI mostra os nós Ericsson do site (4G-UBUR18, MG4118…), a regional escolhe o script (_3G para os nós 3G) e o servidor (CVOA/CVOB/CVO) é descoberto sozinho.&#10;Também aceita o nome do nó (4G-UBUR18). Opcional: forçar servidor e script. Ex.: 4G-UBUR18 CVOA BACKUP_TLE"></textarea>
@@ -746,6 +746,8 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
       <div class="row" style="margin:0;align-items:center"><span class="note" style="margin:0" id="bkCgi">Base CGI: não carregada</span><button class="btn" id="bkCgiUpd">Atualizar base CGI</button><label class="note" style="margin:0">ou carregar o arquivo <input type="file" id="bkCgiFile" accept=".zip,.csv"></label></div>
       <div class="tablebox"><table id="bkTbl"></table></div>
       <label class="note" style="margin:0"><input type="checkbox" id="bkOk"> Os scripts de backup só leem a configuração e salvam arquivos no servidor (<code>confb+</code>, <code>dcgk</code>, <code>cvget</code>, <code>lga</code>). Conferi a fila e quero executar.</label>
+      <div class="row" style="margin:0;align-items:center"><label class="note" style="margin:0">Sites ao mesmo tempo em cada servidor <select id="bkPar" style="width:auto;display:inline-block"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option></select></label><span class="note" style="margin:0">cada site extra abre outro terminal no mesmo servidor, como outra aba do WinFiol</span></div>
+      <div id="bkProgBox" hidden><div class="oss-prog"><span id="bkBar" style="width:0"></span></div><span class="note" style="margin:0" id="bkProg"></span></div>
       <div class="row" style="margin:0"><button class="btn primary" id="bkGo" disabled>Iniciar backup</button><button class="btn" id="bkStop" disabled>Parar a fila</button><button class="btn" id="bkZip" disabled>Baixar todas as saídas (.zip)</button></div>
       <div id="bkMsg"></div>
     </section>
@@ -4486,7 +4488,7 @@ render();
 
 // ================= EXECUTAR NO OSS (AMOS via helper local) =================
 (function(){
-const HELPER = "http://127.0.0.1:8766", MINV = 1.7, OSK = LSK + ":oss";
+const HELPER = "http://127.0.0.1:8766", MINV = 1.8, OSK = LSK + ":oss";
 const WRITE = /^\s*(set|sete|crn|cr|del|rdel|bl|deb|acc|run|ldeb|lbl|lset|lcr|ldel|restart|confb\+?|trun|upgrade|cvms|cvmk|cvrm|cvset)\b/i;
 const O = { online: false, logged: false, job: null, out: "", outName: "", logLen: 0, log: [], busy: false, files: [], after: null };
 const load = () => { try { return JSON.parse(localStorage.getItem(OSK) || "{}"); } catch (e) { return {}; } };
@@ -4536,7 +4538,7 @@ function status(){
     $("ossCur").textContent = O.curNode ? `AMOS aberto em ${O.curNode}` + (sel.depth > 1 ? ` (${sel.depth} sessões empilhadas)` : "") : "";
     $("ossSrvState").innerHTML = servers.filter((x) => x.host).map((x, i) => { const ss = SS.find((y) => y.key === keyOf(x));
       const st = !ss ? `<span class="kg-chip">desconectado</span>` : ss.logged ? `<span class="kg-chip g">conectado</span>` : `<span class="kg-chip a">caiu · reconecta na próxima ação</span>`;
-      return `<div class="ln" style="display:flex;gap:8px;align-items:center;font:11px var(--f-mono);flex-wrap:wrap"><b style="min-width:52px">${escH(x.name)}</b>${st}${ss && ss.curNode ? `<span class="kg-chip c">AMOS: ${escH(ss.curNode)}${ss.depth > 1 ? " ×" + ss.depth : ""}</span>` : ""}${ss && ss.busy ? `<span class="kg-chip a">executando</span>` : ""}</div>`; }).join("");
+      return `<div class="ln" style="display:flex;gap:8px;align-items:center;font:11px var(--f-mono);flex-wrap:wrap"><b style="min-width:52px">${escH(x.name)}</b>${st}${ss && ss.curNode ? `<span class="kg-chip c">AMOS: ${escH(ss.curNode)}${ss.depth > 1 ? " ×" + ss.depth : ""}</span>` : ""}${ss && ss.lanes ? `<span class="kg-chip">+${ss.lanes} terminal(is)</span>` : ""}${ss && ss.busy ? `<span class="kg-chip a">executando</span>` : ""}</div>`; }).join("");
     btns();
   }).catch(() => { $("ossUpd").hidden = true; O.online = false; O.logged = false; SS = []; $("ossDot").className = "oss-dot off"; $("ossSt").textContent = "helper offline"; $("ossHelp").hidden = false; $("ossSrvState").innerHTML = ""; btns(); });
 }
@@ -4771,12 +4773,13 @@ function whereSave(o){ try { localStorage.setItem(WK, JSON.stringify({ ...where(
 const srvIdx = (name) => { const i = servers.findIndex((s) => s.name.toUpperCase() === String(name || "").toUpperCase()); return i >= 0 ? i : (+$("ossSrv").value || 0); };
 function bkDraw(){
   const opts = (sel) => `<option value="-1" ${sel === -1 ? "selected" : ""}>detectar…</option>` + servers.map((s, i) => `<option value="${i}" ${i === sel ? "selected" : ""} ${s.host ? "" : "disabled"}>${escH(s.name)}${s.host ? "" : " (sem IP)"}</option>`).join("");
-  const stTxt = (r) => r.st === "run" ? `<span class="kg-chip c">executando ${r.step}/${r.total}</span>` : r.st === "ok" ? `<span class="kg-chip g">concluído</span>` : r.st === "err" ? `<span class="kg-chip r" title="${escH(r.err)}">erro</span> <span class="note" style="margin:0">${escH(r.err.slice(0, 80))}</span>` : r.st === "wait" ? `<span class="kg-chip">na fila</span>` : r.st === "stop" ? `<span class="kg-chip a">parado</span>` : r.st === "det" ? `<span class="kg-chip c">procurando o servidor…</span>` : r.st === "nf" ? `<span class="kg-chip r">não achei em nenhum servidor</span> <span class="note" style="margin:0">${escH(r.err.slice(0, 80))}</span>` : "";
+  const pc = (r) => r.total ? Math.min(99, Math.floor(r.step / r.total * 100)) : 0;
+  const stTxt = (r) => r.st === "run" ? `<span class="kg-chip c">executando ${pc(r)}%</span> <span class="note" style="margin:0">${r.step}/${r.total} comandos${r.lane ? " · terminal " + (r.lane + 1) : ""}</span><div class="oss-prog" style="max-width:180px;margin-top:3px"><span style="width:${pc(r)}%"></span></div>` : r.st === "ok" ? `<span class="kg-chip g">concluído</span>` : r.st === "err" ? `<span class="kg-chip r" title="${escH(r.err)}">erro</span> <span class="note" style="margin:0">${escH(r.err.slice(0, 80))}</span>` : r.st === "wait" ? `<span class="kg-chip">na fila</span>` : r.st === "stop" ? `<span class="kg-chip a">parado</span>` : r.st === "det" ? `<span class="kg-chip c">procurando o servidor…</span>` : r.st === "nf" ? `<span class="kg-chip r">não achei em nenhum servidor</span> <span class="note" style="margin:0">${escH(r.err.slice(0, 80))}</span>` : "";
   $("bkTbl").innerHTML = table(["Site", "Regional (CGI)", "Servidor", "Script", "Situação", ""], BK.rows.map((r, i) => tr([
     `<input type="text" data-bk="${i}" data-k="node" value="${escH(r.node)}" style="max-width:160px;text-transform:uppercase" ${BK.running ? "disabled" : ""}>`,
     `${r.reg ? `<b>${escH(r.reg)}</b> <span class="note" style="margin:0">${escH(r.tec)}${r.typ ? " · " + escH(r.typ === "BB" ? "Baseband" : r.typ === "3G" ? "RBS 3G" : r.typ) : ""}</span>` : `<span class="note" style="margin:0">—</span>`}${r.note ? `<div class="note" style="margin:0">${escH(r.note)}</div>` : ""}`,
-    `<select data-bk="${i}" data-k="srv" ${BK.running ? "disabled" : ""}>${opts(r.srv)}</select>`,
-    `<select data-bk="${i}" data-k="script" ${BK.running ? "disabled" : ""}>${r.script ? "" : `<option value="" selected>escolha…</option>`}${bkNames.map((n) => `<option ${n === r.script ? "selected" : ""}>${n}</option>`).join("")}</select>${r.auto && r.script ? ` <span class="kg-chip g" title="Escolhido pela regional da CGI e pelo tipo do nó">auto</span>` : ""}`,
+    `<select data-bk="${i}" data-k="srv" style="max-width:110px" ${BK.running ? "disabled" : ""}>${opts(r.srv)}</select>`,
+    `<select data-bk="${i}" data-k="script" style="max-width:150px" ${BK.running ? "disabled" : ""}>${r.script ? "" : `<option value="" selected>escolha…</option>`}${bkNames.map((n) => `<option ${n === r.script ? "selected" : ""}>${n}</option>`).join("")}</select>${r.auto && r.script ? ` <span class="kg-chip g" title="Escolhido pela regional da CGI e pelo tipo do nó">auto</span>` : ""}`,
     stTxt(r), `${r.out ? `<button class="btn" data-bo="${i}">Saída</button> <button class="btn" data-bd="${i}">Baixar</button>` : ""} ${BK.running ? "" : `<button class="btn" data-br="${i}" aria-label="Remover">✕</button>`}`])), { empty: "Fila vazia: adicione os sites." });
   $("bkTbl").querySelectorAll("[data-bk]").forEach((el) => el.onchange = () => { const r = BK.rows[+el.dataset.bk]; const k = el.dataset.k; r[k] = k === "srv" ? +el.value : k === "node" ? el.value.trim().toUpperCase() : el.value;
     if (k === "script") r.auto = false; if (k === "node") { r.typ = ""; r.auto = true; bkApplyCgi(r); const w = where()[r.node]; r.srv = w !== undefined && srvIdx(w) >= 0 && servers[srvIdx(w)].name.toUpperCase() === String(w).toUpperCase() ? srvIdx(w) : -1; bkSave(); bkDraw(); return; }
@@ -4786,7 +4789,18 @@ function bkDraw(){
   $("bkTbl").querySelectorAll("[data-bd]").forEach((b) => b.onclick = () => { const r = BK.rows[+b.dataset.bd]; offer([{ name: `${r.node}_${r.script}_${new Date().toISOString().slice(0, 10)}.txt`, data: r.out }], $("bkMsg")); });
   bkInfo();
 }
+function bkProg(){
+  const act = BK.rows.filter((r) => ["run", "wait", "ok", "err", "stop"].includes(r.st));
+  if (!BK.running || !act.length || BK.rows.some((r) => r.st === "det")) { if (!BK.running) $("bkProgBox").hidden = !act.length || !BK.t0; return; }
+  const part = (r) => r.st === "ok" || r.st === "err" || r.st === "stop" ? 1 : r.st === "run" && r.total ? Math.min(0.99, r.step / r.total) : 0;
+  const pct = Math.floor(act.reduce((a, r) => a + part(r), 0) / act.length * 100);
+  const done = act.filter((r) => part(r) === 1).length, run = act.filter((r) => r.st === "run").length;
+  const sec = (Date.now() - BK.t0) / 1000, eta = pct > 2 ? Math.round(sec * (100 - pct) / pct) : 0;
+  $("bkProgBox").hidden = false; $("bkBar").style.width = pct + "%";
+  $("bkProg").textContent = `${pct}% · ${done} de ${act.length} site(s) terminados · ${run} executando agora · ${Math.round(sec)} s` + (eta ? ` · faltam ~${eta >= 90 ? Math.round(eta / 60) + " min" : eta + " s"}` : "");
+}
 function bkInfo(){
+  bkProg();
   const by = {}; BK.rows.forEach((r) => { const s = servers[r.srv]; const k = s ? s.name : "a detectar"; by[k] = (by[k] || 0) + 1; });
   $("bkInfo").textContent = BK.rows.length ? `${BK.rows.length} site(s) · ` + Object.entries(by).map(([k, v]) => `${k}: ${v}`).join(" · ") + (Object.keys(by).length > 1 ? " · servidores em paralelo" : "") : "";
   $("bkGo").disabled = BK.running || !BK.rows.length || !$("bkOk").checked || !O.online; $("bkStop").disabled = !BK.running;
@@ -4854,11 +4868,11 @@ async function bkDetect(all){
 }
 $("bkDetect").onclick = () => bkDetect();
 $("bkClear").onclick = () => { if (BK.running) return; BK.rows = []; bkSave(); bkDraw(); };
-async function bkRunRow(r){
-  const s = servers[r.srv]; r.st = "run"; r.step = 0; r.total = 0; r.out = ""; r.err = ""; bkDraw();
-  log(`▶ backup ${r.script} em ${r.node} (${s.name})`, "cmd");
+async function bkRunRow(r, lane){
+  const s = servers[r.srv]; r.st = "run"; r.step = 0; r.total = 0; r.out = ""; r.err = ""; r.lane = lane || 0; bkDraw();
+  log(`▶ backup ${r.script} em ${r.node} (${s.name}${lane ? " · terminal " + (lane + 1) : ""})`, "cmd");
   let res;
-  try { res = await call("/job", { server: keyOf(s), node: r.node, paste: BKP[r.script], confirmWrites: true, timeout: 3600, ...nodeCreds(), ...nodeOpts() }); }
+  try { res = await call("/job", { server: keyOf(s), lane: lane || 0, node: r.node, paste: BKP[r.script], confirmWrites: true, timeout: 3600, ...nodeCreds(), ...nodeOpts() }); }
   catch (e) { r.st = "err"; r.err = String(e.message || e); return; }
   if (!res.ok) { r.st = "err"; r.err = res.erro || "não iniciou"; log(`${r.node}: ${r.err}`, "er"); return; }
   r.job = res.id; let since = 0;
@@ -4881,14 +4895,19 @@ $("bkGo").onclick = async () => {
   if (off.length) { $("bkMsg").innerHTML = `<div class="msg warn">Conecte antes: ${escH(off.join(", "))} (use “Conectar todos”).</div>`; return; }
   BK.running = true; BK.stop = false; $("bkMsg").innerHTML = ""; BK.rows.forEach((r) => { r.st = "wait"; r.out = ""; r.err = ""; }); bkDraw();
   const groups = {}; BK.rows.forEach((r) => { (groups[r.srv] = groups[r.srv] || []).push(r); });
-  const t0 = Date.now();
-  await Promise.all(Object.values(groups).map(async (rows) => { for (const r of rows) { if (BK.stop) { r.st = "stop"; continue; } await bkRunRow(r); bkDraw(); } }));
-  BK.running = false; bkDraw(); status();
+  const t0 = Date.now(); BK.t0 = t0; const par = Math.max(1, Math.min(6, +$("bkPar").value || 1)); save({ bkPar: par });
+  // em cada servidor, "par" terminais puxam sites da fila ao mesmo tempo; servidores diferentes também em paralelo
+  await Promise.all(Object.values(groups).map((rows) => { const q = rows.slice();
+    return Promise.all(Array.from({ length: Math.min(par, rows.length) }, (_, lane) => (async () => {
+      for (let r; (r = q.shift());) { if (BK.stop) { r.st = "stop"; continue; } await bkRunRow(r, lane); bkDraw(); } })())); }));
+  BK.running = false; bkDraw(); status(); bkProg(); $("bkProgBox").hidden = false; $("bkBar").style.width = "100%";
+  $("bkProg").textContent = `100% · terminado em ${Math.round((Date.now() - t0) / 1000)} s`;
   const ok = BK.rows.filter((r) => r.st === "ok").length;
   $("bkMsg").innerHTML = `<div class="msg ${ok === BK.rows.length ? "ok" : "warn"}">Backup terminado em ${Math.round((Date.now() - t0) / 1000)} s: ${ok} de ${BK.rows.length} concluído(s).</div>`;
 };
 $("bkStop").onclick = () => { BK.stop = true; BK.rows.filter((r) => r.st === "run" && r.job).forEach((r) => call("/job/stop", { id: r.job })); log("Parando a fila de backup após o comando atual de cada site...", "er"); };
 $("bkZip").onclick = async () => { const z = new JSZip(); BK.rows.filter((r) => r.out).forEach((r) => z.file(`${r.node}_${r.script}.txt`, r.out)); offer([{ name: `backups_${new Date().toISOString().slice(0, 16).replace(/\D/g, "")}.zip`, data: await z.generateAsync({ type: "uint8array" }) }], $("bkMsg")); };
+if (load().bkPar) $("bkPar").value = String(load().bkPar);
 bkDraw();
 cgiLoad("cache").then((ok) => { if (ok && BK.rows.some((r) => r.auto && !r.reg)) bkRefresh(); });
 

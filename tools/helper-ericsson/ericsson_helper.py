@@ -11,7 +11,7 @@ import argparse, json, os, re, sys, threading, time, uuid
 from urllib.parse import urlparse, parse_qs
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "1.7"
+VERSION = "1.8"
 LOCAL_PORT = 8766
 LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "helper.log")
 
@@ -26,6 +26,7 @@ USER_RE = re.compile(r"(user\s*name|username|login|user|usuario)[^\n:]{0,40}:\s*
 AUTH_FAIL_RE = re.compile(r"(permission denied|authentication (fail|error)|auth fail|access denied|login incorrect|incorrect (password|login|user)|wrong password|invalid (user|password|credential|login)|bad password|unable to (connect|login|log ?in|authenticate)|failed to (connect|login|log ?in|authenticate)|could not (connect|login|authenticate)|not authori[sz]ed|too many (authentication )?failures|connection (refused|closed|reset))", re.I)
 FOUND_RE = re.compile(r"ip contact\.*\s*ok\b", re.I)
 NOTFOUND_RE = re.compile(r"(ip contact\.*\s*not ok|unknown node|node\b[^\n]{0,60}\bnot found|no such node|(could not|unable to|cannot|failed to) resolve|not (found|defined) in (the )?(enm|oss|ipdatabase|database)|does not exist|invalid node|no route to host|host unreachable|name or service not known)", re.I)
+SHELL_RE = re.compile(r"^\s*\[?[\w.\-]+@[\w.\-]+[^\n]{0,120}[\$#]\s*$")  # [usuario@servidor ~]$
 NODE_PWD_OK = {}  # no -> indice da senha que funcionou (so em memoria)
 
 
@@ -108,10 +109,32 @@ class Session:
         if not ok:
             logf("login sem prompt claro: " + repr(txt[-300:]))
         # desliga cores e paginacao no shell (ignora se nao for bash)
-        self.chan.send("export TERM=dumb PAGER=cat LESS= 2>/dev/null; stty -echoctl 2>/dev/null\n")
-        self.read_until(self.shell_done, maxsec=10, idle=0.6)
+        self._after_shell()
         logf("login %s@%s:%s prompt=%r" % (user, host, port, self.prompt))
         return {"prompt": self.prompt, "banner": self.banner}
+
+    def _after_shell(self):
+        self.chan.send("export TERM=dumb PAGER=cat LESS= 2>/dev/null; stty -echoctl 2>/dev/null\n")
+        self.read_until(self.shell_done, maxsec=10, idle=0.6)
+
+    def open_lane(self, main):
+        """Abre mais um terminal no mesmo servidor (outro canal na mesma conexao SSH, como outra aba do WinFiol)."""
+        self.logout(); self._cred = main._cred; self.host, self.user, self.port = main.host, main.user, main.port
+        t = main.client.get_transport() if (main.client and main.logged) else None
+        if not t or not t.is_active():
+            if not main._cred: raise RuntimeError("servidor %s nao conectado" % main.name)
+            return self.login(*main._cred)
+        try:
+            ch = t.open_session(); ch.get_pty(term="vt100", width=400, height=2000); ch.invoke_shell(); ch.settimeout(0.3)
+        except Exception as e:  # servidor nao aceita outro canal na mesma conexao: faz outro login
+            logf("canal extra recusado (%s): novo login" % e); return self.login(*main._cred)
+        self.chan = ch; self.client = None  # a conexao e do terminal principal
+        txt, ok = self.read_until(lambda x: re.search(r"[\$#>%]\s*$", x), maxsec=30, idle=1.2)
+        if not ok:
+            logf("canal extra sem prompt: novo login"); self.logout(); return self.login(*main._cred)
+        lines = [l for l in txt.split("\n") if l.strip()]
+        self.prompt = (lines[-1] if lines else main.prompt).rstrip()
+        self._after_shell(); logf("terminal extra %s prompt=%r" % (self.key, self.prompt))
 
     def logout(self):
         try:
@@ -127,6 +150,11 @@ class Session:
     def ensure(self, job=None):
         """Se a sessao caiu (rede/VPN), reconecta com as credenciais guardadas em memoria."""
         if self.logged: return
+        if getattr(self, "lane_of", None):
+            main = SESS.get(self.lane_of)
+            if not main: raise RuntimeError("servidor nao conectado: faca o login de novo")
+            if job is not None: job["log"].append("Abrindo terminal extra em %s." % main.name)
+            return self.open_lane(main)
         if not self._cred: raise RuntimeError("servidor %s nao conectado: faca o login de novo" % (self.name or self.key))
         if job is not None: job["log"].append("Sessao com %s tinha caido: reconectando..." % (self.name or self.key))
         h, pt, u, pw = self._cred; self.login(h, pt, u, pw)
@@ -191,6 +219,18 @@ def use(key):
     _TL.s = s; return s
 
 
+def lane_key(key, lane):
+    """lane 0 = terminal principal; 1, 2... = terminais extras no mesmo servidor (sites ao mesmo tempo)."""
+    lane = int(lane or 0)
+    if lane <= 0: return key
+    main = SESS.get(key)
+    if main is None: raise RuntimeError("servidor nao conectado: faca o login")
+    lk = "%s#%d" % (key, lane)
+    if lk not in SESS:
+        s = Session(); s.key = lk; s.name = "%s #%d" % (main.name, lane + 1); s.lane_of = key; SESS[lk] = s
+    return lk
+
+
 def pick(d):
     key = d.get("server") or d.get("key")
     if not key:
@@ -214,7 +254,8 @@ def amos_prompt(node):
         if PWD_RE.search(last): return "pwd"
         if USER_RE.search(last): return "user"
         if ASK_RE.search(tail[-200:]): return "ask"
-        if re.search(r"[\$#]\s*$", last): return "shell"
+        # antes: qualquer linha terminando em $ ou # (ex.: "#####" do pmxet/lt all) era tomada como "AMOS fechou"
+        if SHELL_RE.match(last): return "shell"
         return None
     return done
 
@@ -262,6 +303,13 @@ class NodeAuth:
 
     def ok(self):
         return self.verdict("")
+
+
+def really_shell(node, job, out):
+    """Confere se o AMOS fechou mesmo: manda Enter e ve qual prompt volta."""
+    S.chan.send("\n"); txt, r = S.read_until(amos_prompt(node), maxsec=20, idle=0.8, job=job); out.append(txt)
+    if r == "amos": job["log"].append("(o AMOS continuava aberto; seguindo)")
+    return r != "amos"
 
 
 def close_amos(job=None, out=None):
@@ -325,7 +373,7 @@ def paste_script(job, node, auth, out, p):
             while r in ("user", "pwd"):
                 auth.handle(r); txt, r = S.read_until(amos_prompt(node), maxsec=per, idle=0.5, job=job, quiet=25); out.append(txt)
             if r == "amos": auth.verdict(txt)
-        if r == "shell":
+        if r == "shell" and really_shell(node, job, out):
             raise RuntimeError("o AMOS fechou durante '%s'" % shown.strip())
         if r is None:
             raise RuntimeError("tempo esgotado em '%s'" % shown.strip())
@@ -434,8 +482,9 @@ def run_job(job):
                         ans = job["answer"] if job["answer"] is not None else "n"
                         job["log"].append("Resposta: " + ans); job["state"] = "running"; job["question"] = ""
                         S.chan.send(ans + "\n"); continue
-                    if r == "shell":
+                    if r == "shell" and really_shell(node, job, out):
                         raise RuntimeError("o AMOS fechou durante '%s'" % c)
+                    if r == "shell": break
                     if r is None:
                         raise RuntimeError("tempo esgotado esperando o fim de '%s'" % c)
                     break
@@ -581,7 +630,12 @@ class Handler(BaseHTTPRequestHandler):
         if not self._guard(): return
         u = urlparse(self.path); q = parse_qs(u.query)
         if u.path == "/":
-            ss = [v.info() for v in SESS.values()]; first = next((x for x in ss if x["logged"]), {})
+            ss = []
+            for k, v in list(SESS.items()):
+                if getattr(v, "lane_of", None): continue
+                i = v.info(); ex = [x for x in SESS.values() if getattr(x, "lane_of", None) == k]
+                i["lanes"] = sum(1 for x in ex if x.logged); i["busy"] = i["busy"] or any(busy(x.key) for x in ex); ss.append(i)
+            first = next((x for x in ss if x["logged"]), {})
             return self._json({"ok": True, "app": "ericsson-helper", "version": VERSION, "sessions": ss, "logged": any(x["logged"] for x in ss),
                                "host": first.get("host", ""), "user": first.get("user", ""), "prompt": first.get("prompt", ""), "curNode": first.get("curNode", ""), "depth": first.get("depth", 0), "busy": busy()})
         if u.path in ("/job", "/job/out"):
@@ -606,6 +660,8 @@ class Handler(BaseHTTPRequestHandler):
             if p == "/login":
                 key = "%s:%s" % (d["host"], int(d.get("port", 5022)))
                 if busy(key): return self._json({"ok": False, "erro": "ha uma execucao em andamento neste servidor"})
+                for k in [k for k, v in SESS.items() if getattr(v, "lane_of", None) == key and not busy(k)]:
+                    x = SESS.pop(k); x.forget()
                 sess = SESS.setdefault(key, Session()); sess.key = key; sess.name = d.get("name") or sess.name or d["host"]
                 _TL.s = sess
                 with sess.lock:
@@ -619,6 +675,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"ok": True})
             if p == "/logout":
                 keys = [d["key"]] if d.get("key") else list(SESS.keys())
+                keys = keys + [k for k, v in SESS.items() if getattr(v, "lane_of", None) in keys and k not in keys]
                 for k in keys:
                     for j in JOBS.values():
                         if j.get("server") == k: j["stop"] = True
@@ -629,6 +686,7 @@ class Handler(BaseHTTPRequestHandler):
             if p == "/job":
                 key = pick(d)
                 if key not in SESS: return self._json({"ok": False, "erro": "servidor nao conectado: faca o login"})
+                key = lane_key(key, d.get("lane"))
                 if busy(key):
                     return self._json({"ok": False, "erro": "ja existe uma execucao em andamento neste servidor"})
                 cmds = d.get("cmds", [])
