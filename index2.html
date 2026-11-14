@@ -3723,22 +3723,112 @@ function secComp(d, s){
   $("kgCoX").onclick = () => xls([["Desvios", [["Classe", "Parâmetro", "MO", "Valor", "Padrão", "Faixa", "Unidade", "Efeito", "Descrição"], ...rows().map((x) => [x.cls, x.attr, x.mo, x.v, x.def, x.info.range, x.info.unit, x.info.takes, x.info.desc])]]], `${s.node}_conformidade_MOM.xlsx`, $("kgCoM"));
   $("kgCoS").onclick = () => { const r = rows().filter((x) => !/Ref$/.test(x.attr)); if (r.length > 300) { $("kgCoM").innerHTML = `<div class="msg warn">${r.length} desvios no filtro. Refine para no máximo 300 antes de gerar o script.</div>`; return; } r.forEach((x) => KG.script.push(K.setCmd(x.mo, x.attr, x.def) + "   // padrão MOM")); $("kgCoM").innerHTML = `<div class="msg ok">${r.length} comando(s) enviados ao Gerador de script.</div>`; };
 }
+// ---------- Topologia (mapa no estilo CafeTele: setores, células, rádios, torre, baseband) ----------
+const LTE_DL = { 1: [2110, 0], 2: [1930, 600], 3: [1805, 1200], 4: [2110, 1950], 5: [869, 2400], 7: [2620, 2750], 8: [925, 3450], 12: [729, 5010], 13: [746, 5180], 14: [758, 5280], 17: [734, 5730], 20: [791, 6150], 25: [1930, 8040], 26: [859, 8690], 28: [758, 9210], 38: [2570, 37750], 40: [2300, 38650], 41: [2496, 39650], 42: [3400, 41590], 43: [3600, 43590], 66: [2110, 66436] };
+const lteMHz = (e) => { const n = +e; const b = K.lteBand(n); const t = LTE_DL[b]; return t ? t[0] + 0.1 * (n - t[1]) : null; };
+const nrMHz = (a) => { const n = +a; if (!n) return null; return n < 600000 ? n * 0.005 : n < 2016667 ? 3000 + 0.015 * (n - 600000) : 24250.08 + 0.06 * (n - 2016667); };
+const shortName = (name, node) => { const base = String(node || "").replace(/^[45]G-?/i, ""); return String(name).replace(/^[45]G-?/i, "").replace(base, "").replace(/^[-_]+/, "").replace(/-/g, "_") || name; };
+function sectorOf(name){ const suf = String(name).split(/[-_]/).pop() || ""; const ch = suf.slice(-1).toUpperCase(); if (!/[A-Z]/.test(ch)) return "?"; return String.fromCharCode(65 + ((ch.charCodeAt(0) - 65) % 8)); }
+function topoModel(d, s){
+  const nbi = K.nbiotCells(d); const hw = K.hardware(d); const ri = K.riLinks(d);
+  const cells = [
+    ...s.lte.map((c) => ({ c, tech: "4G", band: c.band ? "B" + c.band : "", sub: c.bwDl ? (+c.bwDl >= 1000 ? +c.bwDl / 1000 : c.bwDl) + "MHz" : "", radios: K.chainOf(d, c.mo).radio.map((m) => m.id) })),
+    ...nbi.map((c) => { const host = s.lte.find((l) => l.name === c.host); return { c, tech: "NB", band: host && host.band ? "B" + host.band : "", sub: "NB-IoT", radios: host ? K.chainOf(d, host.mo).radio.map((m) => m.id) : [] }; }),
+    ...s.nr.map((c) => ({ c, tech: "5G", band: c.bands ? "n" + String(c.bands).split(/\s+/)[0] : "", sub: c.bwDl ? c.bwDl + "MHz" : "", radios: K.chainOf(d, c.mo).radio.map((m) => m.id) })),
+  ].map((x) => ({ ...x, name: x.c.name, short: shortName(x.c.name, s.node), pci: x.c.pci, ok: x.c.oper === "ENABLED" && x.c.admin === "UNLOCKED", sector: sectorOf(x.c.name) }));
+  const secs = {}; cells.forEach((x) => { (secs[x.sector] = secs[x.sector] || { id: x.sector, cells: [], radios: [] }).cells.push(x); x.radios.forEach((r) => { if (!secs[x.sector].radios.includes(r)) secs[x.sector].radios.push(r); }); });
+  Object.values(secs).forEach((sc) => {
+    sc.ret = hw.ret.filter((r) => sc.radios.some((id) => { const p = hw.rf.find((q) => q.fru === id && q.used); return p && (d.byKey.get(p.mo.key) || {}).a && String(d.byKey.get(p.mo.key).a.reservedBy).includes("AntennaUnitGroup=" + r.aug + ","); }));
+  });
+  const bb = s.frus.filter((u) => !hw.rf.some((p) => p.fru === u.id) && !(d.byCls.get("Transceiver") || []).some((t) => t.key.includes("FieldReplaceableUnit=" + u.id + ",")));
+  return { cells, secs: Object.values(secs).sort((a, b) => a.id.localeCompare(b.id)), bb, ri, hw, nbi };
+}
+function topoSvg(d, s, m, filt){
+  const W = 1180; const secs = m.secs; const n = Math.max(1, secs.length);
+  const colW = W / n; const pillW = 40, pillH = 66, gap = 6;
+  const techCol = { "4G": "var(--c1)", "NB": "#38bdf8", "5G": "var(--c6)" };
+  const radioBox = 150, radioH = 46; let svg = ""; const radioPos = {};
+  const secPalette = ["#818cf8", "var(--c3)", "var(--c4)", "var(--c6)", "var(--c1)", "#fb923c"];
+  const maxRadios = Math.max(1, ...secs.map((sc) => sc.radios.length));
+  const rowsR = Math.ceil(maxRadios / Math.max(1, Math.floor((colW - 20) / (radioBox + 8))));
+  const yRad = 300; const yBB = yRad + rowsR * (radioH + 10) + 120; const H = yBB + 150;
+  // torre
+  const tx = W / 2; svg += `<g stroke="var(--text3)" stroke-width="1.4" fill="none" opacity=".75"><path d="M${tx - 6} 120 L${tx - 34} ${yBB - 20} M${tx + 6} 120 L${tx + 34} ${yBB - 20}"/>${Array.from({ length: 12 }, (_, i) => { const y1 = 130 + i * ((yBB - 160) / 12), y2 = y1 + (yBB - 160) / 12; const w1 = 6 + (y1 - 120) / (yBB - 140) * 28, w2 = 6 + (y2 - 120) / (yBB - 140) * 28; return `<path d="M${tx - w1} ${y1} L${tx + w2} ${y2} M${tx + w1} ${y1} L${tx - w2} ${y2}"/>`; }).join("")}<rect x="${tx - 44}" y="${yBB - 22}" width="88" height="5" fill="var(--text3)"/></g><circle cx="${tx}" cy="118" r="4" fill="var(--c5)"/>`;
+  secs.forEach((sc, i) => {
+    const cx = colW * i + colW / 2; const col = secPalette[i % secPalette.length];
+    const cl = sc.cells.filter((x) => filt === "ALL" || (filt === "LTE" ? x.tech !== "5G" : x.tech === "5G"));
+    const bw = Math.max(170, cl.length * (pillW + gap) + 26); const bx = cx - bw / 2, by = 70;
+    const tilt = sc.ret.map((r) => (+r.tilt / 10).toFixed(1) + "°").join("/");
+    svg += `<line x1="${cx}" y1="${by + 60}" x2="${tx}" y2="125" stroke="var(--border2)" stroke-width="1.2"/>`;
+    svg += `<rect x="${bx}" y="${by}" width="${bw}" height="150" rx="10" fill="var(--bg2)" stroke="var(--border2)"/><text x="${cx}" y="${by + 18}" text-anchor="middle" fill="${col}" style="font:800 12px var(--f-ui)">SETOR ${escH(sc.id)}</text><text x="${cx}" y="${by + 32}" text-anchor="middle" fill="var(--text3)" style="font:9px var(--f-mono)">${sc.cells.length} células · ${sc.radios.length} rádios${tilt ? " · tilt " + tilt : ""}</text>`;
+    cl.forEach((x, j) => { const px = cx - (cl.length * (pillW + gap) - gap) / 2 + j * (pillW + gap), py = by + 44;
+      svg += `<g><title>${escH(x.name)} · ${escH(x.band)} · PCI ${escH(x.pci ?? "-")} · ${x.ok ? "ativa" : "fora de serviço"}</title><rect x="${px}" y="${py}" width="${pillW}" height="${pillH}" rx="7" fill="${techCol[x.tech]}" opacity="${x.ok ? 0.9 : 0.35}" stroke="${x.ok ? "none" : "var(--c5)"}" stroke-width="2"/>
+        <text x="${px + pillW / 2}" y="${py + 15}" text-anchor="middle" fill="#04131c" style="font:800 11px var(--f-ui)">${x.tech}</text><text x="${px + pillW / 2}" y="${py + 28}" text-anchor="middle" fill="#04131c" style="font:700 9px var(--f-mono)">${escH(x.band)}</text>
+        <text x="${px + pillW / 2}" y="${py + 41}" text-anchor="middle" fill="#04131c" style="font:8px var(--f-mono)">${escH(x.sub)}</text><text x="${px + pillW / 2}" y="${py + 54}" text-anchor="middle" fill="#04131c" style="font:8px var(--f-mono)">PCI ${escH(x.pci ?? "-")}</text>
+        <text x="${px + pillW / 2}" y="${py + pillH + 12}" text-anchor="middle" fill="var(--text2)" style="font:8px var(--f-mono)">${escH(x.short)}</text></g>`; });
+    // rádios
+    const per = Math.max(1, Math.floor((colW - 20) / (radioBox + 8)));
+    sc.radios.forEach((id, j) => { const row = Math.floor(j / per), k = j % per, cnt = Math.min(per, sc.radios.length - row * per);
+      const rx = cx - (cnt * (radioBox + 8) - 8) / 2 + k * (radioBox + 8), ry = yRad + row * (radioH + 10);
+      const u = s.frus.find((f) => f.id === id) || {}; const ports = m.hw.rf.filter((p) => p.fru === id && p.used); const rl = ports.map((p) => +p.rl).filter((v) => v > 0);
+      const okR = (u.oper || "ENABLED") === "ENABLED"; const vswrOk = !ports.length || rl.every((v) => v >= 14);
+      radioPos[id] = [rx + radioBox / 2, ry, ry + radioH];
+      svg += `<line x1="${rx + radioBox / 2}" y1="${ry}" x2="${cx}" y2="${by + 150}" stroke="var(--c6)" stroke-width="1.2" stroke-dasharray="3 3" opacity=".7"/>
+        <g><title>${escH(id)} · ${escH(u.name || "")} · ${escH(u.serial || "")}${rl.length ? " · return loss " + rl.join("/") + " dB" : ""}</title><rect x="${rx}" y="${ry}" width="${radioBox}" height="${radioH}" rx="7" fill="var(--bg2)" stroke="${okR ? col : "var(--c5)"}" stroke-width="1.4"/>
+        <circle cx="${rx + radioBox - 9}" cy="${ry + 9}" r="3.5" fill="${okR ? "var(--c3)" : "var(--c5)"}"/>
+        <text x="${rx + radioBox / 2}" y="${ry + 15}" text-anchor="middle" fill="var(--text)" style="font:700 10px var(--f-ui)">${escH((u.name || id).slice(0, 22))}</text><text x="${rx + radioBox / 2}" y="${ry + 27}" text-anchor="middle" fill="var(--text3)" style="font:8px var(--f-mono)">${escH(id)}</text>
+        <text x="${rx + 8}" y="${ry + 40}" fill="${vswrOk ? "var(--c3)" : "var(--c5)"}" style="font:8px var(--f-mono)">${ports.length ? (rl.length ? "RL " + Math.min(...rl).toFixed(1) + " dB" : "VSWR —") : "AAS"}</text><text x="${rx + radioBox - 8}" y="${ry + 40}" text-anchor="end" fill="var(--text3)" style="font:8px var(--f-mono)">${escH(u.number || "")}</text></g>`; });
+  });
+  // baseband e CPRI
+  const bbW = 300, bbX = tx - bbW / 2;
+  m.bb.forEach((u, i) => { const y = yBB + i * 70; radioPos[u.id] = [tx, y, y + 54];
+    svg += `<rect x="${bbX}" y="${y}" width="${bbW}" height="54" rx="9" fill="var(--bg2)" stroke="var(--c2)" stroke-width="1.6"/><text x="${tx}" y="${y + 18}" text-anchor="middle" fill="var(--c2)" style="font:800 11px var(--f-ui)">BASEBAND · ${escH(u.name || u.id)}</text><text x="${tx}" y="${y + 33}" text-anchor="middle" fill="var(--text3)" style="font:9px var(--f-mono)">${escH(u.id)} · ${escH(u.number || "")} · ${escH(u.serial || "")}</text><text x="${tx}" y="${y + 46}" text-anchor="middle" fill="var(--text3)" style="font:9px var(--f-mono)">${m.ri.filter((r) => r.fru1 === u.id || r.fru2 === u.id).length} links CPRI</text>`; });
+  m.ri.forEach((r) => { const a = radioPos[r.fru1], b = radioPos[r.fru2]; if (!a || !b) return;
+    const isBB = (id) => m.bb.some((u) => u.id === id); let x1, y1, x2, y2;
+    if (isBB(r.fru1) || isBB(r.fru2)) { const bbp = isBB(r.fru1) ? a : b, rp = isBB(r.fru1) ? b : a; const port = isBB(r.fru1) ? r.port1 : r.port2; const off = ((port || "A").charCodeAt(0) - 72) * 9; x1 = tx + off; y1 = bbp[1]; x2 = rp[0]; y2 = rp[2]; }
+    else { x1 = a[0]; y1 = a[2]; x2 = b[0]; y2 = b[2]; }
+    const okL = r.oper === "ENABLED"; const casc = !(isBB(r.fru1) || isBB(r.fru2)); const mid = isBB(r.fru1) || isBB(r.fru2) ? `C${x1} ${(y1 + y2) / 2} ${x2} ${(y1 + y2) / 2 + 30} ${x2} ${y2}` : `C${x1} ${y1 + 26} ${x2} ${y2 + 26} ${x2} ${y2}`;
+    svg += `<path d="M${x1} ${y1} ${mid}" fill="none" stroke="${!okL ? "var(--c5)" : casc ? "var(--c4)" : "var(--c6)"}" stroke-width="${casc ? 1.1 : 1.5}" stroke-dasharray="${okL ? (casc ? "2 3" : "5 4") : "2 3"}" opacity="${casc ? 0.55 : 0.85}"><title>RiLink ${escH(r.id)}: ${escH(r.fru1 + ":" + r.port1)} ↔ ${escH(r.fru2 + ":" + r.port2)} · ${escH(r.oper)}${r.rate ? " · " + escH(r.rate) : ""}</title></path>`; });
+  const core = d.mos.filter((x) => /^TermPointTo(Mme|Amf)$/.test(x.cls)); const coreOk = core.filter((x) => K.st(x.a.operationalState) === "ENABLED").length;
+  if (m.bb.length) svg += `<path d="M${bbX + bbW} ${yBB + 27} L${bbX + bbW + 70} ${yBB + 27}" stroke="var(--text2)" stroke-width="1.4" marker-end="url(#kgArr)"/><text x="${bbX + bbW + 78}" y="${yBB + 24}" fill="var(--text2)" style="font:700 10px var(--f-ui)">Para o core</text><text x="${bbX + bbW + 78}" y="${yBB + 37}" fill="${coreOk === core.length ? "var(--c3)" : "var(--c4)"}" style="font:9px var(--f-mono)">S1/NG ${coreOk}/${core.length} OK</text>`;
+  svg += `<line x1="20" y1="${yBB - 18}" x2="${W - 20}" y2="${yBB - 18}" stroke="var(--border2)" stroke-dasharray="4 4"/>`;
+  const legend = `<g style="font:9px var(--f-mono)" fill="var(--text2)">${[["4G LTE", techCol["4G"]], ["NB-IoT", techCol.NB], ["5G NR", techCol["5G"]]].map(([t, c], i) => `<rect x="${20 + i * 82}" y="16" width="11" height="11" rx="3" fill="${c}"/><text x="${36 + i * 82}" y="25">${t}</text>`).join("")}<line x1="270" y1="22" x2="300" y2="22" stroke="var(--c6)" stroke-dasharray="5 4"/><text x="306" y="25">CPRI baseband–rádio</text><line x1="430" y1="22" x2="460" y2="22" stroke="var(--c4)" stroke-dasharray="2 3"/><text x="466" y="25">CPRI em cascata</text><circle cx="580" cy="22" r="4" fill="var(--c5)"/><text x="588" y="25">fora de serviço</text></g>`;
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Mapa de topologia do site" style="display:block;max-width:none;min-width:900px"><defs><marker id="kgArr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--text2)"/></marker></defs>${legend}${svg}</svg>`;
+}
 function secTopo(d, s){
-  const hw = K.hardware(d); const ri = K.riLinks(d);
-  const fruName = (id) => { const f = s.frus.find((x) => x.id === id); return f && f.name ? `${id} · ${f.name}` : id; };
-  // setor = rádio/AIR que transmite a célula
-  const sectors = {};
-  [...s.lte.map((c) => [c, "LTE"]), ...s.nr.map((c) => [c, "NR"])].forEach(([c, t]) => { const ch = K.chainOf(d, c.mo); const r = ch.radio.map((m) => m.id).join("+") || "sem rádio"; const aug = (ch.branch[0] && (ch.branch[0].key.match(/AntennaUnitGroup=([^,]+)/) || [])[1]) || "";
-    const o = sectors[r] = sectors[r] || { radio: r, aug, cells: [], ri: ch.ri }; o.cells.push([c, t]); });
-  const bb = s.frus.filter((u) => /Baseband|RAN Processor|DU/i.test(u.name));
-  $("kgSec").innerHTML = `<div class="kg-tiles">${[["Células LTE", s.lte.length], ["Células NR", s.nr.length], ["Rádios / AIR", s.frus.length - bb.length], ["Baseband", bb.length], ["Grupos de antena", hw.ant.length], ["RET", hw.ret.length]].map(([l, v]) => `<div class="kg-tile"><b>${v}</b><span>${l}</span></div>`).join("")}</div>
-    <h3 class="sub">Visão por rádio / setor</h3><div class="kg-sector">${Object.values(sectors).map((x) => { const ret = hw.ret.filter((r) => r.aug === x.aug); const ports = hw.rf.filter((p) => x.radio.split("+").includes(p.fru) && p.used);
-      return `<div class="kg-card"><h4>${escH(fruName(x.radio))}</h4>${x.cells.map(([c, t]) => `<span class="kg-chip ${t === "NR" ? "c" : "g"}">${escH(c.name)} · ${t === "NR" ? "n" + String(c.bands || "").split(/\s+/)[0] : "B" + c.band} · PCI ${c.pci ?? "-"}</span>`).join("")}
-        ${x.aug ? ln("Grupo de antena", escH(x.aug)) : ""}${ret.length ? ln("Tilt elétrico (RET)", ret.map((r) => escH((+r.tilt / 10).toFixed(1) + "° " + (r.label || ""))).join(", ")) : ""}${ports.length ? ln("Return loss", ports.map((p) => escH(p.id + ": " + (p.rl || "-") + " dB")).join(" · ")) : ""}
-        ${x.ri.length ? ln("CPRI", x.ri.map((r) => escH(r.fru1 + ":" + r.port1 + "↔" + r.fru2 + ":" + r.port2)).join("<br>")) : ""}</div>`; }).join("")}
-      ${bb.map((u) => `<div class="kg-card kg-hc" style="--kc:var(--c2)"><h4>${escH(fruName(u.id))}</h4>${ln("Links CPRI", ri.filter((r) => r.fru1 === u.id || r.fru2 === u.id).length)}${ln("Interfaces para o core", d.mos.filter((m) => /^TermPointTo(Mme|Amf)$/.test(m.cls)).map((m) => m.cls.replace("TermPointTo", "") + " " + K.st(m.a.operationalState)).join(", ") || "-")}${ln("Série", escH(u.serial || "-"))}</div>`).join("")}</div>
-    <h3 class="sub">Cadeia de sinal por célula</h3><div id="kgTopoCh"></div>`;
-  secHwOld(d, s, $("kgTopoCh"));
+  const m = topoModel(d, s); KG.topoTab = KG.topoTab || "map"; KG.topoF = KG.topoF || "ALL"; KG.topoZ = KG.topoZ || 1;
+  const lteN = m.cells.filter((x) => x.tech !== "5G").length, nrN = m.cells.filter((x) => x.tech === "5G").length;
+  const antN = m.hw.ant.length; const radN = s.frus.length - m.bb.length;
+  const head = `<div class="kg-hero" style="padding:12px 16px;gap:12px;justify-content:space-between"><div><h3 style="font-size:16px">${escH(s.node)}</h3><span class="note" style="margin:0">${escH(s.sw || "")}</span></div>
+    <div>${[[m.cells.filter((x) => x.tech === "4G").length + " células LTE" + (m.nbi.length ? " + " + m.nbi.length + " NB-IoT" : ""), "c"], [nrN + " células NR", "r"], [antN + " antenas", "g"], [radN + " rádios", ""], [m.bb.length + " baseband", "a"]].map(([t, c]) => `<span class="kg-chip ${c}">${t}</span>`).join("")}</div>
+    <div class="kg-tabs2">${["ALL", "LTE", "NR"].map((f) => `<button data-tf="${f}" aria-pressed="${KG.topoF === f}">${f === "ALL" ? "Todas" : f}</button>`).join("")}</div></div>
+    <div class="kg-tabs2">${[["map", "Topologia"], ["flow", "Fluxo de sinal"], ["spec", "Espectro"], ["cap", "Capacidade"]].map(([k, t]) => `<button data-tt="${k}" aria-pressed="${KG.topoTab === k}">${t}</button>`).join("")}</div>`;
+  let body = "";
+  if (KG.topoTab === "map") body = `<div class="row"><button class="btn" id="kgTzI" aria-label="Aproximar">＋</button><button class="btn" id="kgTzO" aria-label="Afastar">－</button><button class="btn" id="kgTz1">100%</button><span class="note">Passe o mouse sobre células, rádios e links para ver os detalhes. Setor deduzido pelo nome da célula (A/I → A, B/J → B, C/K → C).</span></div>
+    <div class="tablebox" style="background:radial-gradient(ellipse at top,rgba(0,212,255,.05),transparent 60%),var(--bg);max-height:none;overflow:auto"><div id="kgTopoSvg" style="width:${KG.topoZ * 100}%">${topoSvg(d, s, m, KG.topoF)}</div></div>`;
+  else if (KG.topoTab === "flow") body = `<div id="kgTopoCh"></div>`;
+  else if (KG.topoTab === "spec") {
+    const car = K.freqPlan(d).carriers.map((c) => { const f = c.tech === "NR" ? nrMHz(c.arfcn) : lteMHz(c.arfcn); return { ...c, f }; }).filter((c) => c.f);
+    const groups = {}; car.forEach((c) => { const g = c.band; (groups[g] = groups[g] || []).push(c); });
+    body = `<p class="note">Portadoras no eixo de frequência de downlink (MHz), calculado pelo EARFCN/ARFCN. Cada bloco tem a largura da banda configurada.</p>` + Object.entries(groups).map(([g, l]) => {
+      const lo = Math.min(...l.map((c) => c.f - c.bw / 2)) - 5, hi = Math.max(...l.map((c) => c.f + c.bw / 2)) + 5; const W = 900, sc = (W - 40) / (hi - lo);
+      return `<div class="kg-card"><h4>${escH(g)} · ${escH(l[0].tech)}<span class="note" style="margin:0">${lo.toFixed(0)}–${hi.toFixed(0)} MHz</span></h4><div style="overflow-x:auto"><svg viewBox="0 0 ${W} 86" width="100%" style="min-width:520px;display:block">${l.map((c) => { const x = 20 + (c.f - c.bw / 2 - lo) * sc, w = c.bw * sc; return `<g><title>${escH(c.cells.join(", "))}</title><rect x="${x}" y="14" width="${w}" height="34" rx="5" fill="${c.tech === "NR" ? "var(--c6)" : "var(--c1)"}" opacity=".8"/><text x="${x + w / 2}" y="35" text-anchor="middle" fill="#04131c" style="font:700 11px var(--f-mono)">${c.bw} MHz</text><text x="${x + w / 2}" y="62" text-anchor="middle" fill="var(--text2)" style="font:9px var(--f-mono)">${c.tech === "NR" ? "ARFCN" : "EARFCN"} ${escH(c.arfcn)} · ${c.f.toFixed(1)} MHz</text><text x="${x + w / 2}" y="76" text-anchor="middle" fill="var(--text3)" style="font:9px var(--f-mono)">${c.cells.length} célula(s)</text></g>`; }).join("")}<line x1="20" y1="50" x2="${W - 20}" y2="50" stroke="var(--border2)"/></svg></div></div>`; }).join("");
+  } else {
+    const ant = (c) => { const sc = (c.scMo || [])[0]; const n = sc ? +(sc.a.noOfTxAntennas || sc.a.noOfUsedTxAntennas || 0) : 0; return n; };
+    const rows = m.cells.filter((x) => x.tech !== "NB").map((x) => { const c = x.c; const bw = x.tech === "5G" ? +c.bwDl || 0 : (+c.bwDl || 0) / 1000; const tx = ant(c);
+      const layers = x.tech === "5G" ? Math.min(4, tx >= 4 ? 4 : tx || 4) : Math.min(4, tx || 2);
+      const peak = x.tech === "5G" ? bw * 5.5 * layers * 0.74 : bw * 3.75 * layers * 1.33; return { x, bw, tx, layers, peak: Math.round(peak) }; });
+    const max = Math.max(1, ...rows.map((r) => r.peak)); const bySec = {}; rows.forEach((r) => { bySec[r.x.sector] = (bySec[r.x.sector] || 0) + r.peak; });
+    body = `<p class="note">Pico teórico de downlink por célula, estimado pela banda, número de camadas (antenas TX da portadora, máx. 4) e modulação 256QAM; NR TDD com ~74% dos slots em DL. É uma referência de dimensionamento, não medição.</p>
+      <div class="kg-tiles">${[["Pico LTE (Mbps)", rows.filter((r) => r.x.tech === "4G").reduce((a, r) => a + r.peak, 0)], ["Pico NR (Mbps)", rows.filter((r) => r.x.tech === "5G").reduce((a, r) => a + r.peak, 0)], ...Object.entries(bySec).sort().map(([k, v]) => ["Setor " + k + " (Mbps)", v])].map(([l, v]) => `<div class="kg-tile"><b>${v.toLocaleString("pt-BR")}</b><span>${l}</span></div>`).join("")}</div>
+      <div class="tablebox"><table>${table(["Célula", "Setor", "Tecnologia", "Banda", "BW (MHz)", "Antenas TX", "Camadas", "Pico DL estimado"], rows.sort((a, b) => b.peak - a.peak).map((r) => tr([`<b>${escH(r.x.name)}</b>`, escH(r.x.sector), escH(r.x.tech), escH(r.x.band), r.bw, r.tx || "-", r.layers, `<div style="display:flex;align-items:center;gap:8px"><span style="flex:1;min-width:80px;height:8px;border-radius:4px;background:var(--bg4)"><span style="display:block;height:8px;border-radius:4px;width:${r.peak / max * 100}%;background:${r.x.tech === "5G" ? "var(--c6)" : "var(--c1)"}"></span></span><b>${r.peak.toLocaleString("pt-BR")} Mbps</b></div>`])))}</table></div>`;
+  }
+  $("kgSec").innerHTML = head + body;
+  $("kgSec").querySelectorAll("[data-tt]").forEach((b) => b.onclick = () => { KG.topoTab = b.dataset.tt; secTopo(d, s); });
+  $("kgSec").querySelectorAll("[data-tf]").forEach((b) => b.onclick = () => { KG.topoF = b.dataset.tf; secTopo(d, s); });
+  if (KG.topoTab === "map") { const z = (v) => { KG.topoZ = Math.max(0.4, Math.min(2.5, v)); $("kgTopoSvg").style.width = (KG.topoZ * 100) + "%"; };
+    $("kgTzI").onclick = () => z(KG.topoZ + 0.15); $("kgTzO").onclick = () => z(KG.topoZ - 0.15); $("kgTz1").onclick = () => z(1); }
+  if (KG.topoTab === "flow") secHwOld(d, s, $("kgTopoCh"));
 }
 function secHw(d, s){
   const hw = K.hardware(d); const ri = K.riLinks(d);
