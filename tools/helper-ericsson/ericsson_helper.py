@@ -11,7 +11,7 @@ import argparse, json, os, re, shlex, sys, threading, time, uuid
 from urllib.parse import urlparse, parse_qs
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "2.2"
+VERSION = "2.3"
 LOCAL_PORT = 8766
 LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "helper.log")
 
@@ -96,7 +96,13 @@ class Session:
             raise RuntimeError("paramiko nao instalado: rode o instalador do helper de novo ou 'python -m pip install paramiko'")
         self.logout()
         c = paramiko.SSHClient(); c.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        c.connect(host, port=int(port), username=user, password=pwd, timeout=25, banner_timeout=40, auth_timeout=40, look_for_keys=False, allow_agent=False)
+        try:
+            c.connect(host, port=int(port), username=user, password=pwd, timeout=25, banner_timeout=40, auth_timeout=40, look_for_keys=False, allow_agent=False)
+        except Exception as e:
+            if "Incompatible ssh peer" in str(e) and paramiko.__version__.split(".")[0] not in ("2", "3"):
+                raise RuntimeError("este servidor usa SSH antigo (ssh-rsa/sha1) e o paramiko %s deste PC nao aceita mais. "
+                                   "Rode o instalador do helper de novo: ele instala o paramiko 3.5.1, que conecta." % paramiko.__version__)
+            raise
         try: c.get_transport().set_keepalive(30)  # mantem a sessao viva enquanto ociosa
         except Exception: pass
         self.port = int(port); self._cred = (host, int(port), user, pwd)  # so em memoria, para reconectar se cair
@@ -799,7 +805,10 @@ class Handler(BaseHTTPRequestHandler):
                 i = v.info(); ex = [x for x in SESS.values() if getattr(x, "lane_of", None) == k]
                 i["lanes"] = sum(1 for x in ex if x.logged); i["busy"] = i["busy"] or any(busy(x.key) for x in ex); ss.append(i)
             first = next((x for x in ss if x["logged"]), {})
-            return self._json({"ok": True, "app": "ericsson-helper", "version": VERSION, "sessions": ss, "logged": any(x["logged"] for x in ss),
+            try:
+                import paramiko as _pm; pmv = _pm.__version__
+            except Exception: pmv = ""
+            return self._json({"ok": True, "app": "ericsson-helper", "version": VERSION, "paramiko": pmv, "sessions": ss, "logged": any(x["logged"] for x in ss),
                                "host": first.get("host", ""), "user": first.get("user", ""), "prompt": first.get("prompt", ""), "curNode": first.get("curNode", ""), "depth": first.get("depth", 0), "busy": busy()})
         if u.path == "/job/live":
             j = JOBS.get((q.get("id") or [""])[0])

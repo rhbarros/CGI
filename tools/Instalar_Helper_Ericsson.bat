@@ -90,28 +90,32 @@ if (-not (Test-Path $pyw)) { $pyw = $py }
 Write-Host "Python: $py"
 
 # 1b) paramiko (SSH ate o servidor OSS) - obrigatorio
+# Versao 3.5.1 fixa: as versoes 4 e 5 tiraram os algoritmos antigos (ssh-rsa, ssh-dss, kex sha1)
+# e nao conectam em servidores antigos como o do 2G ("Incompatible ssh peer").
+$PMK = 'paramiko==3.5.1'
+$CHK = "import paramiko,sys; sys.exit(0 if paramiko.__version__.split('.')[0] in ('2','3') else 1)"
 $oldEap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-& $py -c "import paramiko" *> $null
+& $py -c $CHK *> $null
 $okParamiko = ($LASTEXITCODE -eq 0)
 if (-not $okParamiko) {
-  Write-Host 'Instalando paramiko (biblioteca SSH)...'
+  Write-Host 'Instalando paramiko 3.5.1 (biblioteca SSH compativel com servidores antigos)...'
   & $py -m ensurepip --user *> $null
-  & $py -m pip install --user --disable-pip-version-check -q paramiko *> $null
-  & $py -c "import paramiko" *> $null; $okParamiko = ($LASTEXITCODE -eq 0)
+  & $py -m pip install --user --disable-pip-version-check -q $PMK *> $null
+  & $py -c $CHK *> $null; $okParamiko = ($LASTEXITCODE -eq 0)
 }
 if (-not $okParamiko) {
   # rede corporativa: proxy do Windows e certificado interceptado
   $px = $null; try { $p = [Net.WebRequest]::GetSystemWebProxy().GetProxy([Uri]'https://pypi.org'); if ($p.Host -ne 'pypi.org') { $px = $p.AbsoluteUri } } catch {}
-  $args2 = @('-m','pip','install','--user','--disable-pip-version-check','-q','--trusted-host','pypi.org','--trusted-host','files.pythonhosted.org','paramiko')
+  $args2 = @('-m','pip','install','--user','--disable-pip-version-check','-q','--trusted-host','pypi.org','--trusted-host','files.pythonhosted.org',$PMK)
   if ($px) { $args2 += @('--proxy', $px); Write-Host "Tentando pelo proxy $px..." }
   & $py @args2 *> $null
-  & $py -c "import paramiko" *> $null; $okParamiko = ($LASTEXITCODE -eq 0)
+  & $py -c $CHK *> $null; $okParamiko = ($LASTEXITCODE -eq 0)
 }
 $ErrorActionPreference = $oldEap
 if ($okParamiko) { Write-Host 'paramiko (SSH): OK' } else {
-  Write-Host 'Nao consegui instalar o paramiko (biblioteca SSH): a rede bloqueou o pip.' -ForegroundColor Red
+  Write-Host 'Nao consegui instalar o paramiko 3.5.1 (biblioteca SSH): a rede bloqueou o pip.' -ForegroundColor Red
   Write-Host 'Rode manualmente num Prompt de Comando e depois este instalador de novo:'
-  Write-Host ('  "' + $py + '" -m pip install --user paramiko')
+  Write-Host ('  "' + $py + '" -m pip install --user "paramiko==3.5.1"')
   return
 }
 
@@ -132,7 +136,7 @@ import argparse, json, os, re, shlex, sys, threading, time, uuid
 from urllib.parse import urlparse, parse_qs
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "2.2"
+VERSION = "2.3"
 LOCAL_PORT = 8766
 LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "helper.log")
 
@@ -217,7 +221,13 @@ class Session:
             raise RuntimeError("paramiko nao instalado: rode o instalador do helper de novo ou 'python -m pip install paramiko'")
         self.logout()
         c = paramiko.SSHClient(); c.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        c.connect(host, port=int(port), username=user, password=pwd, timeout=25, banner_timeout=40, auth_timeout=40, look_for_keys=False, allow_agent=False)
+        try:
+            c.connect(host, port=int(port), username=user, password=pwd, timeout=25, banner_timeout=40, auth_timeout=40, look_for_keys=False, allow_agent=False)
+        except Exception as e:
+            if "Incompatible ssh peer" in str(e) and paramiko.__version__.split(".")[0] not in ("2", "3"):
+                raise RuntimeError("este servidor usa SSH antigo (ssh-rsa/sha1) e o paramiko %s deste PC nao aceita mais. "
+                                   "Rode o instalador do helper de novo: ele instala o paramiko 3.5.1, que conecta." % paramiko.__version__)
+            raise
         try: c.get_transport().set_keepalive(30)  # mantem a sessao viva enquanto ociosa
         except Exception: pass
         self.port = int(port); self._cred = (host, int(port), user, pwd)  # so em memoria, para reconectar se cair
@@ -920,7 +930,10 @@ class Handler(BaseHTTPRequestHandler):
                 i = v.info(); ex = [x for x in SESS.values() if getattr(x, "lane_of", None) == k]
                 i["lanes"] = sum(1 for x in ex if x.logged); i["busy"] = i["busy"] or any(busy(x.key) for x in ex); ss.append(i)
             first = next((x for x in ss if x["logged"]), {})
-            return self._json({"ok": True, "app": "ericsson-helper", "version": VERSION, "sessions": ss, "logged": any(x["logged"] for x in ss),
+            try:
+                import paramiko as _pm; pmv = _pm.__version__
+            except Exception: pmv = ""
+            return self._json({"ok": True, "app": "ericsson-helper", "version": VERSION, "paramiko": pmv, "sessions": ss, "logged": any(x["logged"] for x in ss),
                                "host": first.get("host", ""), "user": first.get("user", ""), "prompt": first.get("prompt", ""), "curNode": first.get("curNode", ""), "depth": first.get("depth", 0), "busy": busy()})
         if u.path == "/job/live":
             j = JOBS.get((q.get("id") or [""])[0])

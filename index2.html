@@ -4517,7 +4517,7 @@ render();
 
 // ================= EXECUTAR NO OSS (AMOS via helper local) =================
 (function(){
-const HELPER = "http://127.0.0.1:8766", MINV = 2.2, OSK = LSK + ":oss";
+const HELPER = "http://127.0.0.1:8766", MINV = 2.3, OSK = LSK + ":oss";
 const WRITE = /^\s*(set|sete|crn|cr|del|rdel|bl|deb|acc|run|ldeb|lbl|lset|lcr|ldel|restart|confb\+?|trun|upgrade|cvms|cvmk|cvrm|cvset)\b/i;
 const O = { online: false, logged: false, job: null, out: "", outName: "", logLen: 0, log: [], busy: false, files: [], after: null };
 const load = () => { try { return JSON.parse(localStorage.getItem(OSK) || "{}"); } catch (e) { return {}; } };
@@ -4574,7 +4574,8 @@ function status(){
   call("/").then((s) => {
     O.online = true; SS = s.sessions || (s.logged ? [{ key: "", host: s.host, user: s.user, logged: true, prompt: s.prompt, curNode: s.curNode, depth: s.depth }] : []);
     $("ossDot").className = "oss-dot on"; $("ossHelp").hidden = true;
-    const old = +s.version < MINV; $("ossUpd").hidden = !old; $("ossUpdT").textContent = `O helper deste PC é a versão ${s.version}; a atual é ${MINV.toFixed(1)}.`;
+    const pmNew = s.paramiko && !/^[23]\./.test(s.paramiko);
+    const old = +s.version < MINV || pmNew; $("ossUpd").hidden = !old; $("ossUpdT").textContent = +s.version < MINV ? `O helper deste PC é a versão ${s.version}; a atual é ${MINV.toFixed(1)}.` : `O paramiko deste PC (${s.paramiko}) não conecta em servidores antigos como o 2G. Rode o instalador de novo: ele instala o 3.5.1.`;
     const sel = SS.find((x) => x.key === keyOf(selSrv())) || (!s.sessions && SS[0]) || null;
     O.logged = !!(sel && sel.logged); if (!O.logged && TABS.length) T().curNode = "";
     const on = SS.filter((x) => x.logged);
