@@ -603,9 +603,9 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
     <!-- Biblioteca -->
     <div id="kgLib" hidden style="display:flex;flex-direction:column;gap:13px">
       <section class="panel">
-        <div class="ph"><span class="step">2</span><h2>Referência de parâmetros</h2><p id="kgLibNote"></p></div>
-        <div class="kg-filters"><input type="search" id="kgLQ" placeholder="buscar parâmetro, classe ou descrição" style="flex:1"><select id="kgLSrc"><option value="ref">referência resumida</option><option value="file">atributos do KGET carregado</option></select></div>
-        <div class="tablebox"><table id="kgLTbl"></table></div>
+        <div class="ph"><span class="step">2</span><h2>Biblioteca Ericsson</h2><p id="kgLibNote"></p></div>
+        <div class="kg-tabs2" id="kgLibTabs"></div>
+        <div id="kgLibBody" style="display:flex;flex-direction:column;gap:11px;min-width:0"></div>
       </section>
     </div>
   </div>
@@ -1965,17 +1965,25 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
     }
     const en = {};
     for (const e of x.getElementsByTagName('enum')) en[e.getAttribute('name')] = [...e.children].filter((c) => c.localName === 'enumMember').map((c) => `${txt(c, 'value')}=${c.getAttribute('name')}`).join(', ');
-    const classes = new Map(); let nAttrs = 0;
+    const classes = new Map(); let nAttrs = 0; let nActions = 0;
     for (const ce of x.getElementsByTagName('class')) {
       const cn = ce.getAttribute('name'); let cl = classes.get(cn);
       if (!cl) { cl = { desc: txt(ce, 'description').slice(0, 800), attrs: new Map() }; classes.set(cn, cl); }
       for (const ae of ce.children) {
+        if (ae.localName === 'action') {
+          const rt = kid(ae, 'returnType'); const r0 = rt && rt.children[0];
+          const tn = (e) => { const dt = kid(e, 'dataType'); if (!dt) return ''; let t = kid(dt, 'sequence') || dt; const r = t.children[0]; return r ? (r.getAttribute('name') || r.localName) + (t !== dt ? '[]' : '') : ''; };
+          nActions++;
+          (cl.actions = cl.actions || []).push({ name: ae.getAttribute('name'), desc: txt(ae, 'description').slice(0, 1500), ret: r0 ? (r0.getAttribute('name') || r0.localName) : 'void', dist: txt(ae, 'disturbances'),
+            params: [...ae.children].filter((p) => p.localName === 'parameter').map((p) => ({ name: p.getAttribute('name'), dir: kid(p, 'out') ? 'out' : 'in', type: tn(p), desc: txt(p, 'description').slice(0, 400) })) });
+          continue;
+        }
         if (ae.localName !== 'attribute') continue;
         const an = ae.getAttribute('name'); const dt = kid(ae, 'dataType'); if (!dt) continue;
         let t = dt; let seq = false; const sq = kid(dt, 'sequence'); if (sq) { t = sq; seq = true; }
         const ref = [...t.children].find((c) => /Ref$/.test(c.localName)) || t.children[0];
         const def = (dt.getElementsByTagName('defaultValue')[0] || {}).textContent;
-        const o = { desc: txt(ae, 'description').slice(0, 1200), readOnly: !!kid(ae, 'readOnly'), takes: txt(ae, 'takesEffect'), def: def == null ? '' : String(def).trim(), seq, type: '', range: '', unit: '', enumVals: '' };
+        const o = { desc: txt(ae, 'description').slice(0, 1200), readOnly: !!kid(ae, 'readOnly'), deprecated: !!kid(ae, 'deprecated'), mandatory: !!kid(ae, 'mandatory'), takes: txt(ae, 'takesEffect'), def: def == null ? '' : String(def).trim(), seq, type: '', range: '', unit: '', enumVals: '' };
         if (ref) {
           const rn = ref.getAttribute('name');
           if (ref.localName === 'derivedDataTypeRef' && dd[rn]) { const q = dd[rn]; o.type = q.base; o.unit = q.unit; o.range = q.subs.length > 1 ? q.subs.join(', ') : q.min !== '' || q.max !== '' ? (q.str ? `${q.min}–${q.max} caracteres` : `${q.min} a ${q.max}`) : ''; }
@@ -1989,7 +1997,7 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
         cl.attrs.set(an, o);
       }
     }
-    return { name, classes, nAttrs };
+    return { name, classes, nAttrs, nActions };
   }
   // Referência do MOM para classe.atributo (atributo de struct "a.b" usa "a")
   function momAttr(mom, cls, attr) { if (!mom) return null; const c = mom.classes.get(cls); return c ? c.attrs.get(String(attr).split(/[.[]/)[0]) || null : null; }
@@ -2467,7 +2475,25 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
     return { overall, comps: C, ranking, label: overall >= 85 ? 'Bom' : overall >= 70 ? 'Atenção' : 'Crítico' };
   }
 
-  Object.assign(K, { nbiotCells, neighbors, freqPlan, features, mobility, readiness, discrepancies, hardware, momCompliance, health });
+  // ---------- bibliotecas tiradas do próprio KGET ----------
+  function counters(d) {
+    return cache(d, 'ctr', () => {
+      const grp = {}; (d.byCls.get('PmGroup') || []).forEach((g) => { grp[g.id] = { desc: str(g.a.description), mo: str(g.a['moClass.moClassName']), gen: str(g.a.generation) }; });
+      const pm = (d.byCls.get('MeasurementType') || []).map((m) => { const g = (m.key.match(/PmGroup=([^,]+)/) || [])[1] || ''; const cats = Object.keys(m.a).filter((k) => /^categories\[\d+\]\.(type|area|scenario)$/.test(k));
+        const pick = (t) => [...new Set(cats.filter((k) => k.endsWith('.' + t)).map((k) => m.a[k]).filter(Boolean))].join(', ');
+        return { name: m.a.measurementName || m.id, group: g, mo: (grp[g] || {}).mo || '', gen: (grp[g] || {}).gen || '', type: st(m.a.collectionMethod) + '/' + st(m.a.aggregation), catType: pick('type'), catArea: pick('area'), scen: pick('scenario'),
+          desc: str(m.a.description).replace(/\\n/g, ' ').replace(/\s+/g, ' '), cond: str(m.a.condition).replace(/\\n/g, ' ').replace(/\s+/g, ' '), mult: m.a.multiplicity, status: st(m.a.measurementStatus) }; });
+      const ev = (d.byCls.get('EventType') || []).map((e) => ({ name: e.id, producer: (e.key.match(/EventProducer=([^,]+)/) || [])[1] || '', group: (e.key.match(/EventGroup=([^,]+)/) || [])[1] || '', status: st(e.a.eventStatus), period: e.a.periodicity, trig: str(e.a.triggerDescription) }));
+      return { pm, ev, groups: grp };
+    });
+  }
+  function alarmTypes(d) {
+    const act = new Set((d.alarms || []).map((a) => a.problem));
+    return (d.byCls.get('FmAlarmType') || []).map((a) => ({ id: a.id, problem: str(a.a.specificProblem) || a.id, sev: st(a.a.configuredSeverity) || st(a.a.defaultSeverity) || 'VARIÁVEL', event: st(a.a.eventType), cause: str(a.a.probableCause).replace(/^\d+\s+\((.*)\)$/, '$1'),
+      mo: str(a.a.moClasses), major: a.a.majorType, minor: a.a.minorType, stateful: a.a.isStateful, active: act.has(str(a.a.specificProblem)) }));
+  }
+
+  Object.assign(K, { counters, alarmTypes, nbiotCells, neighbors, freqPlan, features, mobility, readiness, discrepancies, hardware, momCompliance, health });
 })(typeof window !== 'undefined' ? window : globalThis);
 </script>
 <script>
@@ -3556,7 +3582,8 @@ function render(){
 // ================= SITE ÚNICO (barra lateral no estilo do CafeTele) =================
 const SECS = [
   ["ANÁLISE", [["dash", "Dashboard"], ["health", "Relatório de saúde"], ["cells", "Células"], ["intel", "Comparar MOs"], ["nr", "NR/5G detalhado"], ["audit", "Auditoria inteligente"], ["comp", "Conformidade (MOM)"], ["topo", "Topologia"], ["hw", "Hardware"], ["nb", "Vizinhas"], ["freq", "Planejamento de frequência"], ["mo", "Navegador MO"], ["script", "Gerador de script"], ["feat", "Matriz de features"], ["pci", "Colisão PCI/PRACH"], ["mob", "Mobilidade"], ["ready", "Prontidão"], ["disc", "Discrepâncias"]]],
-  ["FERRAMENTAS", [["@cmp", "Comparar arquivos"], ["@fleet", "Frota"], ["@lib", "Biblioteca Ericsson"]]],
+  ["FERRAMENTAS", [["@cmp", "Comparar arquivos"], ["@fleet", "Frota"]]],
+  ["BIBLIOTECA ERICSSON", [["@lib:par", "Parâmetros"], ["@lib:ctr", "Contadores"], ["@lib:alm", "Alarmes"], ["@lib:act", "Ações"]]],
 ];
 const TITLES = Object.fromEntries(SECS.flatMap(([, l]) => l));
 function H(){ const d = KG.A; if (!KG.h) KG.h = K.health(d, KG.aud, KG.mom); return KG.h; }
@@ -3582,7 +3609,7 @@ function renderSingle(){
   const d = KG.A; const s = K.summary(d); if (!KG.aud) { KG.aud = K.audit(d); KG.h = null; }
   if (!TITLES[KG.sec]) KG.sec = "dash";
   $("kgSide").innerHTML = SECS.map(([g, l]) => `<h4>${g}</h4>` + l.map(([id, t]) => `<button data-s="${id}" ${id === KG.sec ? 'aria-current="true"' : ""}><span>${escH(t)}</span>${id[0] === "@" ? "" : badge(id, d, s)}</button>`).join("")).join("");
-  $("kgSide").querySelectorAll("button").forEach((b) => b.onclick = () => { const id = b.dataset.s; if (id[0] === "@") { setMode(id.slice(1)); return; } KG.sec = id; renderSingle(); $("kgHead").scrollIntoView({ block: "nearest" }); });
+  $("kgSide").querySelectorAll("button").forEach((b) => b.onclick = () => { const id = b.dataset.s; if (id[0] === "@") { const [m, t] = id.slice(1).split(":"); if (t) KG.libTab = t; setMode(m); return; } KG.sec = id; renderSingle(); $("kgHead").scrollIntoView({ block: "nearest" }); });
   $("kgHead").innerHTML = `<h2>${escH(TITLES[KG.sec])}</h2><span class="r">${escH(s.node)} · ${escH(s.sw || "")} · saúde <b style="color:${H().overall >= 85 ? "var(--c3)" : H().overall >= 70 ? "var(--c4)" : "var(--c5)"}">${H().overall}/100</b></span>`;
   ({ dash: secDash, health: secHealth, cells: secCells, intel: secIntel, nr: secNr, audit: secAudit, comp: secComp, topo: secTopo, hw: secHw, nb: secNb, freq: secFreq, mo: secMo, script: secScript, feat: secFeat, pci: secPci, mob: secMob, ready: secReady, disc: secDisc })[KG.sec](d, s);
 }
@@ -4013,38 +4040,110 @@ $("kgFScr").onclick = async () => {
   offer([{ name: `KGET_frota_scripts_${sites.length}_sites.zip`, data: await z.generateAsync({ type: "uint8array" }) }], $("kgFMsg"));
 };
 
-// ================= BIBLIOTECA =================
-$("kgLQ").oninput = () => renderLib(); $("kgLSrc").onchange = () => renderLib();
+// ================= BIBLIOTECA ERICSSON (parâmetros, contadores, alarmes, ações) =================
 function renderLib(){
-  const sel = $("kgLSrc");
-  if (KG.mom && !sel.querySelector('option[value="mom"]')) { sel.insertAdjacentHTML("afterbegin", `<option value="mom">MOM do nó (${escH(KG.mom.name.replace(/\.xml$/i, ""))})</option><option value="momdef">MOM: valores diferentes do padrão</option>`); sel.value = "mom"; }
-  const q = $("kgLQ").value.toLowerCase(); const src = sel.value; const d = KG.A || KG.fleet[0];
-  if (src === "mom" || src === "momdef") {
-    $("kgLibNote").textContent = `MOM oficial do nó, lido do pacote modump: ${KG.mom.classes.size} classes e ${KG.mom.nAttrs} parâmetros com descrição, tipo, faixa, unidade, padrão e quando a alteração tem efeito.${src === "momdef" ? " Mostrando só parâmetros do KGET carregado cujo valor difere do padrão do MOM." : ""}`;
-    const rows = []; const H = ["Classe", "Parâmetro", "Descrição", "Tipo · faixa · unidade", "Padrão", "Efeito", d ? "No KGET carregado" : "—"];
-    for (const [cls, c] of KG.mom.classes) {
-      const mos = d ? d.byCls.get(cls) || [] : [];
-      if (src === "momdef" && !mos.length) continue;
-      for (const [an, o] of c.attrs) {
-        if (q && !(cls + " " + an).toLowerCase().includes(q) && !(q.length > 3 && o.desc.toLowerCase().includes(q))) continue;
-        const vs = [...new Set(mos.map((m) => m.a[an]).filter((v) => v != null))];
-        if (src === "momdef") { if (o.def === "" || !vs.length) continue; const nv = (v) => String(v).replace(/^(-?\d+)\s+\(\w+\)$/, "$1").trim(); const dv = o.def; const dif = vs.filter((v) => nv(v) !== dv && String(v).replace(/^-?\d+\s+\((\w+)\)$/, "$1") !== dv); if (!dif.length) continue; }
-        rows.push(tr([escH(cls), `<b>${escH(an)}</b>`, `<span title="${escH(o.desc)}">${escH(o.desc.length > 220 ? o.desc.slice(0, 220) + "…" : o.desc)}</span>`, escH([o.type, o.range, o.unit, o.enumVals ? "[" + o.enumVals + "]" : ""].filter(Boolean).join(" · ")), escH(o.def), escH(o.takes + (o.readOnly ? " (somente leitura)" : "")), escH(vs.slice(0, 4).join(" | "))]));
-      }
-    }
-    $("kgLTbl").innerHTML = table(H, rows, { max: 500, empty: src === "momdef" && !d ? "Carregue um KGET para comparar com o padrão." : "Nada encontrado." }); return;
-  }
-  $("kgLibNote").textContent = `Referência resumida com ${K.LIB.length} parâmetros mais usados em RAN Ericsson (descrição, faixa e unidade). Não é a MOM oficial completa: para o restante, consulte a CPI/ELEX. Em “atributos do KGET carregado” aparecem todas as classes e atributos do seu arquivo, com exemplos de valor.`;
-  if (src === "file") {
-    if (!d) { $("kgLTbl").innerHTML = table(["Classe", "Atributo", "MOs", "Valores (exemplos)", "Referência"], [], { empty: "Carregue um KGET (Site único ou Frota) para listar os atributos dele." }); return; }
-    const rows = [];
-    for (const [cls, mos] of d.byCls) { const at = {}; mos.forEach((m) => Object.entries(m.a).forEach(([k, v]) => { (at[k] = at[k] || new Set()).add(v); }));
-      Object.entries(at).forEach(([k, vs]) => { if (q && !(cls + " " + k).toLowerCase().includes(q)) return; const ref = K.LIB.find((x) => x.attr === k && (x.cls === cls || cls.startsWith(x.cls.replace(/FDD$/, "")))); rows.push(tr([escH(cls), `<b>${escH(k)}</b>`, mos.length, escH([...vs].slice(0, 5).join(" | ")), ref ? escH(ref.desc) : ""])); }); }
-    $("kgLTbl").innerHTML = table(["Classe", "Atributo", "MOs", "Valores (exemplos)", "Referência"], rows, { max: 800 }); return;
-  }
+  const d = KG.A || KG.fleet[0]; const mom = KG.mom;
+  const ctr = d ? K.counters(d) : null; const alm = d ? K.alarmTypes(d) : [];
+  const nAct = mom ? [...mom.classes.values()].reduce((a, c) => a + (c.actions || []).length, 0) : 0;
+  const tabs = [["par", `Parâmetros${mom ? " (" + mom.nAttrs + ")" : ""}`], ["ctr", `Contadores${ctr ? " (" + ctr.pm.length + ")" : ""}`], ["alm", `Alarmes${alm.length ? " (" + alm.length + ")" : ""}`], ["act", `Ações${nAct ? " (" + nAct + ")" : ""}`], ["ref", "Referência resumida"], ["file", "Atributos do KGET"]];
+  KG.libTab = KG.libTab || (mom ? "par" : d ? "ctr" : "ref");
+  $("kgLibTabs").innerHTML = tabs.map(([k, t]) => `<button data-l="${k}" aria-pressed="${k === KG.libTab}">${escH(t)}</button>`).join("");
+  $("kgLibTabs").querySelectorAll("button").forEach((b) => b.onclick = () => { KG.libTab = b.dataset.l; renderLib(); });
+  const src = [mom ? `MOM ${mom.name.replace(/\.xml$/i, "")}` : "", d ? `KGET ${K.summary(d).node}` : ""].filter(Boolean).join(" + ");
+  $("kgLibNote").textContent = src ? `Dados do próprio nó (${src}). Parâmetros e ações vêm do MOM do pacote modump; contadores, eventos e alarmes vêm do KGET.` : "Carregue um KGET (de preferência o pacote modump .zip, que traz o MOM) para ver os parâmetros, contadores, alarmes e ações do seu nó.";
+  ({ par: libPar, ctr: libCtr, alm: libAlm, act: libAct, ref: libRef, file: libFile })[KG.libTab](d, mom);
+}
+const need = (what) => `<div class="msg warn">${what}</div>`;
+function libExport(name, head, rows){ return () => xls([[name.slice(0, 31), [head, ...rows]]], `Biblioteca_${name}.xlsx`, $("kgLbM")); }
+function libPar(d, mom){
+  if (!mom) { $("kgLibBody").innerHTML = need("A referência completa de parâmetros vem do MOM (MSRBS_NODE_MODEL), que vem dentro do pacote modump (.zip) do AMOS. Carregue o pacote para ver os ~10 mil parâmetros do nó. Enquanto isso, use a aba “Referência resumida”."); return; }
+  // árvore: classe → função raiz (primeiro nível sob ManagedElement no KGET)
+  const root = {}; if (d) for (const [cls, l] of d.byCls) root[cls] = l[0].key.split(",")[0].split("=")[0];
+  const groups = {}; for (const [cls, c] of mom.classes) { if (!c.attrs.size) continue; const g = root[cls] || "Só no MOM (sem instância no KGET)"; (groups[g] = groups[g] || []).push(cls); }
+  const kind = (o) => /^lista/.test(o.type) ? "Lista" : /^enum/.test(o.type) ? "Enum" : /^struct/.test(o.type) ? "Struct" : /^ref/.test(o.type) ? "Ref" : /bool/i.test(o.type) ? "Boolean" : /string/i.test(o.type) ? "String" : /int|long|float|double|decimal/i.test(o.type) ? "Inteiro" : "Outro";
+  const all = []; for (const [cls, c] of mom.classes) for (const [an, o] of c.attrs) all.push({ cls, an, o, k: kind(o) });
+  const cnt = (f) => all.filter(f).length;
+  const chips = [["", "Todos", all.length], ["ro", "Somente leitura", cnt((x) => x.o.readOnly)], ["dep", "Obsoletos", cnt((x) => x.o.deprecated)], ["man", "Obrigatórios", cnt((x) => x.o.mandatory)], ...["Enum", "Struct", "Boolean", "String", "Inteiro", "Ref", "Lista"].map((k) => [k, k, cnt((x) => x.k === k)])];
+  KG.lpChip = KG.lpChip || ""; KG.lpCls = KG.lpCls || "";
+  $("kgLibBody").innerHTML = `<div class="kg-tiles">${[["Parâmetros", mom.nAttrs], ["Classes", mom.classes.size], ["Ações", [...mom.classes.values()].reduce((a, c) => a + (c.actions || []).length, 0)], ["Somente leitura", cnt((x) => x.o.readOnly)], ["Obsoletos", cnt((x) => x.o.deprecated)]].map(([l, v]) => `<div class="kg-tile"><b>${v}</b><span>${l}</span></div>`).join("")}</div>
+    <div class="kg-two" style="grid-template-columns:minmax(0,240px) minmax(0,1fr)">
+      <div><input type="search" id="kgLpCF" placeholder="filtrar classes" style="width:100%;font:11px var(--f-mono);background:var(--bg4);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:6px 8px;margin-bottom:6px"><div class="kg-cls" id="kgLpTree" style="max-height:640px"></div></div>
+      <div style="display:flex;flex-direction:column;gap:8px;min-width:0"><div>${chips.map(([k, t, n]) => `<button class="kg-chip ${KG.lpChip === k ? "c" : ""}" data-ch="${k}" style="cursor:pointer;background:none">${escH(t)} (${n})</button>`).join("")}</div>
+        <div class="kg-filters"><input type="search" id="kgLpQ" placeholder="buscar parâmetro ou descrição (ex.: qRxLevMin, handover)" style="flex:1"><span class="note" id="kgLpN"></span></div>
+        <div class="tablebox" style="max-height:640px"><table id="kgLpT"></table></div><div class="row"><button class="btn" id="kgLbX">Exportar filtro (.xlsx)</button></div><div id="kgLbM"></div></div></div>`;
+  const drawTree = () => { const q = $("kgLpCF").value.toLowerCase();
+    $("kgLpTree").innerHTML = `<button data-c="" aria-pressed="${!KG.lpCls}"><span>Todas as classes</span><span>${mom.classes.size}</span></button>` + Object.keys(groups).sort((a, b) => (a[0] === "S") - (b[0] === "S") || a.localeCompare(b)).map((g) => { const l = groups[g].filter((c) => !q || c.toLowerCase().includes(q)).sort(); if (!l.length) return "";
+      return `<div class="note" style="margin:8px 6px 2px;font-weight:600;color:var(--text2)">${escH(g)} (${l.length})</div>` + l.map((c) => `<button data-c="${escH(c)}" aria-pressed="${c === KG.lpCls}"><span>${escH(c)}</span><span>${mom.classes.get(c).attrs.size}</span></button>`).join(""); }).join("");
+    $("kgLpTree").querySelectorAll("button").forEach((b) => b.onclick = () => { KG.lpCls = b.dataset.c; drawTree(); draw(); }); };
+  const rows = () => { const q = $("kgLpQ").value.toLowerCase(); const ch = KG.lpChip;
+    return all.filter((x) => (!KG.lpCls || x.cls === KG.lpCls) && (!ch || (ch === "ro" ? x.o.readOnly : ch === "dep" ? x.o.deprecated : ch === "man" ? x.o.mandatory : x.k === ch)) && (!q || x.an.toLowerCase().includes(q) || (q.length > 3 && x.o.desc.toLowerCase().includes(q)))); };
+  const cur = (x) => { if (!d) return ""; const v = [...new Set((d.byCls.get(x.cls) || []).map((m) => m.a[x.an]).filter((v) => v != null && v !== ""))]; return v.slice(0, 3).join(" | ") + (v.length > 3 ? " …" : ""); };
+  const draw = () => { const r = rows(); $("kgLpN").textContent = `${r.length} parâmetro(s)`;
+    $("kgLpT").innerHTML = table(["Classe", "Parâmetro", "Tipo", "Padrão", "Valor atual", "Faixa / unidade", "Descrição"], r.map((x) => tr([escH(x.cls), `<b>${escH(x.an)}</b>${x.o.readOnly ? ' <span class="kg-chip">RO</span>' : ""}${x.o.deprecated ? ' <span class="kg-chip r">obsoleto</span>' : ""}${x.o.mandatory ? ' <span class="kg-chip a">obrig.</span>' : ""}`, escH(x.o.type), escH(x.o.def), escH(cur(x)), escH([x.o.range, x.o.unit, x.o.enumVals ? "[" + x.o.enumVals + "]" : ""].filter(Boolean).join(" · ").slice(0, 160)), `<details><summary>${escH(x.o.desc.slice(0, 110))}${x.o.desc.length > 110 ? "…" : ""}</summary>${escH(x.o.desc)}${x.o.takes ? "<br><b>Efeito:</b> " + escH(x.o.takes) : ""}</details>`])), { max: 400 }); };
+  $("kgLibBody").querySelectorAll("[data-ch]").forEach((b) => b.onclick = () => { KG.lpChip = b.dataset.ch; libPar(d, mom); });
+  $("kgLpCF").oninput = drawTree; let t; $("kgLpQ").oninput = () => { clearTimeout(t); t = setTimeout(draw, 200); }; drawTree(); draw();
+  $("kgLbX").onclick = () => libExport("Parametros", ["Classe", "Parâmetro", "Tipo", "Padrão", "Valor atual", "Faixa", "Unidade", "Valores enum", "Somente leitura", "Obsoleto", "Efeito", "Descrição"], rows().map((x) => [x.cls, x.an, x.o.type, x.o.def, cur(x), x.o.range, x.o.unit, x.o.enumVals, x.o.readOnly, x.o.deprecated, x.o.takes, x.o.desc]))();
+}
+function libCtr(d){
+  if (!d) { $("kgLibBody").innerHTML = need("Os contadores vêm do KGET (MOs MeasurementType e EventType). Carregue um KGET."); return; }
+  const c = K.counters(d); KG.lcTab = KG.lcTab || "pm";
+  const opts = (vals) => [...new Set(vals.filter(Boolean))].sort().map((v) => `<option>${escH(v)}</option>`).join("");
+  const pm = KG.lcTab === "pm";
+  $("kgLibBody").innerHTML = `<div class="kg-tiles">${[["Contadores PM", c.pm.length], ["Eventos (EBS/CTR)", c.ev.length], ["Grupos PM", Object.keys(c.groups).length], ["Classes de MO", new Set(c.pm.map((x) => x.mo)).size]].map(([l, v]) => `<div class="kg-tile"><b>${v}</b><span>${l}</span></div>`).join("")}</div>
+    <div class="kg-tabs2"><button data-lc="pm" aria-pressed="${pm}">Contadores PM (${c.pm.length})</button><button data-lc="ev" aria-pressed="${!pm}">Eventos (${c.ev.length})</button></div>
+    <div class="kg-filters">${pm ? `<select id="kgLcT"><option value="">tipo: todos</option>${opts(c.pm.map((x) => x.type))}</select><select id="kgLcA"><option value="">área: todas</option>${opts(c.pm.flatMap((x) => x.catArea.split(", ")))}</select><select id="kgLcM"><option value="">MO: todos</option>${opts(c.pm.map((x) => x.mo || x.group))}</select>` : `<select id="kgLcP"><option value="">produtor: todos</option>${opts(c.ev.map((x) => x.producer))}</select>`}<input type="search" id="kgLcQ" placeholder="buscar (ex.: pmRrcConn, handover, drop)" style="flex:1"><span class="note" id="kgLcN"></span></div>
+    <div class="tablebox" style="max-height:640px"><table id="kgLcTb"></table></div><div class="row"><button class="btn" id="kgLbX">Exportar filtro (.xlsx)</button></div><div id="kgLbM"></div>`;
+  $("kgLibBody").querySelectorAll("[data-lc]").forEach((b) => b.onclick = () => { KG.lcTab = b.dataset.lc; libCtr(d); });
+  const rows = () => { const q = $("kgLcQ").value.toLowerCase();
+    if (!pm) { const p = $("kgLcP").value; return c.ev.filter((x) => (!p || x.producer === p) && (!q || (x.name + " " + x.group).toLowerCase().includes(q))); }
+    const t = $("kgLcT").value, a = $("kgLcA").value, m = $("kgLcM").value;
+    return c.pm.filter((x) => (!t || x.type === t) && (!a || x.catArea.split(", ").includes(a)) && (!m || (x.mo || x.group) === m) && (!q || x.name.toLowerCase().includes(q) || (q.length > 3 && x.desc.toLowerCase().includes(q)))); };
+  const typeChip = (t) => `<span class="kg-chip ${/^CC/.test(t) ? "c" : "g"}">${escH(t)}</span>`;
+  const draw = () => { const r = rows(); $("kgLcN").textContent = `${r.length} item(ns)`;
+    $("kgLcTb").innerHTML = pm ? table(["Contador", "MO / grupo", "Tipo", "Categoria", "Multiplicidade", "Descrição"], r.map((x) => tr([`<b>${escH(x.name)}</b>`, escH(x.mo || x.group) + (x.mo && x.mo !== x.group ? `<br><span class="note">${escH(x.group)}</span>` : ""), typeChip(x.type), escH([x.catType, x.catArea].filter(Boolean).join(" · ")), escH(x.mult), `<details><summary>${escH(x.desc.slice(0, 120))}${x.desc.length > 120 ? "…" : ""}</summary>${escH(x.desc)}${x.cond && x.cond !== "-" ? "<br><b>Condição:</b> " + escH(x.cond) : ""}</details>`])), { max: 500 })
+      : table(["Evento", "Produtor", "Grupo", "Status", "Periodicidade"], r.map((x) => tr([`<b>${escH(x.name)}</b>`, escH(x.producer), escH(x.group), escH(x.status), escH(x.period)])), { max: 600 }); };
+  $("kgLibBody").querySelectorAll("select").forEach((s) => s.onchange = draw); let t; $("kgLcQ").oninput = () => { clearTimeout(t); t = setTimeout(draw, 200); }; draw();
+  $("kgLbX").onclick = () => pm ? libExport("Contadores", ["Contador", "MO", "Grupo", "Tipo", "Categoria tipo", "Área", "Cenário", "Multiplicidade", "Descrição", "Condição"], rows().map((x) => [x.name, x.mo, x.group, x.type, x.catType, x.catArea, x.scen, x.mult, x.desc, x.cond]))() : libExport("Eventos", ["Evento", "Produtor", "Grupo", "Status", "Periodicidade"], rows().map((x) => [x.name, x.producer, x.group, x.status, x.period]))();
+}
+function libAlm(d){
+  if (!d) { $("kgLibBody").innerHTML = need("Os tipos de alarme vêm do KGET (MOs FmAlarmType). Carregue um KGET."); return; }
+  const a = K.alarmTypes(d); const sevs = ["CRITICAL", "MAJOR", "MINOR", "WARNING", "VARIÁVEL"]; const col = { CRITICAL: "r", MAJOR: "a", MINOR: "c", WARNING: "", "VARIÁVEL": "" };
+  KG.laSev = KG.laSev || "";
+  $("kgLibBody").innerHTML = `<div class="kg-tiles">${sevs.map((s) => `<div class="kg-tile"><b>${a.filter((x) => x.sev === s).length}</b><span>${s === "VARIÁVEL" ? "Severidade variável" : s}</span></div>`).join("")}<div class="kg-tile"><b style="color:${a.some((x) => x.active) ? "var(--c4)" : "var(--c3)"}">${a.filter((x) => x.active).length}</b><span>Ativos agora</span></div></div>
+    <div>${["", ...sevs, "ATIVO"].map((s) => `<button class="kg-chip ${KG.laSev === s ? "c" : ""}" data-sv="${s}" style="cursor:pointer;background:none">${s ? (s === "ATIVO" ? "Ativos agora" : s) : "Todos"}</button>`).join("")}</div>
+    <div class="kg-filters"><select id="kgLaM"><option value="">MO: todos</option>${[...new Set(a.flatMap((x) => x.mo.split(/[,\s]+/)).filter(Boolean))].sort().map((v) => `<option>${escH(v)}</option>`).join("")}</select><select id="kgLaE"><option value="">tipo de evento: todos</option>${[...new Set(a.map((x) => x.event).filter(Boolean))].sort().map((v) => `<option>${escH(v)}</option>`).join("")}</select><input type="search" id="kgLaQ" placeholder="buscar problema ou causa" style="flex:1"><span class="note" id="kgLaN"></span></div>
+    <div class="tablebox" style="max-height:640px"><table id="kgLaT"></table></div><p class="note">Alarmes com severidade “variável” não têm severidade padrão no nó: ela é definida no momento do alarme.</p><div class="row"><button class="btn" id="kgLbX">Exportar filtro (.xlsx)</button></div><div id="kgLbM"></div>`;
+  $("kgLibBody").querySelectorAll("[data-sv]").forEach((b) => b.onclick = () => { KG.laSev = b.dataset.sv; libAlm(d); });
+  const rows = () => { const m = $("kgLaM").value, e = $("kgLaE").value, q = $("kgLaQ").value.toLowerCase(); return a.filter((x) => (!KG.laSev || (KG.laSev === "ATIVO" ? x.active : x.sev === KG.laSev)) && (!m || x.mo.split(/[,\s]+/).includes(m)) && (!e || x.event === e) && (!q || (x.problem + " " + x.cause + " " + x.id).toLowerCase().includes(q))).sort((p, q2) => sevs.indexOf(p.sev) - sevs.indexOf(q2.sev) || p.problem.localeCompare(q2.problem)); };
+  const draw = () => { const r = rows(); $("kgLaN").textContent = `${r.length} alarme(s)`; $("kgLaT").innerHTML = table(["Severidade", "Problema (specificProblem)", "Tipo de evento", "Causa provável", "MO", "Major / minor", ""], r.map((x) => tr([`<span class="kg-chip ${col[x.sev]}">${escH(x.sev)}</span>`, `<b>${escH(x.problem)}</b>`, escH(x.event), escH(x.cause), escH(x.mo), escH(x.major + " / " + x.minor), x.active ? `<span class="kg-chip a">ativo agora</span>` : ""])), { max: 500 }); };
+  $("kgLibBody").querySelectorAll("select").forEach((s) => s.onchange = draw); $("kgLaQ").oninput = draw; draw();
+  $("kgLbX").onclick = () => libExport("Alarmes", ["Severidade", "Problema", "ID", "Tipo de evento", "Causa provável", "MO", "Major", "Minor", "Ativo"], rows().map((x) => [x.sev, x.problem, x.id, x.event, x.cause, x.mo, x.major, x.minor, x.active]))();
+}
+function libAct(d, mom){
+  if (!mom) { $("kgLibBody").innerHTML = need("As ações (comandos de MO como restart, changeFrequency, updateAmfConnection) vêm do MOM do pacote modump. Carregue o pacote .zip."); return; }
+  const all = []; for (const [cls, c] of mom.classes) (c.actions || []).forEach((a) => all.push({ cls, ...a }));
+  $("kgLibBody").innerHTML = `<div class="kg-tiles">${[["Ações", all.length], ["Classes de MO", new Set(all.map((x) => x.cls)).size], ["Com interrupção de tráfego", all.filter((x) => x.dist).length]].map(([l, v]) => `<div class="kg-tile"><b>${v}</b><span>${l}</span></div>`).join("")}</div>
+    <div class="kg-filters"><select id="kgLaC"><option value="">MO: todos</option>${[...new Set(all.map((x) => x.cls))].sort().map((v) => `<option>${escH(v)}</option>`).join("")}</select><label class="note" style="margin:0"><input type="checkbox" id="kgLaD"> só as que interrompem tráfego</label><input type="search" id="kgLaQ2" placeholder="buscar ação" style="flex:1"><span class="note" id="kgLaN2"></span></div>
+    <div class="tablebox" style="max-height:640px"><table id="kgLaT2"></table></div><p class="note">No AMOS a ação roda com <code>acc &lt;MO&gt; &lt;ação&gt;</code>; o AMOS pede os parâmetros.</p><div class="row"><button class="btn" id="kgLbX">Exportar filtro (.xlsx)</button></div><div id="kgLbM"></div>`;
+  const rows = () => { const c = $("kgLaC").value, q = $("kgLaQ2").value.toLowerCase(), dist = $("kgLaD").checked; return all.filter((x) => (!c || x.cls === c) && (!dist || x.dist) && (!q || (x.name + " " + x.cls).toLowerCase().includes(q))).sort((a, b) => a.name.localeCompare(b.name)); };
+  const draw = () => { const r = rows(); $("kgLaN2").textContent = `${r.length} ação(ões)`; $("kgLaT2").innerHTML = table(["Ação", "Classe", "Retorno", "Parâmetros", "Interrupção", "Descrição"], r.map((x) => tr([`<b>${escH(x.name)}</b>`, escH(x.cls), `<span class="kg-chip c">${escH(x.ret)}</span>`, escH(x.params.map((p) => (p.dir === "out" ? "→" : "") + p.name + ": " + p.type).join(", ") || "nenhum"), x.dist ? `<span class="kg-chip r" title="${escH(x.dist)}">sim</span>` : "não", `<details><summary>${escH(x.desc.slice(0, 110))}${x.desc.length > 110 ? "…" : ""}</summary>${escH(x.desc)}${x.dist ? "<br><b>Interrupção:</b> " + escH(x.dist) : ""}</details>`])), { max: 500 }); };
+  ["kgLaC", "kgLaD"].forEach((id) => $(id).onchange = draw); $("kgLaQ2").oninput = draw; draw();
+  $("kgLbX").onclick = () => libExport("Acoes", ["Ação", "Classe", "Retorno", "Parâmetros", "Interrupção", "Descrição"], rows().map((x) => [x.name, x.cls, x.ret, x.params.map((p) => p.dir + " " + p.name + ": " + p.type).join("; "), x.dist, x.desc]))();
+}
+function libRef(d){
+  $("kgLibBody").innerHTML = `<p class="note">Referência resumida com ${K.LIB.length} parâmetros mais usados em RAN Ericsson, sempre disponível (não depende do MOM).</p><div class="kg-filters"><input type="search" id="kgLrQ" placeholder="buscar" style="flex:1"></div><div class="tablebox"><table id="kgLrT"></table></div>`;
   const vals = (x) => { if (!d) return ""; const l = (d.byCls.get(x.cls) || []).map((m) => m.a[x.attr]).filter((v) => v != null); return [...new Set(l)].slice(0, 4).join(" | "); };
-  const rows = K.LIB.filter((x) => !q || (x.cls + " " + x.attr + " " + x.desc).toLowerCase().includes(q)).map((x) => tr([escH(x.cls), `<b>${escH(x.attr)}</b>`, escH(x.desc), escH(x.range), escH(x.unit), escH(vals(x))]));
-  $("kgLTbl").innerHTML = table(["Classe", "Parâmetro", "Descrição", "Faixa", "Unidade", d ? "No KGET carregado" : "—"], rows, { empty: "Nada encontrado." });
+  const draw = () => { const q = $("kgLrQ").value.toLowerCase(); $("kgLrT").innerHTML = table(["Classe", "Parâmetro", "Descrição", "Faixa", "Unidade", d ? "No KGET carregado" : "—"], K.LIB.filter((x) => !q || (x.cls + " " + x.attr + " " + x.desc).toLowerCase().includes(q)).map((x) => tr([escH(x.cls), `<b>${escH(x.attr)}</b>`, escH(x.desc), escH(x.range), escH(x.unit), escH(vals(x))])), { empty: "Nada encontrado." }); };
+  $("kgLrQ").oninput = draw; draw();
+}
+function libFile(d){
+  if (!d) { $("kgLibBody").innerHTML = need("Carregue um KGET para listar as classes e atributos dele."); return; }
+  $("kgLibBody").innerHTML = `<div class="kg-filters"><input type="search" id="kgLfQ" placeholder="buscar classe ou atributo" style="flex:1"></div><div class="tablebox"><table id="kgLfT"></table></div>`;
+  const draw = () => { const q = $("kgLfQ").value.toLowerCase(); const rows = [];
+    for (const [cls, mos] of d.byCls) { const at = {}; mos.forEach((m) => Object.entries(m.a).forEach(([k, v]) => { (at[k] = at[k] || new Set()).add(v); }));
+      Object.entries(at).forEach(([k, vs]) => { if (q && !(cls + " " + k).toLowerCase().includes(q)) return; const o = K.momAttr(KG.mom, cls, k); rows.push(tr([escH(cls), `<b>${escH(k)}</b>`, mos.length, escH([...vs].slice(0, 5).join(" | ")), escH(o ? o.desc.slice(0, 140) : "")])); }); }
+    $("kgLfT").innerHTML = table(["Classe", "Atributo", "MOs", "Valores (exemplos)", "Descrição (MOM)"], rows, { max: 800 }); };
+  let t; $("kgLfQ").oninput = () => { clearTimeout(t); t = setTimeout(draw, 250); }; draw();
 }
 
 window.KGopen = render;
