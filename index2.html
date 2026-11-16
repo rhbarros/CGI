@@ -5194,23 +5194,43 @@ async function bkRun2G(r, lane){
 // ---------- resumo de cada site: células fora e alarmes ----------
 const SEVN = { C: "Critical", M: "Major", m: "Minor", w: "Warning", "*": "Alarme" };
 function bkSummary(r){
-  const t = (r.out || "").replace(/\r/g, ""), cells = new Map(), alarms = [], seen = new Set(), tgs = {}; let altTotal = null, x2 = 0;
+  const t = (r.out || "").replace(/\r/g, "").replace(/\u00a0/g, " "), cells = new Map(), alarms = [], seen = new Set(), tgs = {}; let altTotal = null, x2 = 0;
   if (r.g2) {
-    const want = new Set((r.g2.cells || []).map((c) => c.toUpperCase())); let cmd = "";
+    const want = new Set((r.g2.cells || []).map((c) => c.toUpperCase())); let cmd = "", lastCell = "", fmo = "", fcls = "", rep = "";
+    const addFault = (mo, cls, codes) => { const k = "F" + mo + cls + codes; if (codes && !seen.has(k)) { seen.add(k); alarms.push({ sev: "*", prob: `falha classe ${cls}: códigos ${codes}`, mo, time: "", fault: true }); } };
     t.split("\n").forEach((l) => {
-      const c = l.match(/^\s*<?\s*([A-Z]{5}):([^;]*);?\s*$/i); if (c) { cmd = (c[1] + ":" + c[2]).toUpperCase(); return; }
+      const c = l.match(/^\s*<?\s*([A-Z]{5}):([^;]*);?\s*$/i); if (c) { cmd = (c[1] + ":" + c[2]).toUpperCase(); lastCell = ""; fmo = ""; fcls = ""; return; }
       if (/^\s*END\s*$/.test(l)) { cmd = ""; return; }
-      if (/^RLSTP/.test(cmd)) { const m = l.match(/^\s*([A-Z0-9]+)\s+([A-Z]+)\b/i); if (m && want.has(m[1].toUpperCase())) cells.set(m[1].toUpperCase(), { type: "2G", state: m[2].toUpperCase(), out: m[2].toUpperCase() !== "ACTIVE" }); }
-      if (/^RXMSP/.test(cmd)) {  // estado do TG e dos MOs abaixo dele
+      if (/^RLSTP/.test(cmd)) {  // "TDFS01B   ACTIVE  0   ACTIVE" e a linha de baixo "   8   ACTIVE" (estado do channel group)
+        let m = l.match(/^([A-Z0-9]+)\s+([A-Z]+)(?:\s+(\d+)\s+([A-Z]+))?\s*$/i);
+        if (m && !/^CELL$/i.test(m[1])) { const id = m[1].toUpperCase(); lastCell = id;
+          if (want.has(id)) { const st = m[2].toUpperCase(), cg = m[3] != null ? [{ n: m[3], st: m[4].toUpperCase() }] : [];
+            cells.set(id, { type: "2G", state: st, chgr: cg, out: st !== "ACTIVE" || cg.some((x) => x.st !== "ACTIVE") }); } return; }
+        m = l.match(/^\s+(\d+)\s+([A-Z]+)\s*$/i);
+        if (m && lastCell && cells.has(lastCell)) { const C = cells.get(lastCell); C.chgr.push({ n: m[1], st: m[2].toUpperCase() }); if (m[2].toUpperCase() !== "ACTIVE") C.out = true; }
+        return;
+      }
+      if (/^RXMSP/.test(cmd)) {  // estado do TG e dos MOs abaixo dele (STATE / BLSTATE ... / CONF)
         const m = l.match(/^\s*(RXO[A-Z]+-[\d-]+)\s+([A-Z][A-Z0-9]*)\b(.*)$/i);
         if (m && !/^(MO|STATE)$/i.test(m[2])) { const tgn = (cmd.match(/RXOTG-(\d+)/i) || [])[1] || (m[1].match(/-(\d+)/) || [])[1];
           const T = tgs[tgn] || (tgs[tgn] = { tg: "RXOTG-" + tgn, state: "?", rest: "", mos: [] });
-          if (/^RXOTG-/i.test(m[1])) { T.state = m[2].toUpperCase(); T.rest = m[3].replace(/\s{2,}/g, " ").trim(); }
-          else if (!T.mos.some((x) => x.mo === m[1])) T.mos.push({ mo: m[1].toUpperCase(), state: m[2].toUpperCase(), rest: m[3].replace(/\s{2,}/g, " ").trim() }); }
+          const rest = m[3].replace(/\s{2,}/g, " ").trim();
+          if (/^RXOTG-/i.test(m[1])) { T.state = m[2].toUpperCase(); T.rest = /^[\s0]*$|^0000 0000/.test(rest) ? "" : rest.replace(/\b0000\b/g, "").replace(/\s{2,}/g, " ").trim(); }
+          else if (!T.mos.some((x) => x.mo === m[1])) T.mos.push({ mo: m[1].toUpperCase(), state: m[2].toUpperCase(), rest, unconf: /\bUNCONF\b/.test(rest), blo: /\bBLO\b/.test(rest) }); }
+        return;
       }
-      if (/^RXASP/.test(cmd) || (/^RXMFP/.test(cmd) && /FAULTY/.test(cmd))) {
+      if (/^RXMFP/.test(cmd)) {  // falhas: "FAULT CODES CLASS 2A" e na linha de baixo "  8  58  92"
+        let m = l.match(/^(RXO[A-Z]+-[\d-]+)\b/i); if (m) { fmo = m[1].toUpperCase(); fcls = ""; return; }
+        m = l.match(/FAULT CODES CLASS\s+(\w+)/i); if (m) { fcls = m[1].toUpperCase(); return; }
+        if (/REPLACEMENT UNITS/i.test(l)) { fcls = "RU"; return; }
+        if (fcls && /^\s*\d+(\s+\d+)*\s*$/.test(l)) { const codes = l.trim().split(/\s+/).join(" ");
+          if (fcls === "RU") { const A = alarms.filter((a) => a.fault && a.mo === fmo).pop(); if (A && !/RU /.test(A.prob)) A.prob += ` (trocar RU ${codes})`; }
+          else addFault(fmo, fcls, codes); fcls = ""; return; }
+        return;
+      }
+      if (/^RXASP/.test(cmd)) {
         const m = l.match(/^\s*(RXO[A-Z]+-[\d-]+)\s+(\S.*)$/i);
-        if (m && !/^(MO|NONE)\b/i.test(m[2])) { const k = cmd.slice(0, 5) + m[1] + m[2]; if (!seen.has(k)) { seen.add(k); alarms.push({ sev: "*", prob: (/^RXASP/.test(cmd) ? "RXASP: " : "RXMFP FAULTY: ") + m[2].replace(/\s{2,}/g, " ").trim(), mo: m[1], time: "" }); } }
+        if (m && !/^(MO|NONE)\b/i.test(m[2])) { const k = "A" + m[1] + m[2]; if (!seen.has(k)) { seen.add(k); alarms.push({ sev: "*", prob: "RXASP: " + m[2].replace(/\s{2,}/g, " ").trim(), mo: m[1], time: "" }); } }
       }
     });
     want.forEach((c) => { if (!cells.has(c)) cells.set(c, { type: "2G", state: "?", out: false, unknown: true }); });
@@ -5230,10 +5250,11 @@ function bkSummary(r){
   const list = [...cells.entries()].map(([k, v]) => ({ name: v.name || k, ...v }));
   // TG: em serviço quando o estado é COM/OPER; MOs abaixo dele em outro estado entram como pendência
   const OKST = /^(COM|OPER|OPERATIONAL|ENABLED)$/;
-  const tgl = Object.values(tgs).map((T) => ({ ...T, ok: OKST.test(T.state), bad: T.mos.filter((x) => !OKST.test(x.state)),
+  const tgl = Object.values(tgs).map((T) => ({ ...T, ok: OKST.test(T.state), bad: T.mos.filter((x) => !OKST.test(x.state) && !x.unconf), unconf: T.mos.filter((x) => x.unconf).length,
     cnt: T.mos.reduce((a, x) => (a[x.state] = (a[x.state] || 0) + 1, a), {}) }));
   return { cells: list, out: list.filter((c) => c.out), unknown: list.filter((c) => c.unknown).length, alarms, tgs: tgl, tgBad: tgl.filter((T) => !T.ok || T.bad.length).length, altTotal, x2, ok: r.st === "ok" };
 }
+const g2lbl = (c) => c.state !== "ACTIVE" ? c.state : "CHGR " + (c.chgr || []).filter((x) => x.st !== "ACTIVE").map((x) => x.n + " " + x.st).join(", ");
 function bkSumAfter(r){
   try { if (r.out) r.sum = bkSummary(r); r.sumErr = ""; } catch (e) { r.sum = null; r.sumErr = String(e.message || e); log(`${r.node}: não montei o resumo (${r.sumErr})`, "er"); }
   try { bkSumDraw(); } catch (e) { log(`Resumo: ${e.message || e}`, "er"); }
@@ -5257,11 +5278,11 @@ function bkReport(){
       else {
         if (r.g2) {  // 2G: uma linha só
           const parts = [`${S.cells.length} cél.`];
-          parts.push(S.out.length ? `fora: ${S.out.map((c) => `${c.name} (${c.state})`).join(", ")}` : "células no ar");
+          parts.push(S.out.length ? `fora: ${S.out.map((c) => c.state !== "ACTIVE" ? `${c.name} (${c.state})` : `${c.name} (CHGR ${(c.chgr || []).filter((x) => x.st !== "ACTIVE").map((x) => x.n).join("/")} ${(c.chgr || []).find((x) => x.st !== "ACTIVE").st})`).join(", ")}` : "células no ar");
           if ((S.tgs || []).length) parts.push("TG: " + S.tgs.map((T) => { const n = T.tg.replace(/^RXOTG-/, "");
             return T.ok && !T.bad.length ? `${n} OK` : `${n} ${T.state}${T.rest && !T.ok ? " " + T.rest : ""}${T.bad.length ? ` (${T.bad.slice(0, 3).map((x) => x.mo.replace(/^RXO/, "") + " " + x.state).join(", ")}${T.bad.length > 3 ? " +" + (T.bad.length - 3) : ""})` : ""}`; }).join(", "));
           else parts.push("TG: não lido");
-          if (S.alarms.length) parts.push(`alarmes: ${S.alarms.length} (${S.alarms.slice(0, 2).map((a) => a.mo + " " + a.prob.replace(/^(RXASP|RXMFP FAULTY): /, "").slice(0, 40)).join("; ")}${S.alarms.length > 2 ? "; +" + (S.alarms.length - 2) : ""})`);
+          if (S.alarms.length) parts.push(`alarmes/falhas: ${S.alarms.length} (${S.alarms.slice(0, 2).map((a) => a.mo + " " + a.prob.replace(/^RXASP: /, "").slice(0, 60)).join("; ")}${S.alarms.length > 2 ? "; +" + (S.alarms.length - 2) : ""})`);
           o += parts.join(" | ") + "\n"; return;
         }
         o += `${S.cells.length} célula(s)`;
@@ -5295,7 +5316,7 @@ function bkSumDraw(){
       `${S.cells.length} · ${S.out.length ? chip(S.out.length, "r", "fora") : `<span class="kg-chip g">todas no ar</span>`}`,
       S.alarms.length ? `<span class="kg-chip a">${S.alarms.length}</span> <span class="note" style="margin:0">${escH(sev)}</span>` : `<span class="kg-chip g">sem alarmes</span>`,
       [(S.tgs || []).map((T) => `<div><b>${escH(T.tg)}:</b> <span class="kg-chip ${T.ok && !T.bad.length ? "g" : T.ok ? "a" : "r"}">${escH(T.state)}</span>${T.mos.length ? ` <span class="note" style="margin:0">${escH(Object.entries(T.cnt).map(([k, n]) => n + " " + k).join(", "))}</span>` : ""}${T.bad.length ? `<div class="note" style="margin:0">${escH(T.bad.slice(0, 4).map((x) => x.mo + " " + x.state).join(" · "))}${T.bad.length > 4 ? " …" : ""}</div>` : ""}</div>`).join(""),
-       S.out.map((c) => `<div><b>Fora:</b> ${escH(c.name)} <span class="note" style="margin:0">${escH(r.g2 ? c.state : [c.adm, c.op].join("/"))}</span></div>`).join(""),
+       S.out.map((c) => `<div><b>Fora:</b> ${escH(c.name)} <span class="note" style="margin:0">${escH(r.g2 ? g2lbl(c) : [c.adm, c.op].join("/"))}</span></div>`).join(""),
        S.alarms.slice(0, 6).map((a) => `<div>${a.sev !== "*" ? `<b>${escH(a.sev)}</b> ` : ""}${escH(a.prob)} <span class="note" style="margin:0">${escH(a.mo)}</span></div>`).join(""),
        S.alarms.length > 6 ? `<div class="note" style="margin:0">… +${S.alarms.length - 6} no report</div>` : ""].join("") || `<span class="note" style="margin:0">nada fora</span>`]); })) + `</table></div>`;
   const rep = bkReport(); $("bkRep").value = rep; ["bkRepCopy", "bkRepDl", "bkRepRe"].forEach((id) => $(id).disabled = !rep);
