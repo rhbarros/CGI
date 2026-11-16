@@ -5225,10 +5225,13 @@ function bkSummary(r){
     cnt: T.mos.reduce((a, x) => (a[x.state] = (a[x.state] || 0) + 1, a), {}) }));
   return { cells: list, out: list.filter((c) => c.out), unknown: list.filter((c) => c.unknown).length, alarms, tgs: tgl, tgBad: tgl.filter((T) => !T.ok || T.bad.length).length, ok: r.st === "ok" };
 }
-function bkSumAfter(r){ if (r.out) r.sum = bkSummary(r); bkSumDraw(); }
+function bkSumAfter(r){
+  try { if (r.out) r.sum = bkSummary(r); r.sumErr = ""; } catch (e) { r.sum = null; r.sumErr = String(e.message || e); log(`${r.node}: não montei o resumo (${r.sumErr})`, "er"); }
+  try { bkSumDraw(); } catch (e) { log(`Resumo: ${e.message || e}`, "er"); }
+}
 const tecOf = (r) => r.g2 ? "2G" : /_3G$/.test(r.script) ? "3G" : (r.tec || "").includes("5G") ? "4G/5G" : "4G";
 function bkReport(){
-  const done = BK.rows.filter((r) => r.sum || r.st === "err"); if (!done.length) return "";
+  const done = BK.rows.filter((r) => r.sum || r.st === "err" || r.out); if (!done.length) return "";
   const d = new Date(), pad = (x) => String(x).padStart(2, "0");
   const bySt = {}; done.forEach((r) => { const k = r.sta || "SEM STATION ID"; (bySt[k] = bySt[k] || []).push(r); });
   const nOut = done.reduce((a, r) => a + (r.sum ? r.sum.out.length : 0), 0), nAl = done.reduce((a, r) => a + (r.sum ? r.sum.alarms.length : 0), 0);
@@ -5241,8 +5244,17 @@ function bkReport(){
       const S = r.sum, srv = (servers[r.srv] || {}).name || "";
       o += `- ${r.node} (${tecOf(r)}${r.g2 ? " · BSC " + r.g2.bsc : " · " + srv}): `;
       if (r.st === "err") o += `BACKUP COM ERRO (${r.err || "ver saída"})\n`;
-      else if (!S) o += `sem saída\n`;
+      else if (!S) o += r.sumErr ? `resumo não montado (${r.sumErr}) - ver arquivo do site\n` : `sem saída\n`;
       else {
+        if (r.g2) {  // 2G: uma linha só
+          const parts = [`${S.cells.length} cél.`];
+          parts.push(S.out.length ? `fora: ${S.out.map((c) => `${c.name} (${c.state})`).join(", ")}` : "células no ar");
+          if ((S.tgs || []).length) parts.push("TG: " + S.tgs.map((T) => { const n = T.tg.replace(/^RXOTG-/, "");
+            return T.ok && !T.bad.length ? `${n} OK` : `${n} ${T.state}${T.rest && !T.ok ? " " + T.rest : ""}${T.bad.length ? ` (${T.bad.slice(0, 3).map((x) => x.mo.replace(/^RXO/, "") + " " + x.state).join(", ")}${T.bad.length > 3 ? " +" + (T.bad.length - 3) : ""})` : ""}`; }).join(", "));
+          else parts.push("TG: não lido");
+          if (S.alarms.length) parts.push(`alarmes: ${S.alarms.length} (${S.alarms.slice(0, 2).map((a) => a.mo + " " + a.prob.replace(/^(RXASP|RXMFP FAULTY): /, "").slice(0, 40)).join("; ")}${S.alarms.length > 2 ? "; +" + (S.alarms.length - 2) : ""})`);
+          o += parts.join(" | ") + "\n"; return;
+        }
         o += `${S.cells.length} célula(s)`;
         o += S.out.length ? `, ${S.out.length} FORA` : ", todas no ar";
         o += S.alarms.length ? `, ${S.alarms.length} alarme(s)` : ", sem alarmes";
@@ -5262,11 +5274,11 @@ function bkReport(){
   return o;
 }
 function bkSumDraw(){
-  const rows = BK.rows.filter((r) => r.sum || r.st === "err");
+  const rows = BK.rows.filter((r) => r.sum || r.st === "err" || r.out);
   if (!rows.length) return;
   const chip = (n, cls, txt) => n ? `<span class="kg-chip ${cls}">${n} ${txt}</span>` : `<span class="kg-chip g">0 ${txt}</span>`;
   $("bkSumTbl").innerHTML = `<div class="tablebox"><table>` + table(["Site", "STATION", "Tec.", "Células", "Alarmes", "TG / Detalhe"], rows.map((r) => { const S = r.sum;
-    if (!S) return tr([escH(r.node), escH(r.sta || ""), tecOf(r), "—", "—", `<span class="kg-chip r">backup com erro</span> <span class="note" style="margin:0">${escH((r.err || "").slice(0, 90))}</span>`]);
+    if (!S) return tr([escH(r.node), escH(r.sta || ""), tecOf(r), "—", "—", r.st === "err" ? `<span class="kg-chip r">backup com erro</span> <span class="note" style="margin:0">${escH((r.err || "").slice(0, 90))}</span>` : `<span class="kg-chip a">resumo não montado</span> <span class="note" style="margin:0">${escH((r.sumErr || "").slice(0, 90))}</span>`]);
     const sev = ["C", "M", "m", "w", "*"].map((k) => { const n = S.alarms.filter((a) => a.sev === k).length; return n ? `${n} ${k === "*" ? "" : SEVN[k]}` : ""; }).filter(Boolean).join(", ");
     return tr([`<b>${escH(r.node)}</b>`, escH(r.sta || ""), tecOf(r) + (r.g2 ? `<div class="note" style="margin:0">BSC ${escH(r.g2.bsc)}</div>` : ""),
       `${S.cells.length} · ${S.out.length ? chip(S.out.length, "r", "fora") : `<span class="kg-chip g">todas no ar</span>`}`,
@@ -5319,11 +5331,11 @@ $("bkGo").onclick = async () => {
   // em cada servidor, "par" terminais puxam sites da fila ao mesmo tempo; servidores diferentes também em paralelo
   await Promise.all(Object.values(groups).map((rows) => { const q = rows.slice();
     return Promise.all(Array.from({ length: Math.min(par, rows.length) }, (_, lane) => (async () => {
-      for (let r; (r = q.shift());) { if (BK.stop) { r.st = "stop"; continue; } await bkRunRow(r, lane); bkSumAfter(r); bkDraw(); } })())); }));
+      for (let r; (r = q.shift());) { if (BK.stop) { r.st = "stop"; continue; } try { await bkRunRow(r, lane); } catch (e) { r.st = "err"; r.err = String(e.message || e); log(`${r.node}: ${r.err}`, "er"); } bkSumAfter(r); bkDraw(); } })())); }));
   BK.running = false; bkDraw(); status(); bkProg(); $("bkProgBox").hidden = false; $("bkBar").style.width = "100%";
   $("bkProg").textContent = `100% · terminado em ${Math.round((Date.now() - t0) / 1000)} s`;
   const ok = BK.rows.filter((r) => r.st === "ok").length;
-  $("bkDlMsg").innerHTML = ""; bkZipSave(true);
+  $("bkDlMsg").innerHTML = ""; bkZipSave(true).catch((e) => { $("bkDlMsg").innerHTML = `<div class="msg bad">Não consegui gerar o .zip: ${escH(e.message || e)}. Use “Baixar de novo”.</div>`; });
   $("bkMsg").innerHTML = `<div class="msg ${ok === BK.rows.length ? "ok" : "warn"}">Backup terminado em ${Math.round((Date.now() - t0) / 1000)} s: ${ok} de ${BK.rows.length} concluído(s).</div>`;
 };
 $("bkStop").onclick = () => { BK.stop = true; BK.rows.filter((r) => r.st === "run" && r.job).forEach((r) => call("/job/stop", { id: r.job })); log("Parando a fila de backup após o comando atual de cada site...", "er"); };
@@ -5334,7 +5346,7 @@ async function bkZipSave(auto){
   const z = new JSZip(), stas = new Set();
   rows.forEach((r) => { const st = (r.sta || (cgiFind(r.node) || {}).st || "SEM_STATION_ID").replace(/[^\w.\-]/g, "_"); stas.add(st);
     z.folder(st).file(`${r.node}_${r.script}_${ts}${r.st === "ok" ? "" : r.st === "err" ? "_ERRO" : "_PARADO"}.txt`, r.out); });
-  const rep = bkReport() || $("bkRep").value; if (rep) z.file(`RESUMO_${ts}.txt`, rep);
+  let rep = ""; try { rep = bkReport() || $("bkRep").value; } catch (e) { rep = $("bkRep").value; } if (rep) z.file(`RESUMO_${ts}.txt`, rep);
   const name = stas.size === 1 ? `${[...stas][0]}_backup_${ts}.zip` : `backup_${stas.size}_stations_${ts}.zip`;
   await offer([{ name, data: await z.generateAsync({ type: "uint8array", compression: "DEFLATE" }) }], $("bkDlMsg"),
     auto ? null : null);
