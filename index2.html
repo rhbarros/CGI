@@ -5190,7 +5190,7 @@ async function bkRun2G(r, lane){
 // ---------- resumo de cada site: células fora e alarmes ----------
 const SEVN = { C: "Critical", M: "Major", m: "Minor", w: "Warning", "*": "Alarme" };
 function bkSummary(r){
-  const t = (r.out || "").replace(/\r/g, ""), cells = new Map(), alarms = [], seen = new Set(), tgs = {};
+  const t = (r.out || "").replace(/\r/g, ""), cells = new Map(), alarms = [], seen = new Set(), tgs = {}; let altTotal = null;
   if (r.g2) {
     const want = new Set((r.g2.cells || []).map((c) => c.toUpperCase())); let cmd = "";
     t.split("\n").forEach((l) => {
@@ -5214,8 +5214,12 @@ function bkSummary(r){
     t.split("\n").forEach((l) => {
       let m = l.match(/^\s*\d+\s+(\d)\s+\((\w+)\)\s+(\d)\s+\((\w+)\)\s+(\S+)\s*$/);
       if (m) { const seg = m[5].split(",").pop(); if (/cell/i.test(seg)) { const [type, name] = seg.split("="); cells.set(m[5], { name: name || seg, type, adm: m[2], op: m[4], out: m[2] !== "UNLOCKED" || m[4] !== "ENABLED" }); } return; }
-      m = l.match(/^\s*(\d{4}-\d{2}-\d{2} \d{2}:\d{2}(?::\d{2})?)\s+([CMmw*])\s+(.+?)\s{2,}(\S.*?)\s*$/);
-      if (m) { const k = m[1] + m[3] + m[4]; if (!seen.has(k)) { seen.add(k); alarms.push({ time: m[1], sev: m[2], prob: m[3].trim(), mo: m[4] }); } }
+      // alarme do alt: o problema pode encostar no MO com 1 espaço só (ex.: "...Performance Degraded FieldReplaceableUnit=RU-10")
+      m = l.match(/^\s*(\d{4}-\d{2}-\d{2} \d{2}:\d{2}(?::\d{2})?)\s+([CMmw*])\s+(.+?)\s+([A-Za-z][A-Za-z0-9]*=\S.*?)\s*$/) || l.match(/^\s*(\d{4}-\d{2}-\d{2} \d{2}:\d{2}(?::\d{2})?)\s+([CMmw*])\s+(.+?)\s{2,}(\S.*?)\s*$/);
+      if (m) { const k = m[1] + m[3] + m[4]; if (!seen.has(k)) { seen.add(k);
+        const i = m[4].indexOf(" ("), mo = i > 0 ? m[4].slice(0, i) : m[4], info = i > 0 ? m[4].slice(i + 2).replace(/\)\s*$/, "") : "";
+        alarms.push({ time: m[1], sev: m[2], prob: m[3].trim(), mo, info }); } return; }
+      m = l.match(/>>>\s*Total:\s*(\d+)\s+Alarms?/i); if (m) altTotal = +m[1];
     });
   }
   const list = [...cells.entries()].map(([k, v]) => ({ name: v.name || k, ...v }));
@@ -5223,7 +5227,7 @@ function bkSummary(r){
   const OKST = /^(COM|OPER|OPERATIONAL|ENABLED)$/;
   const tgl = Object.values(tgs).map((T) => ({ ...T, ok: OKST.test(T.state), bad: T.mos.filter((x) => !OKST.test(x.state)),
     cnt: T.mos.reduce((a, x) => (a[x.state] = (a[x.state] || 0) + 1, a), {}) }));
-  return { cells: list, out: list.filter((c) => c.out), unknown: list.filter((c) => c.unknown).length, alarms, tgs: tgl, tgBad: tgl.filter((T) => !T.ok || T.bad.length).length, ok: r.st === "ok" };
+  return { cells: list, out: list.filter((c) => c.out), unknown: list.filter((c) => c.unknown).length, alarms, tgs: tgl, tgBad: tgl.filter((T) => !T.ok || T.bad.length).length, altTotal, ok: r.st === "ok" };
 }
 function bkSumAfter(r){
   try { if (r.out) r.sum = bkSummary(r); r.sumErr = ""; } catch (e) { r.sum = null; r.sumErr = String(e.message || e); log(`${r.node}: não montei o resumo (${r.sumErr})`, "er"); }
@@ -5266,7 +5270,9 @@ function bkReport(){
           if (T.bad.length > 10) o += `      ... mais ${T.bad.length - 10} MO(s)\n`; });
         if (r.g2 && !(S.tgs || []).length) o += `    TG: estado não lido (RXMSP)\n`;
         S.out.forEach((c) => { o += `    Fora: ${c.name}${c.type && !r.g2 ? " [" + c.type + "]" : ""} - ${r.g2 ? c.state : (c.adm !== "UNLOCKED" ? c.adm : "") + (c.adm !== "UNLOCKED" && c.op !== "ENABLED" ? "/" : "") + (c.op !== "ENABLED" ? c.op : "")}\n`; });
-        S.alarms.slice(0, 15).forEach((a) => { o += `    Alarme${a.sev !== "*" ? " " + SEVN[a.sev] : ""} - ${a.prob}${a.mo ? " - " + a.mo : ""}${a.time ? " (" + a.time + ")" : ""}\n`; });
+        if (S.altTotal != null && S.altTotal > S.alarms.length) o += `    (alt mostrou ${S.altTotal} alarmes; ${S.alarms.length} lidos - ver arquivo do site)\n`;
+        S.alarms.slice(0, 15).forEach((a) => { const inf = (a.info || "").replace(/\s*AI:.*$/, "").replace(/^This is a secondary alarm.*$/i, "secundário").trim();
+          o += `    Alarme${a.sev !== "*" ? " " + SEVN[a.sev] : ""} - ${a.prob}${a.mo ? " - " + a.mo : ""}${inf ? " (" + (inf.length > 60 ? inf.slice(0, 60) + "…" : inf) + ")" : ""}${a.time ? " · " + a.time : ""}\n`; });
         if (S.alarms.length > 15) o += `    ... mais ${S.alarms.length - 15} alarme(s) no arquivo do site\n`;
       }
     });
