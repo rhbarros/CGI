@@ -5190,13 +5190,20 @@ async function bkRun2G(r, lane){
 // ---------- resumo de cada site: células fora e alarmes ----------
 const SEVN = { C: "Critical", M: "Major", m: "Minor", w: "Warning", "*": "Alarme" };
 function bkSummary(r){
-  const t = (r.out || "").replace(/\r/g, ""), cells = new Map(), alarms = [], seen = new Set();
+  const t = (r.out || "").replace(/\r/g, ""), cells = new Map(), alarms = [], seen = new Set(), tgs = {};
   if (r.g2) {
     const want = new Set((r.g2.cells || []).map((c) => c.toUpperCase())); let cmd = "";
     t.split("\n").forEach((l) => {
       const c = l.match(/^\s*<?\s*([A-Z]{5}):([^;]*);?\s*$/i); if (c) { cmd = (c[1] + ":" + c[2]).toUpperCase(); return; }
       if (/^\s*END\s*$/.test(l)) { cmd = ""; return; }
       if (/^RLSTP/.test(cmd)) { const m = l.match(/^\s*([A-Z0-9]+)\s+([A-Z]+)\b/i); if (m && want.has(m[1].toUpperCase())) cells.set(m[1].toUpperCase(), { type: "2G", state: m[2].toUpperCase(), out: m[2].toUpperCase() !== "ACTIVE" }); }
+      if (/^RXMSP/.test(cmd)) {  // estado do TG e dos MOs abaixo dele
+        const m = l.match(/^\s*(RXO[A-Z]+-[\d-]+)\s+([A-Z][A-Z0-9]*)\b(.*)$/i);
+        if (m && !/^(MO|STATE)$/i.test(m[2])) { const tgn = (cmd.match(/RXOTG-(\d+)/i) || [])[1] || (m[1].match(/-(\d+)/) || [])[1];
+          const T = tgs[tgn] || (tgs[tgn] = { tg: "RXOTG-" + tgn, state: "?", rest: "", mos: [] });
+          if (/^RXOTG-/i.test(m[1])) { T.state = m[2].toUpperCase(); T.rest = m[3].replace(/\s{2,}/g, " ").trim(); }
+          else if (!T.mos.some((x) => x.mo === m[1])) T.mos.push({ mo: m[1].toUpperCase(), state: m[2].toUpperCase(), rest: m[3].replace(/\s{2,}/g, " ").trim() }); }
+      }
       if (/^RXASP/.test(cmd) || (/^RXMFP/.test(cmd) && /FAULTY/.test(cmd))) {
         const m = l.match(/^\s*(RXO[A-Z]+-[\d-]+)\s+(\S.*)$/i);
         if (m && !/^(MO|NONE)\b/i.test(m[2])) { const k = cmd.slice(0, 5) + m[1] + m[2]; if (!seen.has(k)) { seen.add(k); alarms.push({ sev: "*", prob: (/^RXASP/.test(cmd) ? "RXASP: " : "RXMFP FAULTY: ") + m[2].replace(/\s{2,}/g, " ").trim(), mo: m[1], time: "" }); } }
@@ -5212,7 +5219,11 @@ function bkSummary(r){
     });
   }
   const list = [...cells.entries()].map(([k, v]) => ({ name: v.name || k, ...v }));
-  return { cells: list, out: list.filter((c) => c.out), unknown: list.filter((c) => c.unknown).length, alarms, ok: r.st === "ok" };
+  // TG: em serviço quando o estado é COM/OPER; MOs abaixo dele em outro estado entram como pendência
+  const OKST = /^(COM|OPER|OPERATIONAL|ENABLED)$/;
+  const tgl = Object.values(tgs).map((T) => ({ ...T, ok: OKST.test(T.state), bad: T.mos.filter((x) => !OKST.test(x.state)),
+    cnt: T.mos.reduce((a, x) => (a[x.state] = (a[x.state] || 0) + 1, a), {}) }));
+  return { cells: list, out: list.filter((c) => c.out), unknown: list.filter((c) => c.unknown).length, alarms, tgs: tgl, tgBad: tgl.filter((T) => !T.ok || T.bad.length).length, ok: r.st === "ok" };
 }
 function bkSumAfter(r){ if (r.out) r.sum = bkSummary(r); bkSumDraw(); }
 const tecOf = (r) => r.g2 ? "2G" : /_3G$/.test(r.script) ? "3G" : (r.tec || "").includes("5G") ? "4G/5G" : "4G";
@@ -5221,7 +5232,7 @@ function bkReport(){
   const d = new Date(), pad = (x) => String(x).padStart(2, "0");
   const bySt = {}; done.forEach((r) => { const k = r.sta || "SEM STATION ID"; (bySt[k] = bySt[k] || []).push(r); });
   const nOut = done.reduce((a, r) => a + (r.sum ? r.sum.out.length : 0), 0), nAl = done.reduce((a, r) => a + (r.sum ? r.sum.alarms.length : 0), 0);
-  const pend = done.filter((r) => r.st === "err" || (r.sum && (r.sum.out.length || r.sum.alarms.length))).length;
+  const pend = done.filter((r) => r.st === "err" || (r.sum && (r.sum.out.length || r.sum.alarms.length || r.sum.tgBad))).length;
   let o = `*Backup antes da atividade - ${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}*\n`;
   o += `Sites: ${done.length} | sem pendência: ${done.length - pend} | com pendência: ${pend} | células fora: ${nOut} | alarmes: ${nAl}\n`;
   Object.entries(bySt).forEach(([st, rows]) => {
@@ -5237,6 +5248,11 @@ function bkReport(){
         o += S.alarms.length ? `, ${S.alarms.length} alarme(s)` : ", sem alarmes";
         o += S.unknown && r.g2 ? ` (estado de ${S.unknown} célula(s) não lido)` : "";
         o += "\n";
+        (S.tgs || []).forEach((T) => { const c = Object.entries(T.cnt).map(([k, n]) => `${n} ${k}`).join(", ");
+          o += `    TG ${T.tg}: ${T.state}${T.rest ? " " + T.rest : ""}${T.ok ? "" : " (FORA DE SERVIÇO)"}${T.mos.length ? ` · ${T.mos.length} MO(s) abaixo: ${c}` : ""}\n`;
+          T.bad.slice(0, 10).forEach((x) => { o += `      ${x.mo} - ${x.state}${x.rest ? " " + x.rest : ""}\n`; });
+          if (T.bad.length > 10) o += `      ... mais ${T.bad.length - 10} MO(s)\n`; });
+        if (r.g2 && !(S.tgs || []).length) o += `    TG: estado não lido (RXMSP)\n`;
         S.out.forEach((c) => { o += `    Fora: ${c.name}${c.type && !r.g2 ? " [" + c.type + "]" : ""} - ${r.g2 ? c.state : (c.adm !== "UNLOCKED" ? c.adm : "") + (c.adm !== "UNLOCKED" && c.op !== "ENABLED" ? "/" : "") + (c.op !== "ENABLED" ? c.op : "")}\n`; });
         S.alarms.slice(0, 15).forEach((a) => { o += `    Alarme${a.sev !== "*" ? " " + SEVN[a.sev] : ""} - ${a.prob}${a.mo ? " - " + a.mo : ""}${a.time ? " (" + a.time + ")" : ""}\n`; });
         if (S.alarms.length > 15) o += `    ... mais ${S.alarms.length - 15} alarme(s) no arquivo do site\n`;
@@ -5249,13 +5265,14 @@ function bkSumDraw(){
   const rows = BK.rows.filter((r) => r.sum || r.st === "err");
   if (!rows.length) return;
   const chip = (n, cls, txt) => n ? `<span class="kg-chip ${cls}">${n} ${txt}</span>` : `<span class="kg-chip g">0 ${txt}</span>`;
-  $("bkSumTbl").innerHTML = `<div class="tablebox"><table>` + table(["Site", "STATION", "Tec.", "Células", "Alarmes", "Detalhe"], rows.map((r) => { const S = r.sum;
+  $("bkSumTbl").innerHTML = `<div class="tablebox"><table>` + table(["Site", "STATION", "Tec.", "Células", "Alarmes", "TG / Detalhe"], rows.map((r) => { const S = r.sum;
     if (!S) return tr([escH(r.node), escH(r.sta || ""), tecOf(r), "—", "—", `<span class="kg-chip r">backup com erro</span> <span class="note" style="margin:0">${escH((r.err || "").slice(0, 90))}</span>`]);
     const sev = ["C", "M", "m", "w", "*"].map((k) => { const n = S.alarms.filter((a) => a.sev === k).length; return n ? `${n} ${k === "*" ? "" : SEVN[k]}` : ""; }).filter(Boolean).join(", ");
     return tr([`<b>${escH(r.node)}</b>`, escH(r.sta || ""), tecOf(r) + (r.g2 ? `<div class="note" style="margin:0">BSC ${escH(r.g2.bsc)}</div>` : ""),
       `${S.cells.length} · ${S.out.length ? chip(S.out.length, "r", "fora") : `<span class="kg-chip g">todas no ar</span>`}`,
       S.alarms.length ? `<span class="kg-chip a">${S.alarms.length}</span> <span class="note" style="margin:0">${escH(sev)}</span>` : `<span class="kg-chip g">sem alarmes</span>`,
-      [S.out.map((c) => `<div><b>Fora:</b> ${escH(c.name)} <span class="note" style="margin:0">${escH(r.g2 ? c.state : [c.adm, c.op].join("/"))}</span></div>`).join(""),
+      [(S.tgs || []).map((T) => `<div><b>${escH(T.tg)}:</b> <span class="kg-chip ${T.ok && !T.bad.length ? "g" : T.ok ? "a" : "r"}">${escH(T.state)}</span>${T.mos.length ? ` <span class="note" style="margin:0">${escH(Object.entries(T.cnt).map(([k, n]) => n + " " + k).join(", "))}</span>` : ""}${T.bad.length ? `<div class="note" style="margin:0">${escH(T.bad.slice(0, 4).map((x) => x.mo + " " + x.state).join(" · "))}${T.bad.length > 4 ? " …" : ""}</div>` : ""}</div>`).join(""),
+       S.out.map((c) => `<div><b>Fora:</b> ${escH(c.name)} <span class="note" style="margin:0">${escH(r.g2 ? c.state : [c.adm, c.op].join("/"))}</span></div>`).join(""),
        S.alarms.slice(0, 6).map((a) => `<div>${a.sev !== "*" ? `<b>${escH(a.sev)}</b> ` : ""}${escH(a.prob)} <span class="note" style="margin:0">${escH(a.mo)}</span></div>`).join(""),
        S.alarms.length > 6 ? `<div class="note" style="margin:0">… +${S.alarms.length - 6} no report</div>` : ""].join("") || `<span class="note" style="margin:0">nada fora</span>`]); })) + `</table></div>`;
   const rep = bkReport(); $("bkRep").value = rep; ["bkRepCopy", "bkRepDl", "bkRepRe"].forEach((id) => $(id).disabled = !rep);
