@@ -4531,10 +4531,14 @@ const O = { online: false, logged: false, job: null, out: "", outName: "", logLe
 const load = () => { try { return JSON.parse(localStorage.getItem(OSK) || "{}"); } catch (e) { return {}; } };
 const save = (o) => { try { localStorage.setItem(OSK, JSON.stringify({ ...load(), ...o })); } catch (e) {} };
 const cfg = load();
-const servers = cfg.servers || [{ name: "CVOA", host: "", port: 5022 }, { name: "CVOB", host: "", port: 5022 }, { name: "CVO", host: "", port: 5022 }];
+// endereços padrão dos servidores (já vêm preenchidos; quem tiver mudado na tela mantém o seu)
+const SRV_DEF = { CVOA: { host: "10.216.154.6", port: 5022 }, CVOB: { host: "10.216.155.6", port: 5022 }, CVO: { host: "10.216.224.6", port: 5022 }, "2G": { host: "10.36.154.163", port: 22 } };
+const servers = cfg.servers || [{ name: "CVOA", host: SRV_DEF.CVOA.host, port: 5022 }, { name: "CVOB", host: SRV_DEF.CVOB.host, port: 5022 }, { name: "CVO", host: SRV_DEF.CVO.host, port: 5022 }];
 // servidor do 2G Ericsson (porta 22, com usuário próprio): entra uma vez na lista; o IP e o usuário são preenchidos pelo usuário
 if (!cfg.added2g) { if (!servers.some((s) => /2G/i.test(s.name))) servers.push({ name: "2G", host: "", port: 22, user: "" }); save({ servers, added2g: true }); }
 const is2g = (s) => /2G/i.test((s && s.name) || "");
+servers.forEach((s) => { const d = SRV_DEF[String(s.name || "").trim().toUpperCase()] || (is2g(s) ? SRV_DEF["2G"] : null); if (d && !s.host) { s.host = d.host; s.port = d.port; } });
+save({ servers });
 function drawServers(){
   $("ossSrvList").innerHTML = `<span class="note" style="margin:0">Endereços dos servidores (preencha uma vez) · o 2G usa o usuário e a senha da caixa do 2G</span>` + servers.map((s, i) => `<div class="oss-srv"><input type="text" data-sv="${i}" data-k="name" value="${escH(s.name)}" aria-label="Nome"><input type="text" data-sv="${i}" data-k="host" value="${escH(s.host)}" placeholder="IP (ex.: 10.x.x.x)" aria-label="IP do ${escH(s.name)}"><input type="number" data-sv="${i}" data-k="port" value="${escH(s.port)}" aria-label="Porta"><input type="text" data-sv="${i}" data-k="user" value="${is2g(s) ? "" : escH(s.user || "")}" placeholder="${is2g(s) ? "caixa do 2G →" : "usuário próprio"}" ${is2g(s) ? "disabled" : ""} aria-label="Usuário próprio do ${escH(s.name)}" autocomplete="off"></div>`).join("");
   $("ossSrvList").querySelectorAll("input").forEach((el) => el.onchange = () => { const s = servers[+el.dataset.sv]; s[el.dataset.k] = el.dataset.k === "port" ? +el.value || 5022 : el.value.trim(); save({ servers }); drawSel(); drawOwnPw(); });
