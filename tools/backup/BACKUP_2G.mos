@@ -2,7 +2,7 @@
 // A ferramenta abre o BSC do site (coluna J da CGI) e:
 //  1) roda as linhas com {CELL} da parte DESCOBRIR para cada célula do site (coluna L da CGI) e acha os TGs (RXOTG-n);
 //  2) roda o bloco com {TG} uma vez para cada TG encontrado;
-//  3) roda as linhas com {CELL} da parte CELULAS para cada célula.
+//  3) roda as linhas com {CELL} da parte CELULAS para cada célula (RLSTP mostra se a célula está ACTIVE ou HALTED, usado no resumo).
 // Só comandos de impressão (terminam em P): não alteram o BSC.
 // ===== DESCOBRIR =====
 RXTCP:MOTY=RXOTG,CELL={CELL};
@@ -15,3 +15,4 @@ RXMFP:MO=RXOCF-{TG},SUBORD,FAULTY;
 RXMSP:MO=RXOTG-{TG},SUBORD;
 // ===== CELULAS =====
 RLCRP:CELL={CELL};
+RLSTP:CELL={CELL};
