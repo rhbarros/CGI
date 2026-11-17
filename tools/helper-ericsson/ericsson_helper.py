@@ -11,7 +11,7 @@ import argparse, json, os, re, shlex, sys, threading, time, uuid
 from urllib.parse import urlparse, parse_qs
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "2.4"
+VERSION = "2.5"
 LOCAL_PORT = 8766
 LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "helper.log")
 
@@ -708,6 +708,7 @@ def probe_job(job):
                 if job.get("stop"): job["log"].append("Parado pelo usuario."); break
                 job["step"] += 1
                 had = S.cur_node
+                p["nodePwdPref"] = (p.get("nodePwdPrefs") or {}).get(node, p.get("nodePwdPref", ""))  # senha da regional de cada no
                 auth = NodeAuth(job, node); auth.job = {"log": [], "params": p}  # sem poluir o log com cada senha
                 cmd = (switch_tpl if had else open_tpl).replace("{node}", node).replace("{no}", node)
                 job["log"].append("[%s] testando %s: %s" % (S.name or S.key, node, cmd))

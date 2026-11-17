@@ -4527,7 +4527,7 @@ render();
 
 // ================= EXECUTAR NO OSS (AMOS via helper local) =================
 (function(){
-const HELPER = "http://127.0.0.1:8766", MINV = 2.4, OSK = LSK + ":oss";
+const HELPER = "http://127.0.0.1:8766", MINV = 2.5, OSK = LSK + ":oss";
 const WRITE = /^\s*(set|sete|crn|cr|del|rdel|bl|deb|acc|run|ldeb|lbl|lset|lcr|ldel|restart|confb\+?|trun|upgrade|cvms|cvmk|cvrm|cvset)\b/i;
 const O = { online: false, logged: false, job: null, out: "", outName: "", logLen: 0, log: [], busy: false, files: [], after: null };
 const load = () => { try { return JSON.parse(localStorage.getItem(OSK) || "{}"); } catch (e) { return {}; } };
@@ -4597,7 +4597,7 @@ function status(){
     O.online = true; SS = s.sessions || (s.logged ? [{ key: "", host: s.host, user: s.user, logged: true, prompt: s.prompt, curNode: s.curNode, depth: s.depth }] : []);
     $("ossDot").className = "oss-dot on"; $("ossHelp").hidden = true;
     const pmNew = s.paramiko && !/^[23]\./.test(s.paramiko);
-    const old = +s.version < MINV || pmNew; $("ossUpd").hidden = !old; $("ossUpdT").textContent = +s.version < MINV ? `O helper deste PC é a versão ${s.version}; a atual é ${MINV.toFixed(1)}.` : `O paramiko deste PC (${s.paramiko}) não conecta em servidores antigos como o 2G. Rode o instalador de novo: ele instala o 3.5.1.`;
+    O.hver = +s.version; const old = +s.version < MINV || pmNew; $("ossUpd").hidden = !old; $("ossUpdT").textContent = +s.version < MINV ? `O helper deste PC é a versão ${s.version}; a atual é ${MINV.toFixed(1)}.` : `O paramiko deste PC (${s.paramiko}) não conecta em servidores antigos como o 2G. Rode o instalador de novo: ele instala o 3.5.1.`;
     const sel = SS.find((x) => x.key === keyOf(selSrv())) || (!s.sessions && SS[0]) || null;
     O.logged = !!(sel && sel.logged); if (!O.logged && TABS.length) T().curNode = "";
     const on = SS.filter((x) => x.logged);
@@ -4771,7 +4771,15 @@ function start(body, label, after){
   tb.busy = true; tb.out = ""; tb.outName = label; tb.after = after || null; tb.logLen = 0; tb.tlog = []; tb.lbl = { label, node: body.node || "", srv: s ? s.name : "", cmds: body.cmds || [] }; tb.kg = null; tb.ask = null; tb.live = ""; tb.liveLen = 0; tb.liveHead = "";
   askDraw(tb); setMsg(tb, ""); btns(); tabsDraw(); if (isAct(tb)) conShow();
   log(`[${tabName(tb)}] ▶ ${label} em ${body.node || ""} (${s ? s.name : "?"})`, "cmd");
-  if (body.node) Object.assign(body, nodeCreds(body.node), nodeOpts());
+  // a regional do site (CGI) escolhe a senha do nó: espera a base da CGI carregar antes de mandar
+  const ready = !body.node || is2g(s) || CGI.map ? Promise.resolve() : cgiLoad("cache").then((ok) => ok || cgiLoad()).catch(() => {});
+  ready.then(() => start2(tb, s, body));
+}
+function start2(tb, s, body){
+  if (body.node) { Object.assign(body, nodeCreds(body.node), nodeOpts());
+    if (!is2g(s)) { const reg = regOf(body.node), rp = regPwds();
+      if (body.nodePwdPref) log(`[${tabName(tb)}] Regional ${reg} (CGI): a senha da ${reg} vai primeiro.` + (O.hver && O.hver < 2.4 ? " ATENÇÃO: o helper deste PC é antigo e ignora isso; atualize o helper." : ""));
+      else if (Object.keys(rp).length) log(`[${tabName(tb)}] ${reg ? `Sem senha cadastrada para a regional ${reg}` : `Não achei ${body.node} na CGI`}: vai testar as senhas da lista.`, "er"); } }
   if (is2g(s)) { body.mode = "mml"; body.openCmd = $("ossMmlT").value.trim() || "eaw {no}"; body.cmds = (body.cmds || []).filter((c) => c !== "lt all"); tb.lbl.cmds = body.cmds; }
   body.server = keyOf(s); body.lane = laneOf(tb);
   call("/job", body).then((r) => {
@@ -5168,7 +5176,8 @@ async function bkDetect(all){
   log(`Procurando o servidor de ${rows.map((r) => r.node).join(", ")} em ${on.map((o) => o.s.name).join(", ")}...`, "cmd");
   const found = {}, why = {};
   await Promise.all(on.map(async ({ s, i }) => {
-    let r; try { r = await call("/probe", { server: keyOf(s), nodes: rows.map((x) => x.node), ...nodeCreds(), ...nodeOpts() }); } catch (e) { log(`${s.name}: ${e.message || e}`, "er"); return; }
+    const prefs = {}; rows.forEach((x) => { const c = nodeCreds(x.node, x.reg); if (c.nodePwdPref) prefs[x.node] = c.nodePwdPref; });
+    let r; try { r = await call("/probe", { server: keyOf(s), nodes: rows.map((x) => x.node), ...nodeCreds(), nodePwdPrefs: prefs, ...nodeOpts() }); } catch (e) { log(`${s.name}: ${e.message || e}`, "er"); return; }
     if (!r.ok) { log(`${s.name}: não consultou: ${r.erro}`, "er"); return; }
     let since = 0; const seen = new Set();
     for (;;) { await new Promise((ok) => setTimeout(ok, 1200));
