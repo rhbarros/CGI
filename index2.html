@@ -4646,6 +4646,54 @@ $("ossLogoutAll").onclick = () => call("/logout", {}).then(() => { log("Desconec
 // ---------- nós conhecidos ----------
 function nodes(){ const set = new Set(); try { (typeof hist !== "undefined" ? hist : []).forEach((h) => h && h.node && set.add(h.node)); } catch (e) {} try { if (cur && cur.node) set.add(cur.node); } catch (e) {} (load().nodes || []).forEach((n) => set.add(n)); return [...set]; }
 function drawNodes(){ $("ossNodes").innerHTML = nodes().map((n) => `<option value="${escH(n)}">`).join(""); }
+// ---------- sugestões enquanto digita o nó: nós Ericsson da CGI, BSCs e sites 2G, com o servidor quando já é conhecido ----------
+function nodeSug(){
+  const q = node(); if (q.length < 3 || !CGI.map) { drawNodes(); return; }
+  const w = where(), g2s = (servers.find((s) => is2g(s)) || {}).name || "2G", out = [], seen = new Set();
+  const add = (val, label, rank) => { if (seen.has(val + label)) return; seen.add(val + label); out.push({ val, label, rank }); };
+  const srvOf = (n) => w[n] ? w[n] : "servidor ?";
+  for (const [site, v] of Object.entries(CGI.map)) {
+    if (v.tec === "2G") continue; const b = site.replace(/^[0-9][A-Z]-/, "");
+    if (site.includes(q) || b.startsWith(q)) add(site, [v.reg, v.tec, v.st, srvOf(site)].filter(Boolean).join(" · "), site.startsWith(q) || b.startsWith(q) ? 0 : 1);
+    if (out.length > 400) break;
+  }
+  Object.keys(CGI.sta || {}).forEach((st) => { if (st.startsWith(q)) (CGI.sta[st] || []).forEach((n) => { const v = CGI.map[n]; if (v && v.tec !== "2G") add(n, [v.reg, v.tec, "STATION " + st, srvOf(n)].join(" · "), 2); }); });
+  (CGI.bsc ? [...CGI.bsc] : []).forEach((b) => { if (b.includes(q)) add(b, `BSC 2G · ${g2s}`, b.startsWith(q) ? 0 : 1); });
+  Object.values(CGI.g2site || {}).forEach((g) => { if (g.site.includes(q)) add(g.bsc, `2G do site ${g.site} (${g.cells.length} cél.) · BSC ${g.bsc} · ${g2s}`, 3); });
+  out.sort((a, b) => a.rank - b.rank || a.val.length - b.val.length || a.val.localeCompare(b.val));
+  const hist = nodes().filter((n) => n.includes(q) && !seen.has(n));
+  $("ossNodes").innerHTML = out.slice(0, 40).map((o) => `<option value="${escH(o.val)}" label="${escH(o.label)}">`).join("") + hist.slice(0, 8).map((n) => `<option value="${escH(n)}" label="usado antes">`).join("");
+}
+let sugT = 0;
+$("ossNode").addEventListener("input", () => { clearTimeout(sugT); sugT = setTimeout(() => {
+  if (CGI.map) return nodeSug();
+  cgiLoad("cache").then((ok) => ok ? ok : node().length >= 3 ? cgiLoad() : false).then(() => nodeSug()); }, 150); });
+$("ossNode").addEventListener("focus", () => { if (!CGI.map) cgiLoad("cache"); });
+// nó da CGI sem servidor conhecido: procura nos servidores conectados (amos/!amos, lt root, q — não altera nada)
+function autoFind(tb){
+  const n = tb.node; if (!n || isBsc(n) || tb.finding === n) return;
+  const f = CGI.map && cgiFind(n); if (!f) return;
+  if (where()[f.node]) return;
+  const on = servers.map((s, i) => ({ s, i })).filter(({ s }) => s.host && !is2g(s) && SS.some((x) => x.key === keyOf(s) && x.logged));
+  if (!on.length) return;
+  tb.finding = n; setMsg(tb, `<div class="msg">Procurando em qual servidor está ${escH(n)} (${on.map((o) => escH(o.s.name)).join(", ")})…</div>`);
+  let hit = null;
+  Promise.all(on.map(async ({ s, i }) => {
+    let r; try { r = await call("/probe", { server: keyOf(s), nodes: [n], ...nodeCreds(), ...nodeOpts() }); } catch (e) { return; }
+    if (!r.ok) return;
+    for (let k = 0; k < 120; k++) { await new Promise((ok) => setTimeout(ok, 1000));
+      let j; try { j = await call("/job?id=" + r.id + "&since=0"); } catch (e) { return; }
+      const v = (j.result || {})[n]; if (v && v.found && !hit) hit = { i, name: s.name };
+      if (j.state !== "running") return; }
+  })).then(() => {
+    tb.finding = "";
+    if (!hit) { setMsg(tb, `<div class="msg warn">Não achei ${escH(n)} nos servidores conectados. Confira o nome ou escolha o servidor manualmente.</div>`); return; }
+    whereSave({ [f.node]: hit.name });
+    if (tb.node === n) { tb.srv = hit.i; if (isAct(tb)) { $("ossSrv").value = String(hit.i); save({ srv: hit.i }); } tabsSave(); tabsDraw(); status(); }
+    setMsg(tb, `<div class="msg ok">${escH(n)} está no <b>${escH(hit.name)}</b>: esta aba já usa esse servidor.</div>`);
+    if (isAct(tb)) nodeSug();
+  });
+}
 drawNodes();
 const node = () => $("ossNode").value.trim().toUpperCase();
 function needNode(){ const n = node(); if (!/^[\w.\-]{3,}$/.test(n)) { $("ossMsg").innerHTML = `<div class="msg warn">Informe o nó (ex.: 4G-UBUR18).</div>`; return null; } const l = load().nodes || []; if (!l.includes(n)) save({ nodes: [n, ...l].slice(0, 40) }); drawNodes(); return n; }
@@ -4687,7 +4735,7 @@ function setMsg(tb, h){ tb.msg = h; if (isAct(tb)) $("ossMsg").innerHTML = h; }
 function setProg(tb, txt, bar){ tb.prog = txt; if (bar != null) tb.bar = bar; if (isAct(tb)) { $("ossProg").textContent = txt; $("ossBar").style.width = tb.bar + "%"; } }
 // as entradas da aba ativa ficam guardadas nela
 $("ossNode").addEventListener("input", () => { T().node = node(); tabsDraw(); });
-$("ossNode").addEventListener("change", () => { const tb = T(); tb.node = node(); autoSrv(tb); tabsSave(); tabsDraw();
+$("ossNode").addEventListener("change", () => { const tb = T(); tb.node = node(); autoSrv(tb); autoFind(tb); tabsSave(); tabsDraw();
   if (tb.node && !(CGI.bsc && CGI.bsc.size)) cgiLoad(CGI.map ? true : undefined).then((ok) => { if (ok) { autoSrv(tb); tabsDraw(); } }); });
 // BSC (lista da CGI ou nome começando com BSC) -> servidor 2G; nó 3G/4G numa aba 2G -> volta para o servidor do nó
 function isBsc(n){ n = String(n || "").toUpperCase(); return !!n && ((CGI.bsc && CGI.bsc.has(n)) || /^BSC/.test(n)); }
