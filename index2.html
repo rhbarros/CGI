@@ -718,6 +718,8 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
       <div class="oss-grid" style="grid-template-columns:minmax(0,200px) minmax(0,1fr)">
         <input type="text" id="ossNUser" placeholder="Usuário do nó" autocomplete="off" spellcheck="false">
         <textarea id="ossNPwds" placeholder="Senhas do nó, uma por linha" spellcheck="false" style="min-height:96px;-webkit-text-security:disc"></textarea>
+        <span class="note" style="margin:0">Senha por regional (usada primeiro, pela regional do site na CGI — sem ficar testando)</span>
+        <textarea id="ossNReg" placeholder="Uma por linha, ex.:&#10;TNE=senha&#10;TSP=senha&#10;TNO=senha&#10;TLE=senha&#10;TCO=senha" spellcheck="false" style="min-height:96px;-webkit-text-security:disc"></textarea>
       </div>
       <div class="row" style="margin:0"><label class="note" style="margin:0"><input type="checkbox" id="ossNRem" checked> lembrar neste navegador</label><button class="btn" id="ossNShow">Mostrar senhas</button><span class="note" id="ossNInfo"></span></div>
     </section>
@@ -4525,7 +4527,7 @@ render();
 
 // ================= EXECUTAR NO OSS (AMOS via helper local) =================
 (function(){
-const HELPER = "http://127.0.0.1:8766", MINV = 2.3, OSK = LSK + ":oss";
+const HELPER = "http://127.0.0.1:8766", MINV = 2.4, OSK = LSK + ":oss";
 const WRITE = /^\s*(set|sete|crn|cr|del|rdel|bl|deb|acc|run|ldeb|lbl|lset|lcr|ldel|restart|confb\+?|trun|upgrade|cvms|cvmk|cvrm|cvset)\b/i;
 const O = { online: false, logged: false, job: null, out: "", outName: "", logLen: 0, log: [], busy: false, files: [], after: null };
 const load = () => { try { return JSON.parse(localStorage.getItem(OSK) || "{}"); } catch (e) { return {}; } };
@@ -4558,11 +4560,19 @@ $("ossSrv").onchange = () => save({ srv: +$("ossSrv").value });
 $("ossUser").value = cfg.user || ""; $("oss2gUser").value = cfg.user2g || "";
 $("oss2gUser").onchange = () => save({ user2g: $("oss2gUser").value.trim() }); $("ossCurV").textContent = MINV.toFixed(1);
 // credenciais do no (so neste navegador, se "lembrar" estiver marcado)
-$("ossNUser").value = cfg.nodeUser || ""; $("ossNPwds").value = (cfg.nodePwds || []).join("\n"); $("ossNRem").checked = cfg.nodeRemember !== false;
-const nodeCreds = () => ({ nodeUser: $("ossNUser").value.trim(), nodePwds: $("ossNPwds").value.split("\n").map((x) => x.trim()).filter(Boolean) });
-function saveCreds(){ const c = nodeCreds(); const rem = $("ossNRem").checked; save({ nodeRemember: rem, nodeUser: rem ? c.nodeUser : "", nodePwds: rem ? c.nodePwds : [] }); $("ossNInfo").textContent = `${c.nodePwds.length} senha(s)` + (rem ? " · guardadas neste navegador" : " · só nesta sessão"); }
-["ossNUser", "ossNPwds"].forEach((id) => $(id).onchange = saveCreds); $("ossNRem").onchange = saveCreds;
-$("ossNShow").onclick = () => { const on = $("ossNPwds").style.webkitTextSecurity !== "none"; $("ossNPwds").style.webkitTextSecurity = on ? "none" : "disc"; $("ossNShow").textContent = on ? "Ocultar senhas" : "Mostrar senhas"; };
+$("ossNUser").value = cfg.nodeUser || ""; $("ossNPwds").value = (cfg.nodePwds || []).join("\n"); $("ossNReg").value = cfg.nodeReg || ""; $("ossNRem").checked = cfg.nodeRemember !== false;
+// senha do nó por regional (TNE=..., TSP=...): fica só neste navegador; a regional do site vem da CGI
+const regPwds = () => { const o = {}; $("ossNReg").value.split("\n").forEach((l) => { const m = l.match(/^\s*(T[A-Z]{2})\s*[=:\-–]\s*(\S+)\s*$/i); if (m) o[m[1].toUpperCase()] = m[2]; }); return o; };
+function regOf(n, reg){ if (reg) return reg; try { const f = CGI.map && cgiFind(n); return f ? f.reg : ""; } catch (e) { return ""; } }
+const nodeCreds = (n, reg) => { const base = $("ossNPwds").value.split("\n").map((x) => x.trim()).filter(Boolean), rp = regPwds();
+  const all = base.concat(Object.values(rp).filter((x) => !base.includes(x)));
+  const pref = n ? rp[regOf(n, reg)] || "" : "";
+  return { nodeUser: $("ossNUser").value.trim(), nodePwds: all, nodePwdPref: pref }; };
+function saveCreds(){ const rem = $("ossNRem").checked, base = $("ossNPwds").value.split("\n").map((x) => x.trim()).filter(Boolean), rp = regPwds();
+  save({ nodeRemember: rem, nodeUser: rem ? $("ossNUser").value.trim() : "", nodePwds: rem ? base : [], nodeReg: rem ? $("ossNReg").value : "" });
+  $("ossNInfo").textContent = `${base.length} senha(s) · ${Object.keys(rp).length} regional(is)` + (rem ? " · guardadas neste navegador" : " · só nesta sessão"); }
+["ossNUser", "ossNPwds", "ossNReg"].forEach((id) => $(id).onchange = saveCreds); $("ossNRem").onchange = saveCreds;
+$("ossNShow").onclick = () => { const on = $("ossNPwds").style.webkitTextSecurity !== "none"; $("ossNPwds").style.webkitTextSecurity = on ? "none" : "disc"; $("ossNReg").style.webkitTextSecurity = on ? "none" : "disc"; $("ossNShow").textContent = on ? "Ocultar senhas" : "Mostrar senhas"; };
 saveCreds();
 // abrir / trocar de no
 $("ossOpenT").value = cfg.openCmd || "amos {no}"; $("ossSwT").value = (!cfg.switchCmd || cfg.switchCmd === "!{no}") ? "!amos {no}" : cfg.switchCmd; $("ossKeep").checked = cfg.keepOpen !== false;
@@ -4679,7 +4689,7 @@ function autoFind(tb){
   tb.finding = n; setMsg(tb, `<div class="msg">Procurando em qual servidor está ${escH(n)} (${on.map((o) => escH(o.s.name)).join(", ")})…</div>`);
   let hit = null;
   Promise.all(on.map(async ({ s, i }) => {
-    let r; try { r = await call("/probe", { server: keyOf(s), nodes: [n], ...nodeCreds(), ...nodeOpts() }); } catch (e) { return; }
+    let r; try { r = await call("/probe", { server: keyOf(s), nodes: [n], ...nodeCreds(n), ...nodeOpts() }); } catch (e) { return; }
     if (!r.ok) return;
     for (let k = 0; k < 120; k++) { await new Promise((ok) => setTimeout(ok, 1000));
       let j; try { j = await call("/job?id=" + r.id + "&since=0"); } catch (e) { return; }
@@ -4761,7 +4771,7 @@ function start(body, label, after){
   tb.busy = true; tb.out = ""; tb.outName = label; tb.after = after || null; tb.logLen = 0; tb.tlog = []; tb.lbl = { label, node: body.node || "", srv: s ? s.name : "", cmds: body.cmds || [] }; tb.kg = null; tb.ask = null; tb.live = ""; tb.liveLen = 0; tb.liveHead = "";
   askDraw(tb); setMsg(tb, ""); btns(); tabsDraw(); if (isAct(tb)) conShow();
   log(`[${tabName(tb)}] ▶ ${label} em ${body.node || ""} (${s ? s.name : "?"})`, "cmd");
-  if (body.node) Object.assign(body, nodeCreds(), nodeOpts());
+  if (body.node) Object.assign(body, nodeCreds(body.node), nodeOpts());
   if (is2g(s)) { body.mode = "mml"; body.openCmd = $("ossMmlT").value.trim() || "eaw {no}"; body.cmds = (body.cmds || []).filter((c) => c !== "lt all"); tb.lbl.cmds = body.cmds; }
   body.server = keyOf(s); body.lane = laneOf(tb);
   call("/job", body).then((r) => {
@@ -5385,7 +5395,7 @@ async function bkRunRow(r, lane){
   const s = servers[r.srv]; r.st = "run"; r.step = 0; r.total = 0; r.out = ""; r.err = ""; r.lane = lane || 0; bkDraw();
   log(`▶ backup ${r.script} em ${r.node} (${s.name}${lane ? " · terminal " + (lane + 1) : ""})`, "cmd");
   let res;
-  try { res = await call("/job", { server: keyOf(s), lane: lane || 0, node: r.node, paste: BKP[r.script], confirmWrites: true, timeout: 3600, ...nodeCreds(), ...nodeOpts() }); }
+  try { res = await call("/job", { server: keyOf(s), lane: lane || 0, node: r.node, paste: BKP[r.script], confirmWrites: true, timeout: 3600, ...nodeCreds(r.node, r.reg), ...nodeOpts() }); }
   catch (e) { r.st = "err"; r.err = String(e.message || e); return; }
   if (!res.ok) { r.st = "err"; r.err = res.erro || "não iniciou"; log(`${r.node}: ${r.err}`, "er"); return; }
   r.job = res.id; let since = 0; r.live = ""; r.liveLen = 0; r.t0 = Date.now();

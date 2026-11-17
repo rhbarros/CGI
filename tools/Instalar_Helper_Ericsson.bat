@@ -136,7 +136,7 @@ import argparse, json, os, re, shlex, sys, threading, time, uuid
 from urllib.parse import urlparse, parse_qs
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "2.3"
+VERSION = "2.4"
 LOCAL_PORT = 8766
 LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "helper.log")
 
@@ -419,7 +419,10 @@ class NodeAuth:
     def __init__(self, job, node):
         p = job["params"]; self.job = job; self.node = node
         self.user = (p.get("nodeUser") or "").strip(); self.pwds = [x for x in (p.get("nodePwds") or []) if x]
-        first = NODE_PWD_OK.get(node.upper(), NODE_PWD_OK.get("*"))
+        pref = p.get("nodePwdPref") or ""  # senha da regional do site (vem da CGI pela pagina)
+        self.pref = self.pwds.index(pref) if pref in self.pwds else None
+        first = NODE_PWD_OK.get(node.upper())
+        if first is None: first = self.pref if self.pref is not None else NODE_PWD_OK.get("*")
         self.order = ([first] if first is not None and first < len(self.pwds) else []) + [i for i in range(len(self.pwds)) if i != first]
         self.tries = 0; self.cur = None; self.bad = set()
 
@@ -487,6 +490,8 @@ def paste_script(job, node, auth, out, p):
     pw_node = None
     if "{{SENHA_NO}}" in text:
         idx = NODE_PWD_OK.get(node.upper())
+        if idx is None and auth.pref is not None:
+            idx = auth.pref; job["log"].append("Usando a senha da regional do site para {{SENHA_NO}}.")
         if idx is None and auth.pwds:
             job["log"].append("Descobrindo a senha do no %s (lt all) para preencher {{SENHA_NO}}..." % node)
             S.chan.send("lt all\n"); since = ""; retries = 0
