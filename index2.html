@@ -5361,7 +5361,8 @@ function bkReport(){
           if ((S.tgs || []).length) parts.push("TG: " + S.tgs.map((T) => { const n = T.tg.replace(/^RXOTG-/, "");
             return T.ok && !T.bad.length ? `${n} OK` : `${n} ${T.state}${T.rest && !T.ok ? " " + T.rest : ""}${T.bad.length ? ` (${T.bad.slice(0, 3).map((x) => x.mo.replace(/^RXO/, "") + " " + x.state).join(", ")}${T.bad.length > 3 ? " +" + (T.bad.length - 3) : ""})` : ""}`; }).join(", "));
           else parts.push("TG: não lido");
-          if ((S.dips || []).length) parts.push("DIP: " + S.dips.map((d) => d.ok ? `${d.dip} OK` : `${d.dip} ${d.state}${d.fault ? " " + d.fault : ""}${d.reason ? " (" + d.reason + ")" : ""}`).join(", "));
+          const dbad = (S.dips || []).filter((d) => !d.ok);  // só reporta DIP com problema
+          if (dbad.length) parts.push("DIP: " + dbad.map((d) => `${d.dip} ${d.state}${d.fault ? " " + d.fault : ""}${d.reason ? " (" + d.reason + ")" : ""}`).join(", "));
           if (S.alarms.length) { const g = {}; S.alarms.forEach((a) => { (g[a.prob] = g[a.prob] || []).push(a.mo.replace(/^RXO/, "")); });
             const sh = (l) => l.length > 3 ? `${l.length} ${l[0].replace(/-[\d-]+$/, "")}` : l.join(", ");
             parts.push(`alarmes: ${Object.entries(g).map(([p, l]) => `${p.slice(0, 60)} (${sh(l)})`).join("; ")}`); }
@@ -5397,7 +5398,7 @@ function bkSumDraw(){
     return tr([`<b>${escH(r.node)}</b>`, escH(r.sta || ""), tecOf(r) + (r.g2 ? `<div class="note" style="margin:0">BSC ${escH(r.g2.bsc)}</div>` : ""),
       `${S.cells.length} · ${S.out.length ? chip(S.out.length, "r", "fora") : `<span class="kg-chip g">todas no ar</span>`}`,
       S.alarms.length ? `<span class="kg-chip a">${S.alarms.length}</span> <span class="note" style="margin:0">${escH(sev)}</span>` : `<span class="kg-chip g">sem alarmes</span>`,
-      [(S.dips || []).map((d) => `<div><b>DIP ${escH(d.dip)}:</b> <span class="kg-chip ${d.ok ? "g" : "r"}">${escH(d.state)}</span>${d.fault ? ` <span class="note" style="margin:0">${escH(d.fault)}</span>` : ""}</div>`).join(""),
+      [(S.dips || []).filter((d) => !d.ok).map((d) => `<div><b>DIP ${escH(d.dip)}:</b> <span class="kg-chip ${d.ok ? "g" : "r"}">${escH(d.state)}</span>${d.fault ? ` <span class="note" style="margin:0">${escH(d.fault)}</span>` : ""}</div>`).join(""),
        (S.tgs || []).map((T) => `<div><b>${escH(T.tg)}:</b> <span class="kg-chip ${T.ok && !T.bad.length ? "g" : T.ok ? "a" : "r"}">${escH(T.state)}</span>${T.mos.length ? ` <span class="note" style="margin:0">${escH(Object.entries(T.cnt).map(([k, n]) => n + " " + k).join(", "))}</span>` : ""}${T.bad.length ? `<div class="note" style="margin:0">${escH(T.bad.slice(0, 4).map((x) => x.mo + " " + x.state).join(" · "))}${T.bad.length > 4 ? " …" : ""}</div>` : ""}</div>`).join(""),
        S.out.map((c) => `<div><b>Fora:</b> ${escH(c.name)} <span class="note" style="margin:0">${escH(r.g2 ? g2lbl(c) : [c.adm, c.op].join("/"))}</span></div>`).join(""),
        S.alarms.slice(0, 6).map((a) => `<div>${a.sev !== "*" ? `<b>${escH(a.sev)}</b> ` : ""}${escH(a.prob)} <span class="note" style="margin:0">${escH(a.mo)}</span></div>`).join(""),
