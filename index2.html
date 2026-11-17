@@ -5196,10 +5196,10 @@ const SEVN = { C: "Critical", M: "Major", m: "Minor", w: "Warning", "*": "Alarme
 function bkSummary(r){
   const t = (r.out || "").replace(/\r/g, "").replace(/\u00a0/g, " "), cells = new Map(), alarms = [], seen = new Set(), tgs = {}; let altTotal = null, x2 = 0;
   if (r.g2) {
-    const want = new Set((r.g2.cells || []).map((c) => c.toUpperCase())); let cmd = "", lastCell = "", fmo = "", fcls = "", rep = "";
+    const want = new Set((r.g2.cells || []).map((c) => c.toUpperCase())); let cmd = "", lastCell = "", fmo = "", fcls = "", rep = "", aspCol = -1, aspSite = -1;
     const addFault = (mo, cls, codes) => { const k = "F" + mo + cls + codes; if (codes && !seen.has(k)) { seen.add(k); alarms.push({ sev: "*", prob: `falha classe ${cls}: códigos ${codes}`, mo, time: "", fault: true }); } };
     t.split("\n").forEach((l) => {
-      const c = l.match(/^\s*<?\s*([A-Z]{5}):([^;]*);?\s*$/i); if (c) { cmd = (c[1] + ":" + c[2]).toUpperCase(); lastCell = ""; fmo = ""; fcls = ""; return; }
+      const c = l.match(/^\s*<?\s*([A-Z]{5}):([^;]*);?\s*$/i); if (c) { cmd = (c[1] + ":" + c[2]).toUpperCase(); lastCell = ""; fmo = ""; fcls = ""; aspCol = -1; return; }
       if (/^\s*END\s*$/.test(l)) { cmd = ""; return; }
       if (/^RLSTP/.test(cmd)) {  // "TDFS01B   ACTIVE  0   ACTIVE" e a linha de baixo "   8   ACTIVE" (estado do channel group)
         let m = l.match(/^([A-Z0-9]+)\s+([A-Z]+)(?:\s+(\d+)\s+([A-Z]+))?\s*$/i);
@@ -5228,9 +5228,13 @@ function bkSummary(r){
           else addFault(fmo, fcls, codes); fcls = ""; return; }
         return;
       }
-      if (/^RXASP/.test(cmd)) {
-        const m = l.match(/^\s*(RXO[A-Z]+-[\d-]+)\s+(\S.*)$/i);
-        if (m && !/^(MO|NONE)\b/i.test(m[2])) { const k = "A" + m[1] + m[2]; if (!seen.has(k)) { seen.add(k); alarms.push({ sev: "*", prob: "RXASP: " + m[2].replace(/\s{2,}/g, " ").trim(), mo: m[1], time: "" }); } }
+      if (/^RXASP/.test(cmd)) {  // colunas: MO  SCGR  SC  RSITE  ALARM SITUATION (MO sem texto em ALARM SITUATION = sem alarme)
+        const h = l.indexOf("ALARM SITUATION"); if (/^\s*MO\s/.test(l) && h > 0) { aspCol = h; aspSite = l.indexOf("RSITE"); return; }
+        const m = l.match(/^\s*(RXO[A-Z]+-[\d-]+)\b/i); if (!m) return;
+        let txt = aspCol > 0 ? l.slice(aspCol).trim() : l.slice(m[0].length).trim().replace(/^\S+\s{2,}/, "");
+        if (aspCol > 0 && !txt && l.length > aspCol) txt = l.slice(aspCol).trim();
+        if (!txt || /^NONE$/i.test(txt)) return;
+        const k = "A" + m[1] + txt; if (!seen.has(k)) { seen.add(k); alarms.push({ sev: "*", prob: txt.replace(/\s{2,}/g, " "), mo: m[1].toUpperCase(), time: "", asp: true }); }
       }
     });
     want.forEach((c) => { if (!cells.has(c)) cells.set(c, { type: "2G", state: "?", out: false, unknown: true }); });
@@ -5282,7 +5286,9 @@ function bkReport(){
           if ((S.tgs || []).length) parts.push("TG: " + S.tgs.map((T) => { const n = T.tg.replace(/^RXOTG-/, "");
             return T.ok && !T.bad.length ? `${n} OK` : `${n} ${T.state}${T.rest && !T.ok ? " " + T.rest : ""}${T.bad.length ? ` (${T.bad.slice(0, 3).map((x) => x.mo.replace(/^RXO/, "") + " " + x.state).join(", ")}${T.bad.length > 3 ? " +" + (T.bad.length - 3) : ""})` : ""}`; }).join(", "));
           else parts.push("TG: não lido");
-          if (S.alarms.length) parts.push(`alarmes/falhas: ${S.alarms.length} (${S.alarms.slice(0, 2).map((a) => a.mo + " " + a.prob.replace(/^RXASP: /, "").slice(0, 60)).join("; ")}${S.alarms.length > 2 ? "; +" + (S.alarms.length - 2) : ""})`);
+          if (S.alarms.length) { const g = {}; S.alarms.forEach((a) => { (g[a.prob] = g[a.prob] || []).push(a.mo.replace(/^RXO/, "")); });
+            const sh = (l) => l.length > 3 ? `${l.length} ${l[0].replace(/-[\d-]+$/, "")}` : l.join(", ");
+            parts.push(`alarmes: ${Object.entries(g).map(([p, l]) => `${p.slice(0, 60)} (${sh(l)})`).join("; ")}`); }
           o += parts.join(" | ") + "\n"; return;
         }
         o += `${S.cells.length} célula(s)`;
