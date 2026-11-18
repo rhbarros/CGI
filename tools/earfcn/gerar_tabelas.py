@@ -49,11 +49,25 @@ for reg in regs:
 # markdown resumo
 md=['# EARFCN DL por regional (Ericsson 4G)\n','Fonte: export `earfcndl` dos servidores CVOA, CVOB e CVO (EUtranCellFDD), regional pela CGI (`CGI.zip`, coluna REGIONAL, por célula/site).\n',
     f'Total: {len(rows)} células · {len(set(r["node"] for r in rows))} nós.\n']
-for reg in regs:
+# visao geral: todos os EARFCN DL por regional, por banda (mais usados primeiro)
+BORD=['700','850','900','1800','2100','2600']
+bands=sorted({k[1] for a in summ.values() for k in a}, key=lambda b:(BORD.index(b) if b in BORD else 99, b))
+ordem=sorted(regs, key=lambda g:(g in ('ND','SEM_REGIONAL'), g=='SEM_REGIONAL', -sum(a['cells'] for a in summ[g].values())))
+def lst(agg,b): return ' · '.join(f"{k[0]} ({a['cells']})" for k,a in sorted(agg.items(), key=lambda x:-x[1]['cells']) if k[1]==b) or '—'
+md.append('\n## EARFCN DL mais usados — todas as regionais\n')
+md.append('Todos os EARFCN DL encontrados, por banda, do mais usado para o menos usado. Entre parênteses: número de células.\n')
+md.append('| Regional | Células | Nós | '+' | '.join(bands)+' |'); md.append('|---|---|---|'+'---|'*len(bands))
+with open(f'{out}/EARFCN_RESUMO.csv','w',newline='',encoding='utf-8-sig') as f:
+    w=csv.writer(f, delimiter=';'); w.writerow(['regional','celulas','nos']+bands)
+    for reg in ordem:
+        agg=summ[reg]; R=[r for r in rows if r['regional']==reg]; nn=len(set(r['node'] for r in R))
+        md.append(f"| **{reg}** | {len(R)} | {nn} | "+' | '.join(lst(agg,b) for b in bands)+' |')
+        w.writerow([reg,len(R),nn]+[lst(agg,b) for b in bands])
+for reg in ordem:
     agg=summ[reg]; R=[r for r in rows if r['regional']==reg]
     md.append(f'\n## {reg} — {len(R)} células, {len(set(r["node"] for r in R))} nós\n')
     md.append('| EARFCN DL | Banda | Larguras (kHz) | Células | Sites | Servidores |'); md.append('|---|---|---|---|---|---|')
     for (dl,bn,fb),a in sorted(agg.items(), key=lambda x:(x[0][2].zfill(3), -x[1]['cells'])):
         md.append(f"| {dl} | {bn} (B{fb}) | {', '.join(f'{b}' for b,n in a['bw'].most_common())} | {a['cells']} | {len(a['sites'])} | {', '.join(f'{s} {n}' for s,n in a['srv'].most_common())} |")
-md.append('\nArquivos: `EARFCN_<REGIONAL>.csv` (resumo por EARFCN) e `EARFCN_<REGIONAL>_celulas.csv` (célula a célula).\n')
+md.append('\nArquivos: `EARFCN_RESUMO.csv` (visão geral acima), `EARFCN_<REGIONAL>.csv` (resumo por EARFCN) e `EARFCN_<REGIONAL>_celulas.csv` (célula a célula).\n')
 open(out+'/README.md','w').write('\n'.join(md)+'\n')
