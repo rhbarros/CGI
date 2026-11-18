@@ -1,4 +1,4 @@
-﻿regional;earfcndl;banda;freqBand;larguras_khz;celulas;sites;servidores
-ND;9410;700;28;10000 (8);8;3;CVO (5) / CVOB (3)
-ND;3150;2600;7;20000 (6);6;2;CVOA (3) / CVOB (3)
-ND;2800;2600;7;10000 (3);3;1;CVOB (3)
+﻿regional;earfcndl;earfcnul;banda;freqBand;larguras_khz;celulas;sites;servidores
+ND;9410;27410;700;28;10000 (8);8;3;CVO (5) / CVOB (3)
+ND;3150;21150;2600;7;20000 (6);6;2;CVOA (3) / CVOB (3)
+ND;2800;20800;2600;7;10000 (3);3;1;CVOB (3)

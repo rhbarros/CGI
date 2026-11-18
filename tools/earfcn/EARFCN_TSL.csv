@@ -1,5 +1,5 @@
-﻿regional;earfcndl;banda;freqBand;larguras_khz;celulas;sites;servidores
-TSL;3150;2600;7;20000 (42);42;14;CVOA (42)
-TSL;1500;1800;3;10000 (27);27;9;CVOA (27)
-TSL;1300;1800;3;10000 (18);18;6;CVOA (18)
-TSL;1275;1800;3;15000 (9);9;3;CVOA (9)
+﻿regional;earfcndl;earfcnul;banda;freqBand;larguras_khz;celulas;sites;servidores
+TSL;3150;21150;2600;7;20000 (42);42;14;CVOA (42)
+TSL;1500;19500;1800;3;10000 (27);27;9;CVOA (27)
+TSL;1300;19300;1800;3;10000 (18);18;6;CVOA (18)
+TSL;1275;19275;1800;3;15000 (9);9;3;CVOA (9)
