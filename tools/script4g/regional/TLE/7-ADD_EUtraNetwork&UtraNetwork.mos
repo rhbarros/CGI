@@ -1,0 +1,262 @@
+#DoNotEditThisLine: UndoCommandFile 10.238.20.153 24.0f MSRBS_NODE_MODEL_24.Q3_674.28194.125_9341 stopfile=/tmp/12690
+
+gs+
+
+cr ENodeBFunction=1,UtraNetwork=1 
+
+cr ENodeBFunction=1,GUtraNetwork=1
+
+crn ENodeBFunction=1,GUtraNetwork=1,GUtranSyncSignalFrequency=634080-30
+arfcn 634080
+band 78
+smtcDuration 1
+smtcOffset 0
+smtcPeriodicity 20
+smtcScs 30
+userLabel 
+end
+
+
+
+crn ENodeBFunction=1,UtraNetwork=1,UtranFrequency=WCDMA_4437
+arfcnValueUtranDl 4437
+userLabel 
+end
+
+crn ENodeBFunction=1,UtraNetwork=1,UtranFrequency=WCDMA_4413
+arfcnValueUtranDl 4413
+userLabel 
+end
+
+
+crn ENodeBFunction=1,UtraNetwork=1,UtranFrequency=WCDMA_10662
+arfcnValueUtranDl 10662
+userLabel 
+end
+
+crn ENodeBFunction=1,UtraNetwork=1,UtranFrequency=WCDMA_10638
+arfcnValueUtranDl 10638
+userLabel 
+end
+
+crn ENodeBFunction=1,EUtraNetwork=1,EUtranFrequency=LTE_9510
+arfcnValueEUtranDl 9510
+caOffloadingEnabled false
+excludeAdditionalFreqBandList 
+extEndcAllowedPlmnListPolicy 
+mfbiFreqBandIndPrio false
+prioAdditionalFreqBandList 
+userLabel 
+zzzTemporary1 -2000000000
+zzzTemporary2 -2000000000
+zzzTemporary3 
+zzzTemporary4 -2000000000
+zzzTemporary5 -2000000000
+zzzTemporary6 -2000000000
+zzzTemporaryList1 
+end
+
+crn ENodeBFunction=1,EUtraNetwork=1,EUtranFrequency=LTE_9410
+arfcnValueEUtranDl 9410
+caOffloadingEnabled false
+excludeAdditionalFreqBandList 
+extEndcAllowedPlmnListPolicy 
+mfbiFreqBandIndPrio false
+prioAdditionalFreqBandList 
+userLabel 
+zzzTemporary1 -2000000000
+zzzTemporary2 -2000000000
+zzzTemporary3 
+zzzTemporary4 -2000000000
+zzzTemporary5 -2000000000
+zzzTemporary6 -2000000000
+zzzTemporaryList1 
+end
+
+crn ENodeBFunction=1,EUtraNetwork=1,EUtranFrequency=LTE_500
+arfcnValueEUtranDl 500
+caOffloadingEnabled false
+excludeAdditionalFreqBandList 
+extEndcAllowedPlmnListPolicy 
+mfbiFreqBandIndPrio false
+prioAdditionalFreqBandList 
+userLabel 
+zzzTemporary1 -2000000000
+zzzTemporary2 -2000000000
+zzzTemporary3 
+zzzTemporary4 -2000000000
+zzzTemporary5 -2000000000
+zzzTemporary6 -2000000000
+zzzTemporaryList1 
+end
+
+crn ENodeBFunction=1,EUtraNetwork=1,EUtranFrequency=LTE_39450
+arfcnValueEUtranDl 39450
+caOffloadingEnabled false
+excludeAdditionalFreqBandList 
+extEndcAllowedPlmnListPolicy 
+mfbiFreqBandIndPrio false
+prioAdditionalFreqBandList 
+userLabel 
+zzzTemporary1 -2000000000
+zzzTemporary2 -2000000000
+zzzTemporary3 
+zzzTemporary4 -2000000000
+zzzTemporary5 -2000000000
+zzzTemporary6 -2000000000
+zzzTemporaryList1 
+end
+
+crn ENodeBFunction=1,EUtraNetwork=1,EUtranFrequency=LTE_39250
+arfcnValueEUtranDl 39250
+caOffloadingEnabled false
+excludeAdditionalFreqBandList 
+extEndcAllowedPlmnListPolicy 
+mfbiFreqBandIndPrio false
+prioAdditionalFreqBandList 
+userLabel 
+zzzTemporary1 -2000000000
+zzzTemporary2 -2000000000
+zzzTemporary3 
+zzzTemporary4 -2000000000
+zzzTemporary5 -2000000000
+zzzTemporary6 -2000000000
+zzzTemporaryList1 
+end
+
+crn ENodeBFunction=1,EUtraNetwork=1,EUtranFrequency=LTE_375
+arfcnValueEUtranDl 375
+caOffloadingEnabled false
+excludeAdditionalFreqBandList 
+extEndcAllowedPlmnListPolicy 
+mfbiFreqBandIndPrio false
+prioAdditionalFreqBandList 
+userLabel 
+zzzTemporary1 -2000000000
+zzzTemporary2 -2000000000
+zzzTemporary3 
+zzzTemporary4 -2000000000
+zzzTemporary5 -2000000000
+zzzTemporary6 -2000000000
+zzzTemporaryList1 
+end
+
+crn ENodeBFunction=1,EUtraNetwork=1,EUtranFrequency=LTE_3350
+arfcnValueEUtranDl 3350
+caOffloadingEnabled false
+excludeAdditionalFreqBandList 
+extEndcAllowedPlmnListPolicy 
+mfbiFreqBandIndPrio false
+prioAdditionalFreqBandList 
+userLabel 
+zzzTemporary1 -2000000000
+zzzTemporary2 -2000000000
+zzzTemporary3 
+zzzTemporary4 -2000000000
+zzzTemporary5 -2000000000
+zzzTemporary6 -2000000000
+zzzTemporaryList1 
+end
+
+crn ENodeBFunction=1,EUtraNetwork=1,EUtranFrequency=LTE_3200
+arfcnValueEUtranDl 3200
+caOffloadingEnabled false
+excludeAdditionalFreqBandList 
+extEndcAllowedPlmnListPolicy 
+mfbiFreqBandIndPrio false
+prioAdditionalFreqBandList 
+userLabel 
+zzzTemporary1 -2000000000
+zzzTemporary2 -2000000000
+zzzTemporary3 
+zzzTemporary4 -2000000000
+zzzTemporary5 -2000000000
+zzzTemporary6 -2000000000
+zzzTemporaryList1 
+end
+
+crn ENodeBFunction=1,EUtraNetwork=1,EUtranFrequency=LTE_3150
+arfcnValueEUtranDl 3150
+caOffloadingEnabled false
+excludeAdditionalFreqBandList 
+extEndcAllowedPlmnListPolicy 
+mfbiFreqBandIndPrio false
+prioAdditionalFreqBandList 
+userLabel 
+zzzTemporary1 -2000000000
+zzzTemporary2 -2000000000
+zzzTemporary3 
+zzzTemporary4 -2000000000
+zzzTemporary5 -2000000000
+zzzTemporary6 -2000000000
+zzzTemporaryList1 
+end
+
+crn ENodeBFunction=1,EUtraNetwork=1,EUtranFrequency=LTE_2800
+arfcnValueEUtranDl 2800
+caOffloadingEnabled false
+excludeAdditionalFreqBandList 
+extEndcAllowedPlmnListPolicy 
+mfbiFreqBandIndPrio false
+prioAdditionalFreqBandList 
+userLabel 
+zzzTemporary1 -2000000000
+zzzTemporary2 -2000000000
+zzzTemporary3 
+zzzTemporary4 -2000000000
+zzzTemporary5 -2000000000
+zzzTemporary6 -2000000000
+zzzTemporaryList1 
+end
+
+crn ENodeBFunction=1,EUtraNetwork=1,EUtranFrequency=LTE_200
+arfcnValueEUtranDl 200
+caOffloadingEnabled false
+excludeAdditionalFreqBandList 
+extEndcAllowedPlmnListPolicy 
+mfbiFreqBandIndPrio false
+prioAdditionalFreqBandList 
+userLabel 
+zzzTemporary1 -2000000000
+zzzTemporary2 -2000000000
+zzzTemporary3 
+zzzTemporary4 -2000000000
+zzzTemporary5 -2000000000
+zzzTemporary6 -2000000000
+zzzTemporaryList1 
+end
+
+crn ENodeBFunction=1,EUtraNetwork=1,EUtranFrequency=LTE_1425
+arfcnValueEUtranDl 1425
+caOffloadingEnabled false
+excludeAdditionalFreqBandList 
+extEndcAllowedPlmnListPolicy 
+mfbiFreqBandIndPrio false
+prioAdditionalFreqBandList 
+userLabel 
+zzzTemporary1 -2000000000
+zzzTemporary2 -2000000000
+zzzTemporary3 
+zzzTemporary4 -2000000000
+zzzTemporary5 -2000000000
+zzzTemporary6 -2000000000
+zzzTemporaryList1 
+end
+
+crn ENodeBFunction=1,EUtraNetwork=1,EUtranFrequency=LTE_1275
+arfcnValueEUtranDl 1275
+caOffloadingEnabled false
+excludeAdditionalFreqBandList 
+extEndcAllowedPlmnListPolicy 
+mfbiFreqBandIndPrio false
+prioAdditionalFreqBandList 
+userLabel 
+zzzTemporary1 -2000000000
+zzzTemporary2 -2000000000
+zzzTemporary3 
+zzzTemporary4 -2000000000
+zzzTemporary5 -2000000000
+zzzTemporary6 -2000000000
+zzzTemporaryList1 
+end
+gs-

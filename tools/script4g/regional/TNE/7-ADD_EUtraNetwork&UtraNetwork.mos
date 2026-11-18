@@ -1,0 +1,158 @@
+#DoNotEditThisLine: UndoCommandFile 10.111.72.73 24.0f MSRBS_NODE_MODEL_24.Q3_198663.171.71_edc6 stopfile=/tmp/25494
+
+gs+
+
+
+crn ENodeBFunction=1,UtraNetwork=1
+userLabel 
+end
+
+crn ENodeBFunction=1,UtraNetwork=1,UtranFrequency=WCDMA_4413
+arfcnValueUtranDl 4413
+userLabel 
+end
+
+
+
+crn ENodeBFunction=1,UtraNetwork=1,UtranFrequency=WCDMA_4437
+arfcnValueUtranDl 4437
+userLabel 
+end
+
+crn ENodeBFunction=1,EUtraNetwork=1,EUtranFrequency=LTE_9410
+arfcnValueEUtranDl 9410
+caOffloadingEnabled false
+excludeAdditionalFreqBandList 
+extEndcAllowedPlmnListPolicy 
+mfbiFreqBandIndPrio false
+prioAdditionalFreqBandList 
+userLabel 
+zzzTemporary1 -2000000000
+zzzTemporary2 -2000000000
+zzzTemporary3 
+zzzTemporary4 -2000000000
+zzzTemporary5 -2000000000
+zzzTemporary6 -2000000000
+zzzTemporaryList1 
+end
+
+crn ENodeBFunction=1,EUtraNetwork=1,EUtranFrequency=LTE_100
+arfcnValueEUtranDl 100
+caOffloadingEnabled false
+excludeAdditionalFreqBandList 
+extEndcAllowedPlmnListPolicy 
+mfbiFreqBandIndPrio false
+prioAdditionalFreqBandList 
+userLabel 
+zzzTemporary1 -2000000000
+zzzTemporary2 -2000000000
+zzzTemporary3 
+zzzTemporary4 -2000000000
+zzzTemporary5 -2000000000
+zzzTemporary6 -2000000000
+zzzTemporaryList1 
+end
+
+crn ENodeBFunction=1,EUtraNetwork=1,EUtranFrequency=LTE_3150
+arfcnValueEUtranDl 3150
+caOffloadingEnabled false
+excludeAdditionalFreqBandList 
+extEndcAllowedPlmnListPolicy 
+mfbiFreqBandIndPrio false
+prioAdditionalFreqBandList 
+userLabel 
+zzzTemporary1 -2000000000
+zzzTemporary2 -2000000000
+zzzTemporary3 
+zzzTemporary4 -2000000000
+zzzTemporary5 -2000000000
+zzzTemporary6 -2000000000
+zzzTemporaryList1 
+end
+
+crn ENodeBFunction=1,EUtraNetwork=1,EUtranFrequency=LTE_200
+arfcnValueEUtranDl 200
+caOffloadingEnabled false
+excludeAdditionalFreqBandList 
+extEndcAllowedPlmnListPolicy 
+mfbiFreqBandIndPrio false
+prioAdditionalFreqBandList 
+userLabel 
+zzzTemporary1 -2000000000
+zzzTemporary2 -2000000000
+zzzTemporary3 
+zzzTemporary4 -2000000000
+zzzTemporary5 -2000000000
+zzzTemporary6 -2000000000
+zzzTemporaryList1 
+end
+
+crn ENodeBFunction=1,EUtraNetwork=1,EUtranFrequency=LTE_2800
+arfcnValueEUtranDl 2800
+caOffloadingEnabled false
+excludeAdditionalFreqBandList 
+extEndcAllowedPlmnListPolicy 
+mfbiFreqBandIndPrio false
+prioAdditionalFreqBandList 
+userLabel 
+zzzTemporary1 -2000000000
+zzzTemporary2 -2000000000
+zzzTemporary3 
+zzzTemporary4 -2000000000
+zzzTemporary5 -2000000000
+zzzTemporary6 -2000000000
+zzzTemporaryList1 
+end
+
+crn ENodeBFunction=1,EUtraNetwork=1,EUtranFrequency=LTE_75
+arfcnValueEUtranDl 75
+caOffloadingEnabled false
+excludeAdditionalFreqBandList 
+extEndcAllowedPlmnListPolicy 
+mfbiFreqBandIndPrio false
+prioAdditionalFreqBandList 
+userLabel 
+zzzTemporary1 -2000000000
+zzzTemporary2 -2000000000
+zzzTemporary3 
+zzzTemporary4 -2000000000
+zzzTemporary5 -2000000000
+zzzTemporary6 -2000000000
+zzzTemporaryList1 
+end
+
+
+
+crn ENodeBFunction=1,EUtraNetwork=1,EUtranFrequency=LTE_1450
+arfcnValueEUtranDl 1450
+caOffloadingEnabled false
+excludeAdditionalFreqBandList 
+extEndcAllowedPlmnListPolicy 
+mfbiFreqBandIndPrio false
+prioAdditionalFreqBandList 
+userLabel 
+zzzTemporary1 -2000000000
+zzzTemporary2 -2000000000
+zzzTemporary3 
+zzzTemporary4 -2000000000
+zzzTemporary5 -2000000000
+zzzTemporary6 -2000000000
+zzzTemporaryList1 
+end
+
+crn ENodeBFunction=1,GUtraNetwork=1
+userLabel 
+end
+
+crn ENodeBFunction=1,GUtraNetwork=1,GUtranSyncSignalFrequency=634080-30
+arfcn 634080
+band 78
+smtcDuration 1
+smtcOffset 0
+smtcPeriodicity 20
+smtcScs 30
+userLabel 
+end
+
+
+gs-

@@ -1,0 +1,69 @@
+#DoNotEditThisLine: UndoCommandFile 10.111.72.73 24.0f MSRBS_NODE_MODEL_24.Q3_198663.171.71_edc6 stopfile=/tmp/25494
+
+gs+
+
+crn ENodeBFunction=1,TermPointToMme=DMRCE2
+additionalCnRef 
+administrativeState 1
+dcnType 0
+domainName 
+ipAddress1 189.40.168.130
+ipAddress2 189.40.168.131
+ipv6Address1 ::
+ipv6Address2 ::
+mmeSupportLegacyLte true
+mmeSupportNbIoT true
+end
+
+crn ENodeBFunction=1,TermPointToMme=DMRCE1
+additionalCnRef 
+administrativeState 1
+dcnType 0
+domainName 
+ipAddress1 189.40.166.130
+ipAddress2 189.40.166.131
+ipv6Address1 ::
+ipv6Address2 ::
+mmeSupportLegacyLte true
+mmeSupportNbIoT true
+end
+
+crn ENodeBFunction=1,TermPointToMme=DMFLA1
+additionalCnRef 
+administrativeState 1
+dcnType 0
+domainName 
+ipAddress1 189.40.97.35
+ipAddress2 189.40.97.36
+ipv6Address1 ::
+ipv6Address2 ::
+mmeSupportLegacyLte true
+mmeSupportNbIoT false
+end
+
+crn ENodeBFunction=1,TermPointToMme=DMBLM2
+additionalCnRef 
+administrativeState 1
+dcnType 0
+domainName 
+ipAddress1 189.40.169.130
+ipAddress2 189.40.169.131
+ipv6Address1 ::
+ipv6Address2 ::
+mmeSupportLegacyLte true
+mmeSupportNbIoT true
+end
+
+crn ENodeBFunction=1,TermPointToMme=DMBLM1
+additionalCnRef 
+administrativeState 1
+dcnType 0
+domainName 
+ipAddress1 189.40.167.130
+ipAddress2 189.40.167.131
+ipv6Address1 ::
+ipv6Address2 ::
+mmeSupportLegacyLte true
+mmeSupportNbIoT true
+end
+gs-

@@ -1,0 +1,56 @@
+#DoNotEditThisLine: UndoCommandFile 10.238.20.153 24.0f MSRBS_NODE_MODEL_24.Q3_674.28194.125_9341 stopfile=/tmp/11816
+
+gs+
+
+crn ENodeBFunction=1,TermPointToMme=DMSDR2_1
+additionalCnRef 
+administrativeState 1
+dcnType 0
+domainName 
+ipAddress1 189.40.169.192
+ipAddress2 189.40.169.193
+ipv6Address1 ::
+ipv6Address2 ::
+mmeSupportLegacyLte true
+mmeSupportNbIoT true
+end
+
+crn ENodeBFunction=1,TermPointToMme=DMSDR1_1
+additionalCnRef 
+administrativeState 1
+dcnType 0
+domainName 
+ipAddress1 189.40.167.192
+ipAddress2 189.40.167.193
+ipv6Address1 ::
+ipv6Address2 ::
+mmeSupportLegacyLte true
+mmeSupportNbIoT true
+end
+
+crn ENodeBFunction=1,TermPointToMme=DMBHE2_1
+additionalCnRef 
+administrativeState 1
+dcnType 0
+domainName 
+ipAddress1 189.40.168.192
+ipAddress2 189.40.168.193
+ipv6Address1 ::
+ipv6Address2 ::
+mmeSupportLegacyLte true
+mmeSupportNbIoT true
+end
+
+crn ENodeBFunction=1,TermPointToMme=DMBHE1_1
+additionalCnRef 
+administrativeState 1
+dcnType 0
+domainName 
+ipAddress1 189.40.166.192
+ipAddress2 189.40.166.193
+ipv6Address1 ::
+ipv6Address2 ::
+mmeSupportLegacyLte true
+mmeSupportNbIoT true
+end
+gs-
