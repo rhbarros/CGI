@@ -301,7 +301,7 @@ body.role-busca #page-busca [onclick*="goMap"]{display:none!important;}
       <div class="drill-title"><span id="drill-title-txt">—</span><button class="ebtn" onclick="exportDrill()">⬇ CSV</button></div>
       <div id="tf-drill"></div>
       <div style="overflow-x:auto;max-height:340px;overflow-y:auto;">
-        <table class="dtbl"><thead><tr><th>STATION ID</th><th>TECNOLOGIAS</th><th>UF</th><th>CIDADE</th><th>REGIONAL</th><th>VENDOR</th><th>FREQ 2G</th><th>FREQ 3G</th><th>FREQ 4G</th><th>FREQ 5G</th><th>LARGURA 2G</th><th>LARGURA 3G</th><th>LARGURA 4G</th><th>LARGURA 5G</th><th>LATITUDE</th><th>LONGITUDE</th></tr></thead><tbody id="drill-tbody"></tbody></table>
+        <table class="dtbl"><thead><tr><th>STATION ID</th><th>TECNOLOGIAS</th><th>UF</th><th>CIDADE</th><th>REGIONAL</th><th>VENDOR</th><th>BSC/RNC</th><th>FREQ 2G</th><th>FREQ 3G</th><th>FREQ 4G</th><th>FREQ 5G</th><th>LARGURA 2G</th><th>LARGURA 3G</th><th>LARGURA 4G</th><th>LARGURA 5G</th><th>LATITUDE</th><th>LONGITUDE</th></tr></thead><tbody id="drill-tbody"></tbody></table>
       </div>
     </div>
     <div class="card" style="margin-top:13px;">
@@ -327,7 +327,7 @@ body.role-busca #page-busca [onclick*="goMap"]{display:none!important;}
       <div id="reg-drill-note" style="font-size:9px;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:6px;"></div>
       <div id="dt-reg"></div>
       <div class="tscroll" style="max-height:420px;overflow-y:auto;">
-        <table class="dtbl"><thead><tr><th>STATION ID</th><th>SITE</th><th>TECNOLOGIAS</th><th>UF</th><th>CIDADE</th><th>REGIONAL</th><th>VENDOR</th><th>FREQ 2G</th><th>FREQ 3G</th><th>FREQ 4G</th><th>FREQ 5G</th><th>LARGURA 2G</th><th>LARGURA 3G</th><th>LARGURA 4G</th><th>LARGURA 5G</th><th>LAT</th><th>LON</th></tr></thead><tbody id="reg-drill-tbody"></tbody></table>
+        <table class="dtbl"><thead><tr><th>STATION ID</th><th>SITE</th><th>TECNOLOGIAS</th><th>UF</th><th>CIDADE</th><th>REGIONAL</th><th>VENDOR</th><th>BSC/RNC</th><th>FREQ 2G</th><th>FREQ 3G</th><th>FREQ 4G</th><th>FREQ 5G</th><th>LARGURA 2G</th><th>LARGURA 3G</th><th>LARGURA 4G</th><th>LARGURA 5G</th><th>LAT</th><th>LON</th></tr></thead><tbody id="reg-drill-tbody"></tbody></table>
       </div>
     </div>
     <div class="card"><div class="card-title">% Tecnologia por Regional</div><canvas id="regTechChart" height="250"></canvas></div>
@@ -348,7 +348,7 @@ body.role-busca #page-busca [onclick*="goMap"]{display:none!important;}
       <div class="drill-title"><span id="uf-drill-title">—</span><button class="ebtn" onclick="exportUFDrill()">⬇ CSV</button></div>
       <div id="tf-ufd"></div>
       <div style="overflow-x:auto;max-height:380px;overflow-y:auto;">
-        <table class="dtbl"><thead><tr><th>STATION ID</th><th>TECNOLOGIA</th><th>UF</th><th>CIDADE</th><th>REGIONAL</th><th>VENDOR</th><th>FREQ 2G</th><th>FREQ 3G</th><th>FREQ 4G</th><th>FREQ 5G</th><th>LARGURA 2G</th><th>LARGURA 3G</th><th>LARGURA 4G</th><th>LARGURA 5G</th><th>LATITUDE</th><th>LONGITUDE</th><th>OPERADORA</th></tr></thead><tbody id="uf-drill-tbody"></tbody></table>
+        <table class="dtbl"><thead><tr><th>STATION ID</th><th>TECNOLOGIA</th><th>UF</th><th>CIDADE</th><th>REGIONAL</th><th>VENDOR</th><th>BSC/RNC</th><th>FREQ 2G</th><th>FREQ 3G</th><th>FREQ 4G</th><th>FREQ 5G</th><th>LARGURA 2G</th><th>LARGURA 3G</th><th>LARGURA 4G</th><th>LARGURA 5G</th><th>LATITUDE</th><th>LONGITUDE</th><th>OPERADORA</th></tr></thead><tbody id="uf-drill-tbody"></tbody></table>
       </div>
     </div>
     <div class="card"><div class="card-title">Top 20 UFs — Sites Únicos <span style="font-size:9px;color:var(--c1);">clique → drill</span></div><canvas id="ufChart" height="230"></canvas></div>
@@ -356,7 +356,7 @@ body.role-busca #page-busca [onclick*="goMap"]{display:none!important;}
       <div class="drill-title"><span id="uf-top-drill-title">—</span><button class="ebtn" onclick="exportUFTopDrill()">⬇ CSV</button></div>
       <div id="tf-uft"></div>
       <div style="overflow-x:auto;max-height:380px;overflow-y:auto;">
-        <table class="dtbl"><thead><tr><th>STATION ID</th><th>TECNOLOGIAS</th><th>UF</th><th>CIDADE</th><th>REGIONAL</th><th>VENDOR</th><th>FREQ 2G</th><th>FREQ 3G</th><th>FREQ 4G</th><th>FREQ 5G</th><th>LARGURA 2G</th><th>LARGURA 3G</th><th>LARGURA 4G</th><th>LARGURA 5G</th><th>LATITUDE</th><th>LONGITUDE</th><th>OPERADORA</th></tr></thead><tbody id="uf-top-drill-tbody"></tbody></table>
+        <table class="dtbl"><thead><tr><th>STATION ID</th><th>TECNOLOGIAS</th><th>UF</th><th>CIDADE</th><th>REGIONAL</th><th>VENDOR</th><th>BSC/RNC</th><th>FREQ 2G</th><th>FREQ 3G</th><th>FREQ 4G</th><th>FREQ 5G</th><th>LARGURA 2G</th><th>LARGURA 3G</th><th>LARGURA 4G</th><th>LARGURA 5G</th><th>LATITUDE</th><th>LONGITUDE</th><th>OPERADORA</th></tr></thead><tbody id="uf-top-drill-tbody"></tbody></table>
       </div>
     </div>
   </div>
@@ -390,7 +390,7 @@ body.role-busca #page-busca [onclick*="goMap"]{display:none!important;}
       <div id="ranreg-drill-note" style="font-size:9px;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:6px;"></div>
       <div id="dt-ranreg"></div>
       <div class="tscroll" style="max-height:420px;overflow-y:auto;">
-        <table class="dtbl"><thead><tr><th>STATION ID</th><th>SITE</th><th>OPERADORA</th><th>TECNOLOGIAS</th><th>UF</th><th>CIDADE</th><th>REGIONAL</th><th>VENDOR</th><th>FREQ 2G</th><th>FREQ 3G</th><th>FREQ 4G</th><th>FREQ 5G</th><th>LARGURA 2G</th><th>LARGURA 3G</th><th>LARGURA 4G</th><th>LARGURA 5G</th><th>LAT</th><th>LON</th></tr></thead><tbody id="ranreg-drill-tbody"></tbody></table>
+        <table class="dtbl"><thead><tr><th>STATION ID</th><th>SITE</th><th>OPERADORA</th><th>TECNOLOGIAS</th><th>UF</th><th>CIDADE</th><th>REGIONAL</th><th>VENDOR</th><th>BSC/RNC</th><th>FREQ 2G</th><th>FREQ 3G</th><th>FREQ 4G</th><th>FREQ 5G</th><th>LARGURA 2G</th><th>LARGURA 3G</th><th>LARGURA 4G</th><th>LARGURA 5G</th><th>LAT</th><th>LON</th></tr></thead><tbody id="ranreg-drill-tbody"></tbody></table>
       </div>
     </div>
     <div class="card">
@@ -404,7 +404,7 @@ body.role-busca #page-busca [onclick*="goMap"]{display:none!important;}
       <div class="card-title"><span>Sites RAN Sharing</span><button class="ebtn" onclick="exportRAN()">⬇ CSV</button></div>
       <div id="dt-rant"></div>
       <div class="tscroll" style="max-height:420px;overflow-y:auto;">
-        <table class="dtbl"><thead><tr><th>STATION ID</th><th>OPERADORA</th><th>TECNO</th><th>REGIONAL</th><th>UF</th><th>CIDADE</th><th>VENDOR</th><th>FREQ 2G</th><th>FREQ 3G</th><th>FREQ 4G</th><th>FREQ 5G</th><th>LARGURA 2G</th><th>LARGURA 3G</th><th>LARGURA 4G</th><th>LARGURA 5G</th><th>LATITUDE</th><th>LONGITUDE</th></tr></thead><tbody id="ran-tbody"></tbody></table>
+        <table class="dtbl"><thead><tr><th>STATION ID</th><th>OPERADORA</th><th>TECNO</th><th>REGIONAL</th><th>UF</th><th>CIDADE</th><th>VENDOR</th><th>BSC/RNC</th><th>FREQ 2G</th><th>FREQ 3G</th><th>FREQ 4G</th><th>FREQ 5G</th><th>LARGURA 2G</th><th>LARGURA 3G</th><th>LARGURA 4G</th><th>LARGURA 5G</th><th>LATITUDE</th><th>LONGITUDE</th></tr></thead><tbody id="ran-tbody"></tbody></table>
       </div>
     </div>
   </div>
@@ -1239,18 +1239,19 @@ function showComboDrill(combo,ids){
     var larg=uniqCellVals(s,'larg');
     return {id:s.id,techs:siteTechsStr(s),uf:s.uf,city:s.city,reg:s.reg,
       vend:vend.length>1?vend.join('/'):vend[0]||'—',
+      bsc:siteBsc(s),
       fq:siteFqLg(s).fq,lg:siteFqLg(s).lg,lat:s.lat,lon:s.lon};
   }).filter(Boolean);
   document.getElementById('drill-title-txt').textContent=combo+' — '+ids.length.toLocaleString('pt-BR')+' sites';
   document.getElementById('drill-tbody').innerHTML=drillDataG.map(function(d){
-    return '<tr><td class="hi" style="cursor:pointer;color:var(--c1);" onclick="goFinder(\''+esc(d.id)+'\')">'+d.id+'</td><td>'+d.techs+'</td><td>'+(d.uf||'—')+'</td><td>'+(d.city||'—')+'</td><td>'+(d.reg||'—')+'</td><td>'+d.vend+'</td>'+regTechTds(d)+'<td style="color:var(--text3);">'+(d.lat||'—')+'</td><td style="color:var(--text3);">'+(d.lon||'—')+'</td></tr>';
+    return '<tr><td class="hi" style="cursor:pointer;color:var(--c1);" onclick="goFinder(\''+esc(d.id)+'\')">'+d.id+'</td><td>'+d.techs+'</td><td>'+(d.uf||'—')+'</td><td>'+(d.city||'—')+'</td><td>'+(d.reg||'—')+'</td><td>'+d.vend+'</td><td>'+d.bsc+'</td>'+regTechTds(d)+'<td style="color:var(--text3);">'+(d.lat||'—')+'</td><td style="color:var(--text3);">'+(d.lon||'—')+'</td></tr>';
   }).join('');
   document.getElementById('drill-section').style.display='block';
   document.getElementById('drill-section').scrollIntoView({behavior:'smooth',block:'start'});
 }
 function exportDrill(){
-  dlCsv(['STATION ID,TECNOLOGIAS,UF,CIDADE,REGIONAL,VENDOR,FREQ 2G,FREQ 3G,FREQ 4G,FREQ 5G,LARGURA 2G,LARGURA 3G,LARGURA 4G,LARGURA 5G,LATITUDE,LONGITUDE'].concat(
-    drillDataG.map(function(d){return csvRow([d.id,d.techs,d.uf,d.city,d.reg,d.vend].concat(regTechVals(d),[d.lat,d.lon]));})).join('\n'),'combo_drill.csv');
+  dlCsv(['STATION ID,TECNOLOGIAS,UF,CIDADE,REGIONAL,VENDOR,BSC/RNC,FREQ 2G,FREQ 3G,FREQ 4G,FREQ 5G,LARGURA 2G,LARGURA 3G,LARGURA 4G,LARGURA 5G,LATITUDE,LONGITUDE'].concat(
+    drillDataG.map(function(d){return csvRow([d.id,d.techs,d.uf,d.city,d.reg,d.vend,d.bsc].concat(regTechVals(d),[d.lat,d.lon]));})).join('\n'),'combo_drill.csv');
 }
 
 // ── Regional Drill ─────────────────────────────────────────────────────────
@@ -1259,13 +1260,13 @@ function showRegDrill(reg){
   var LIM=2000;
   _regDrillName=reg;
   _regDrillData=mapVals(siteMap).filter(function(s){return s.reg===reg&&pfPass('rg',s);}).map(function(s){
-    return {id:s.id,site:getSiteNames(s).join(' | '),techs:(siteTechs(s).sort().join(', ')||'—'),uf:s.uf,city:s.city,reg:s.reg,vend:(siteVendList(s).join(' / ')||s.vend),fq:{'2G':siteCellValsByTech(s,'freq','2G'),'3G':siteCellValsByTech(s,'freq','3G'),'4G':siteCellValsByTech(s,'freq','4G'),'5G':siteCellValsByTech(s,'freq','5G')},lg:{'2G':siteCellValsByTech(s,'larg','2G'),'3G':siteCellValsByTech(s,'larg','3G'),'4G':siteCellValsByTech(s,'larg','4G'),'5G':siteCellValsByTech(s,'larg','5G')},lat:s.lat,lon:s.lon};
+    return {id:s.id,site:getSiteNames(s).join(' | '),techs:(siteTechs(s).sort().join(', ')||'—'),uf:s.uf,city:s.city,reg:s.reg,vend:(siteVendList(s).join(' / ')||s.vend),bsc:siteBsc(s),fq:{'2G':siteCellValsByTech(s,'freq','2G'),'3G':siteCellValsByTech(s,'freq','3G'),'4G':siteCellValsByTech(s,'freq','4G'),'5G':siteCellValsByTech(s,'freq','5G')},lg:{'2G':siteCellValsByTech(s,'larg','2G'),'3G':siteCellValsByTech(s,'larg','3G'),'4G':siteCellValsByTech(s,'larg','4G'),'5G':siteCellValsByTech(s,'larg','5G')},lat:s.lat,lon:s.lon};
   }).sort(function(a,b){return String(a.id)<String(b.id)?-1:(String(a.id)>String(b.id)?1:0);});
   _regDrillView=_regDrillData;
   regDrillRender();
   dtHdrInit('reg','dt-reg','reg-drill-tbody',[
     function(d){return [d.id];},function(d){return [d.site];},function(d){return techCombo(d.techs);},
-    function(d){return [d.uf];},function(d){return [d.city];},function(d){return [d.reg];},function(d){return vendCombo(d.vend);}
+    function(d){return [d.uf];},function(d){return [d.city];},function(d){return [d.reg];},function(d){return vendCombo(d.vend);},function(d){return dtCombo(d.bsc);}
   ].concat(dtFqLgCols(function(d){return d;}),[function(d){return [d.lat];},function(d){return [d.lon];}]),
   _regDrillData,function(v){_regDrillView=v;regDrillRender();},2000);
   var sec=document.getElementById('reg-drill-section');
@@ -1277,19 +1278,19 @@ function regDrillRender(){
   document.getElementById('reg-drill-title').textContent=reg+' — '+dtTitleCount(_regDrillView.length,_regDrillData.length)+' sites';
   document.getElementById('reg-drill-note').textContent=_regDrillView.length>LIM?('Exibindo os primeiros '+LIM.toLocaleString('pt-BR')+' sites na tela — use os filtros para refinar; o Excel exporta todos os sites da seleção.'):'';
   document.getElementById('reg-drill-tbody').innerHTML=_regDrillView.slice(0,LIM).map(function(d){
-    return '<tr><td class="hi" style="cursor:pointer;color:var(--c1);" onclick="goFinder(\''+esc(d.id)+'\')">'+d.id+'</td><td>'+(d.site||'—')+'</td><td style="color:var(--c1);">'+d.techs+'</td><td>'+(d.uf||'—')+'</td><td>'+(d.city||'—')+'</td><td>'+(d.reg||'—')+'</td><td style="color:var(--c1);">'+(d.vend||'—')+'</td>'+regTechTds(d)+'<td style="color:var(--text3);">'+(d.lat||'—')+'</td><td style="color:var(--text3);">'+(d.lon||'—')+'</td></tr>';
+    return '<tr><td class="hi" style="cursor:pointer;color:var(--c1);" onclick="goFinder(\''+esc(d.id)+'\')">'+d.id+'</td><td>'+(d.site||'—')+'</td><td style="color:var(--c1);">'+d.techs+'</td><td>'+(d.uf||'—')+'</td><td>'+(d.city||'—')+'</td><td>'+(d.reg||'—')+'</td><td style="color:var(--c1);">'+(d.vend||'—')+'</td><td>'+(d.bsc||'—')+'</td>'+regTechTds(d)+'<td style="color:var(--text3);">'+(d.lat||'—')+'</td><td style="color:var(--text3);">'+(d.lon||'—')+'</td></tr>';
   }).join('');
 }
 function exportRegDrillXlsx(){
-  var head=['STATION ID','SITE','TECNOLOGIAS','UF','CIDADE','REGIONAL','VENDOR','FREQ 2G','FREQ 3G','FREQ 4G','FREQ 5G','LARGURA 2G','LARGURA 3G','LARGURA 4G','LARGURA 5G','LATITUDE','LONGITUDE'];
+  var head=['STATION ID','SITE','TECNOLOGIAS','UF','CIDADE','REGIONAL','VENDOR','BSC/RNC','FREQ 2G','FREQ 3G','FREQ 4G','FREQ 5G','LARGURA 2G','LARGURA 3G','LARGURA 4G','LARGURA 5G','LATITUDE','LONGITUDE'];
   var fname='regional_'+String(_regDrillName).replace(/[^\w.-]+/g,'_')+'_sites';
   if(typeof XLSX==='undefined'){
-    dlCsv([csvRow(head)].concat(_regDrillView.map(function(d){return csvRow([d.id,d.site,d.techs,d.uf,d.city,d.reg,d.vend].concat(regTechVals(d),[d.lat,d.lon]));})).join('\n'),fname+'.csv');
+    dlCsv([csvRow(head)].concat(_regDrillView.map(function(d){return csvRow([d.id,d.site,d.techs,d.uf,d.city,d.reg,d.vend,d.bsc].concat(regTechVals(d),[d.lat,d.lon]));})).join('\n'),fname+'.csv');
     return;
   }
-  var aoa=[head].concat(_regDrillView.map(function(d){return [d.id,d.site,d.techs,d.uf,d.city,d.reg,d.vend].concat(regTechVals(d),[d.lat,d.lon]);}));
+  var aoa=[head].concat(_regDrillView.map(function(d){return [d.id,d.site,d.techs,d.uf,d.city,d.reg,d.vend,d.bsc].concat(regTechVals(d),[d.lat,d.lon]);}));
   var ws=XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols']=[{wch:14},{wch:26},{wch:16},{wch:5},{wch:26},{wch:10},{wch:10},{wch:11},{wch:11},{wch:11},{wch:11},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12}];
+  ws['!cols']=[{wch:14},{wch:26},{wch:16},{wch:5},{wch:26},{wch:10},{wch:10},{wch:16},{wch:11},{wch:11},{wch:11},{wch:11},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12}];
   var wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,String(_regDrillName).replace(/[\\\/?*\[\]:]/g,'_').slice(0,31)||'Regional');
   XLSX.writeFile(wb,fname+'.xlsx');
@@ -1447,6 +1448,16 @@ function siteVendList(s){
   if(!out.length&&s.vend&&!isND(s.vend))out.push(s.vend);
   return out;
 }
+function siteBsc(s,tech){
+  var u=[];
+  (s&&s.cells||[]).forEach(function(c){
+    if(tech&&c.tech!==tech)return;
+    var b=c.bsc!==undefined&&c.bsc!==null?String(c.bsc).trim():'';
+    if(b&&b!=='—'&&!isND(b)&&u.indexOf(b)<0)u.push(b);
+  });
+  u.sort();
+  return u.length?u.join(', '):'—';
+}
 function siteVendStr(s){var l=siteVendList(s);return l.length?l.join(' / '):'—';}
 function siteVendByTechStr(s){
   var map={},order=[];
@@ -1516,12 +1527,12 @@ function showUFCityDrill(uf,city,tech){
     var vend=uniqCellVals(s,'vend').sort();
     var v=vend.length>1?vend.join('/'):vend[0]||'—';
     var fl=siteFqLg(s,tech);
-    _ufDrillData.push({sid:s.id,tech:(tech||siteTechsStr(s)),uf:s.uf,city:s.city||'N/D',reg:s.reg,vend:v,
+    _ufDrillData.push({sid:s.id,tech:(tech||siteTechsStr(s)),uf:s.uf,city:s.city||'N/D',reg:s.reg,vend:v,bsc:siteBsc(s,tech),
       fq:fl.fq,lg:fl.lg,lat:s.lat,lon:s.lon,oper:s.oper});
   });
   document.getElementById('uf-drill-tbody').innerHTML=_ufDrillData.map(function(r){
     var tc=r.tech==='4G'?'t4g':r.tech==='3G'?'t3g':r.tech==='2G'?'t2g':r.tech==='5G'?'t5g':'';
-    return '<tr><td class="hi" style="cursor:pointer;color:var(--c1);" onclick="goFinder(\''+esc(r.sid)+'\')">'+r.sid+'</td><td class="'+tc+'">'+r.tech+'</td><td>'+r.uf+'</td><td>'+r.city+'</td><td>'+(r.reg||'—')+'</td><td>'+r.vend+'</td>'+regTechTds(r)+'<td style="color:var(--text3);">'+(r.lat||'—')+'</td><td style="color:var(--text3);">'+(r.lon||'—')+'</td><td>'+(r.oper||'—')+'</td></tr>';
+    return '<tr><td class="hi" style="cursor:pointer;color:var(--c1);" onclick="goFinder(\''+esc(r.sid)+'\')">'+r.sid+'</td><td class="'+tc+'">'+r.tech+'</td><td>'+r.uf+'</td><td>'+r.city+'</td><td>'+(r.reg||'—')+'</td><td>'+r.vend+'</td><td>'+r.bsc+'</td>'+regTechTds(r)+'<td style="color:var(--text3);">'+(r.lat||'—')+'</td><td style="color:var(--text3);">'+(r.lon||'—')+'</td><td>'+(r.oper||'—')+'</td></tr>';
   }).join('');
   document.getElementById('uf-drill-section').style.display='block';
   document.getElementById('uf-drill-section').scrollIntoView({behavior:'smooth',block:'start'});
@@ -1532,18 +1543,18 @@ function showUFTopDrill(uf){
   _ufTopDrillData=sites.map(function(s){
     var vend=uniqCellVals(s,'vend').sort();
     return {sid:s.id,techs:siteTechsStr(s),uf:s.uf,city:s.city||'N/D',reg:s.reg,
-      vend:vend.length>1?vend.join('/'):vend[0]||'—',
+      vend:vend.length>1?vend.join('/'):vend[0]||'—',bsc:siteBsc(s),
       fq:siteFqLg(s).fq,lg:siteFqLg(s).lg,
       lat:s.lat,lon:s.lon,oper:s.oper};
   });
   document.getElementById('uf-top-drill-tbody').innerHTML=_ufTopDrillData.map(function(r){
-    return '<tr><td class="hi" style="cursor:pointer;color:var(--c1);" onclick="goFinder(\''+esc(r.sid)+'\')">'+r.sid+'</td><td>'+r.techs+'</td><td>'+r.uf+'</td><td>'+r.city+'</td><td>'+(r.reg||'—')+'</td><td>'+r.vend+'</td>'+regTechTds(r)+'<td style="color:var(--text3);">'+(r.lat||'—')+'</td><td style="color:var(--text3);">'+(r.lon||'—')+'</td><td>'+(r.oper||'—')+'</td></tr>';
+    return '<tr><td class="hi" style="cursor:pointer;color:var(--c1);" onclick="goFinder(\''+esc(r.sid)+'\')">'+r.sid+'</td><td>'+r.techs+'</td><td>'+r.uf+'</td><td>'+r.city+'</td><td>'+(r.reg||'—')+'</td><td>'+r.vend+'</td><td>'+r.bsc+'</td>'+regTechTds(r)+'<td style="color:var(--text3);">'+(r.lat||'—')+'</td><td style="color:var(--text3);">'+(r.lon||'—')+'</td><td>'+(r.oper||'—')+'</td></tr>';
   }).join('');
   document.getElementById('uf-top-drill-section').style.display='block';
   document.getElementById('uf-top-drill-section').scrollIntoView({behavior:'smooth',block:'start'});
 }
-function exportUFDrill(){dlCsv(['STATION ID,TECNOLOGIA,UF,CIDADE,REGIONAL,VENDOR,FREQ 2G,FREQ 3G,FREQ 4G,FREQ 5G,LARGURA 2G,LARGURA 3G,LARGURA 4G,LARGURA 5G,LATITUDE,LONGITUDE,OPERADORA'].concat(_ufDrillData.map(function(r){return csvRow([r.sid,r.tech,r.uf,r.city,r.reg,r.vend].concat(regTechVals(r),[r.lat,r.lon,r.oper]));})).join('\n'),'uf_cidade_tech.csv');}
-function exportUFTopDrill(){dlCsv(['STATION ID,TECNOLOGIAS,UF,CIDADE,REGIONAL,VENDOR,FREQ 2G,FREQ 3G,FREQ 4G,FREQ 5G,LARGURA 2G,LARGURA 3G,LARGURA 4G,LARGURA 5G,LATITUDE,LONGITUDE,OPERADORA'].concat(_ufTopDrillData.map(function(r){return csvRow([r.sid,r.techs,r.uf,r.city,r.reg,r.vend].concat(regTechVals(r),[r.lat,r.lon,r.oper]));})).join('\n'),'uf_report.csv');}
+function exportUFDrill(){dlCsv(['STATION ID,TECNOLOGIA,UF,CIDADE,REGIONAL,VENDOR,BSC/RNC,FREQ 2G,FREQ 3G,FREQ 4G,FREQ 5G,LARGURA 2G,LARGURA 3G,LARGURA 4G,LARGURA 5G,LATITUDE,LONGITUDE,OPERADORA'].concat(_ufDrillData.map(function(r){return csvRow([r.sid,r.tech,r.uf,r.city,r.reg,r.vend,r.bsc].concat(regTechVals(r),[r.lat,r.lon,r.oper]));})).join('\n'),'uf_cidade_tech.csv');}
+function exportUFTopDrill(){dlCsv(['STATION ID,TECNOLOGIAS,UF,CIDADE,REGIONAL,VENDOR,BSC/RNC,FREQ 2G,FREQ 3G,FREQ 4G,FREQ 5G,LARGURA 2G,LARGURA 3G,LARGURA 4G,LARGURA 5G,LATITUDE,LONGITUDE,OPERADORA'].concat(_ufTopDrillData.map(function(r){return csvRow([r.sid,r.techs,r.uf,r.city,r.reg,r.vend,r.bsc].concat(regTechVals(r),[r.lat,r.lon,r.oper]));})).join('\n'),'uf_report.csv');}
 
 // ── Vendor ────────────────────────────────────────────────────────────────
 function buildVendorTab(){
@@ -1633,20 +1644,20 @@ function buildRANTable(filt){
   var flOf=function(s){return _fl[s.id]||(_fl[s.id]=siteFqLg(s));};
   dtHdrInit('rant','dt-rant','ran-tbody',[
     function(s){return [s.id];},function(s){return [s.oper];},function(s){return techCombo(siteTechs(s).join(', '));},
-    function(s){return [s.reg];},function(s){return [s.uf];},function(s){return [s.city];},function(s){return vendCombo(siteVendList(s).join(' / '));}
+    function(s){return [s.reg];},function(s){return [s.uf];},function(s){return [s.city];},function(s){return vendCombo(siteVendList(s).join(' / '));},function(s){return dtCombo(siteBsc(s));}
   ].concat(dtFqLgCols(flOf),[function(s){return [s.lat];},function(s){return [s.lon];}]),
   filt,function(v){ranTableRender(v);},500);
 }
 function ranTableRender(filt){
   document.getElementById('ran-tbody').innerHTML=filt.slice(0,500).map(function(s){
     var chips=siteTechs(s).sort().map(function(t){return '<span class="tchip '+techChipClass(t)+'">'+t+'</span>';}).join('')||'—';
-    return '<tr><td class="hi" style="cursor:pointer;color:var(--c1);" onclick="goFinder(\''+esc(s.id)+'\')">'+s.id+'</td><td><span style="background:rgba(236,72,153,.12);color:#ec4899;border:1px solid rgba(236,72,153,.25);padding:2px 8px;border-radius:12px;font-size:10px;font-weight:700;">'+(s.oper||'—')+'</span></td><td>'+chips+'</td><td>'+(s.reg||'—')+'</td><td>'+(s.uf||'—')+'</td><td>'+(s.city||'—')+'</td><td>'+(siteVendList(s).join(' / ')||s.vend||'—')+'</td>'+regTechTds(siteFqLg(s))+'<td style="color:var(--text3);">'+(s.lat||'—')+'</td><td style="color:var(--text3);">'+(s.lon||'—')+'</td></tr>';
+    return '<tr><td class="hi" style="cursor:pointer;color:var(--c1);" onclick="goFinder(\''+esc(s.id)+'\')">'+s.id+'</td><td><span style="background:rgba(236,72,153,.12);color:#ec4899;border:1px solid rgba(236,72,153,.25);padding:2px 8px;border-radius:12px;font-size:10px;font-weight:700;">'+(s.oper||'—')+'</span></td><td>'+chips+'</td><td>'+(s.reg||'—')+'</td><td>'+(s.uf||'—')+'</td><td>'+(s.city||'—')+'</td><td>'+(siteVendList(s).join(' / ')||s.vend||'—')+'</td><td>'+siteBsc(s)+'</td>'+regTechTds(siteFqLg(s))+'<td style="color:var(--text3);">'+(s.lat||'—')+'</td><td style="color:var(--text3);">'+(s.lon||'—')+'</td></tr>';
   }).join('');
 }
 function exportRAN(){
   if(!_ranPre)return;
-  dlCsv(['STATION ID,OPERADORA,TECNOLOGIAS,REGIONAL,UF,CIDADE,VENDOR,FREQ 2G,FREQ 3G,FREQ 4G,FREQ 5G,LARGURA 2G,LARGURA 3G,LARGURA 4G,LARGURA 5G,LAT,LON'].concat(
-    _ranPre.ranSites.map(function(s){return csvRow([s.id,s.oper,siteTechsStr(s),s.reg,s.uf,s.city,(siteVendList(s).join(' / ')||s.vend)].concat(regTechVals(siteFqLg(s)),[s.lat,s.lon]));})).join('\n'),'ran_sharing.csv');
+  dlCsv(['STATION ID,OPERADORA,TECNOLOGIAS,REGIONAL,UF,CIDADE,VENDOR,BSC/RNC,FREQ 2G,FREQ 3G,FREQ 4G,FREQ 5G,LARGURA 2G,LARGURA 3G,LARGURA 4G,LARGURA 5G,LAT,LON'].concat(
+    _ranPre.ranSites.map(function(s){return csvRow([s.id,s.oper,siteTechsStr(s),s.reg,s.uf,s.city,(siteVendList(s).join(' / ')||s.vend),siteBsc(s)].concat(regTechVals(siteFqLg(s)),[s.lat,s.lon]));})).join('\n'),'ran_sharing.csv');
 }
 
 // ── RAN Sharing: drill por Regional ────────────────────────────────────────
@@ -1657,13 +1668,13 @@ function showRANRegDrill(reg){
   var opF=document.getElementById('ran-oper-sel').value;
   _ranRegDrillName=reg+(opF==='ALL'?'':'_'+opF);
   _ranRegDrillData=ranBase().filter(function(s){return s.reg===reg&&(opF==='ALL'||s.oper===opF);}).map(function(s){
-    return {id:s.id,site:getSiteNames(s).join(' | '),oper:s.oper,techs:(siteTechs(s).sort().join(', ')||'—'),uf:s.uf,city:s.city,reg:s.reg,vend:(siteVendList(s).join(' / ')||s.vend),fq:siteFqLg(s).fq,lg:siteFqLg(s).lg,lat:s.lat,lon:s.lon};
+    return {id:s.id,site:getSiteNames(s).join(' | '),oper:s.oper,techs:(siteTechs(s).sort().join(', ')||'—'),uf:s.uf,city:s.city,reg:s.reg,vend:(siteVendList(s).join(' / ')||s.vend),bsc:siteBsc(s),fq:siteFqLg(s).fq,lg:siteFqLg(s).lg,lat:s.lat,lon:s.lon};
   }).sort(function(a,b){return String(a.id)<String(b.id)?-1:(String(a.id)>String(b.id)?1:0);});
   _ranRegDrillReg=reg;_ranRegDrillOp=opF;_ranRegDrillView=_ranRegDrillData;
   ranRegDrillRender();
   dtHdrInit('ranreg','dt-ranreg','ranreg-drill-tbody',[
     function(d){return [d.id];},function(d){return [d.site];},function(d){return [d.oper];},function(d){return techCombo(d.techs);},
-    function(d){return [d.uf];},function(d){return [d.city];},function(d){return [d.reg];},function(d){return vendCombo(d.vend);}
+    function(d){return [d.uf];},function(d){return [d.city];},function(d){return [d.reg];},function(d){return vendCombo(d.vend);},function(d){return dtCombo(d.bsc);}
   ].concat(dtFqLgCols(function(d){return d;}),[function(d){return [d.lat];},function(d){return [d.lon];}]),
   _ranRegDrillData,function(v){_ranRegDrillView=v;ranRegDrillRender();},2000);
   var sec=document.getElementById('ranreg-drill-section');
@@ -1675,19 +1686,19 @@ function ranRegDrillRender(){
   document.getElementById('ranreg-drill-title').textContent='RAN Sharing · '+reg+(opF==='ALL'?'':' · '+opF)+' — '+dtTitleCount(_ranRegDrillView.length,_ranRegDrillData.length)+' sites';
   document.getElementById('ranreg-drill-note').textContent=_ranRegDrillView.length>LIM?('Exibindo os primeiros '+LIM.toLocaleString('pt-BR')+' sites na tela — use os filtros para refinar; o Excel exporta todos os sites da seleção.'):'';
   document.getElementById('ranreg-drill-tbody').innerHTML=_ranRegDrillView.slice(0,LIM).map(function(d){
-    return '<tr><td class="hi" style="cursor:pointer;color:var(--c1);" onclick="goFinder(\''+esc(d.id)+'\')">'+d.id+'</td><td>'+(d.site||'—')+'</td><td>'+(d.oper||'—')+'</td><td style="color:var(--c1);">'+d.techs+'</td><td>'+(d.uf||'—')+'</td><td>'+(d.city||'—')+'</td><td>'+(d.reg||'—')+'</td><td style="color:var(--c1);">'+(d.vend||'—')+'</td>'+regTechTds(d)+'<td style="color:var(--text3);">'+(d.lat||'—')+'</td><td style="color:var(--text3);">'+(d.lon||'—')+'</td></tr>';
+    return '<tr><td class="hi" style="cursor:pointer;color:var(--c1);" onclick="goFinder(\''+esc(d.id)+'\')">'+d.id+'</td><td>'+(d.site||'—')+'</td><td>'+(d.oper||'—')+'</td><td style="color:var(--c1);">'+d.techs+'</td><td>'+(d.uf||'—')+'</td><td>'+(d.city||'—')+'</td><td>'+(d.reg||'—')+'</td><td style="color:var(--c1);">'+(d.vend||'—')+'</td><td>'+(d.bsc||'—')+'</td>'+regTechTds(d)+'<td style="color:var(--text3);">'+(d.lat||'—')+'</td><td style="color:var(--text3);">'+(d.lon||'—')+'</td></tr>';
   }).join('');
 }
 function exportRANRegDrillXlsx(){
-  var head=['STATION ID','SITE','OPERADORA','TECNOLOGIAS','UF','CIDADE','REGIONAL','VENDOR','FREQ 2G','FREQ 3G','FREQ 4G','FREQ 5G','LARGURA 2G','LARGURA 3G','LARGURA 4G','LARGURA 5G','LATITUDE','LONGITUDE'];
+  var head=['STATION ID','SITE','OPERADORA','TECNOLOGIAS','UF','CIDADE','REGIONAL','VENDOR','BSC/RNC','FREQ 2G','FREQ 3G','FREQ 4G','FREQ 5G','LARGURA 2G','LARGURA 3G','LARGURA 4G','LARGURA 5G','LATITUDE','LONGITUDE'];
   var fname='ran_sharing_'+String(_ranRegDrillName).replace(/[^\w.-]+/g,'_')+'_sites';
   if(typeof XLSX==='undefined'){
-    dlCsv([csvRow(head)].concat(_ranRegDrillView.map(function(d){return csvRow([d.id,d.site,d.oper,d.techs,d.uf,d.city,d.reg,d.vend].concat(regTechVals(d),[d.lat,d.lon]));})).join('\n'),fname+'.csv');
+    dlCsv([csvRow(head)].concat(_ranRegDrillView.map(function(d){return csvRow([d.id,d.site,d.oper,d.techs,d.uf,d.city,d.reg,d.vend,d.bsc].concat(regTechVals(d),[d.lat,d.lon]));})).join('\n'),fname+'.csv');
     return;
   }
-  var aoa=[head].concat(_ranRegDrillView.map(function(d){return [d.id,d.site,d.oper,d.techs,d.uf,d.city,d.reg,d.vend].concat(regTechVals(d),[d.lat,d.lon]);}));
+  var aoa=[head].concat(_ranRegDrillView.map(function(d){return [d.id,d.site,d.oper,d.techs,d.uf,d.city,d.reg,d.vend,d.bsc].concat(regTechVals(d),[d.lat,d.lon]);}));
   var ws=XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols']=[{wch:14},{wch:26},{wch:12},{wch:16},{wch:5},{wch:26},{wch:10},{wch:10},{wch:11},{wch:11},{wch:11},{wch:11},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12}];
+  ws['!cols']=[{wch:14},{wch:26},{wch:12},{wch:16},{wch:5},{wch:26},{wch:10},{wch:10},{wch:16},{wch:11},{wch:11},{wch:11},{wch:11},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12}];
   var wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,String(_ranRegDrillName).replace(/[\\\/?*\[\]:]/g,'_').slice(0,31)||'Regional');
   XLSX.writeFile(wb,fname+'.xlsx');
@@ -2182,10 +2193,10 @@ function runFinder(){
     if(!results.length){el.innerHTML=notFoundHTML(q);el.classList.add('show');return;}
     if(results.length===1){el.innerHTML=renderSiteDetail(results[0]);el.classList.add('show');return;}
     el.innerHTML='<div class="info-banner">'+results.length+' sites para "'+q+'"</div>'+
-      '<div class="tscroll" style="max-height:480px;overflow-y:auto;"><table class="dtbl"><thead><tr><th>STATION ID</th><th>SITE</th><th>CIDADE</th><th>UF</th><th>REGIONAL</th><th>TECNO</th><th>VENDOR</th></tr></thead><tbody>'+
+      '<div class="tscroll" style="max-height:480px;overflow-y:auto;"><table class="dtbl"><thead><tr><th>STATION ID</th><th>SITE</th><th>CIDADE</th><th>UF</th><th>REGIONAL</th><th>TECNO</th><th>VENDOR</th><th>BSC/RNC</th></tr></thead><tbody>'+
       results.map(function(s){
         var chips=siteTechs(s).sort().map(function(t){return '<span class="tchip '+techChipClass(t)+'">'+t+'</span>';}).join('')||'—';
-        return '<tr><td class="hi" style="cursor:pointer;color:var(--c1);" onclick="goFinder(\''+esc(s.id)+'\')">'+s.id+'</td><td>'+getSiteNames(s).join(', ')+'</td><td>'+(s.city||'—')+'</td><td>'+(s.uf||'—')+'</td><td>'+(s.reg||'—')+'</td><td>'+chips+'</td><td>'+siteVendStr(s)+'</td></tr>';
+        return '<tr><td class="hi" style="cursor:pointer;color:var(--c1);" onclick="goFinder(\''+esc(s.id)+'\')">'+s.id+'</td><td>'+getSiteNames(s).join(', ')+'</td><td>'+(s.city||'—')+'</td><td>'+(s.uf||'—')+'</td><td>'+(s.reg||'—')+'</td><td>'+chips+'</td><td>'+siteVendStr(s)+'</td><td>'+siteBsc(s)+'</td></tr>';
       }).join('')+'</tbody></table></div>';
     el.classList.add('show');
   } else if(mode==='ci'){
@@ -2264,16 +2275,16 @@ function renderCityDetail(cityName,ufPart,sites){
     return '<tr><td class="hi" style="white-space:nowrap;">'+
       '<span style="cursor:pointer;color:var(--c1);" onclick="goFinder(\''+esc(s.id)+'\')">'+s.id+'</span> '+
       '<span onclick="goMap(\'sid\',\''+esc(s.id)+'\')" title="Ver no mapa" style="cursor:pointer;font-size:11px;opacity:.7;user-select:none;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.7">🗺️</span>'+
-      '</td><td style="font-size:9px;">'+getSiteNames(s).join(', ')+'</td><td>'+schips+'</td><td>'+(s.reg||'—')+'</td><td>'+siteVendStr(s)+'</td>'+
+      '</td><td style="font-size:9px;">'+getSiteNames(s).join(', ')+'</td><td>'+schips+'</td><td>'+(s.reg||'—')+'</td><td>'+siteVendStr(s)+'</td><td>'+siteBsc(s)+'</td>'+
       (s.oper&&s.oper.toUpperCase()!=='TIM'?'<td><span style="background:rgba(236,72,153,.12);color:#ec4899;padding:1px 6px;border-radius:10px;font-size:9px;font-weight:700;">'+s.oper+'</span></td>':'<td style="color:var(--text3);">TIM</td>')+
       '<td style="color:var(--text3);">'+(s.lat||'—')+'</td><td style="color:var(--text3);">'+(s.lon||'—')+'</td></tr>';
   }).join('');
   return header+'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;"><div style="font-size:11px;font-weight:700;color:var(--text2);">Sites — <span style="color:var(--c1);">'+N+'</span></div><button class="ebtn" onclick="exportCityCSV(\''+esc(cityName)+'\',\''+esc(ufPart||'')+'\')">⬇ CSV</button></div>'+
-    '<div class="tscroll" style="max-height:400px;overflow-y:auto;"><table class="dtbl"><thead><tr><th>STATION ID</th><th>SITE</th><th>TECNO</th><th>REGIONAL</th><th>VENDOR</th><th>OPERADORA</th><th>LAT</th><th>LON</th></tr></thead><tbody>'+tbody+'</tbody></table></div>';
+    '<div class="tscroll" style="max-height:400px;overflow-y:auto;"><table class="dtbl"><thead><tr><th>STATION ID</th><th>SITE</th><th>TECNO</th><th>REGIONAL</th><th>VENDOR</th><th>BSC/RNC</th><th>OPERADORA</th><th>LAT</th><th>LON</th></tr></thead><tbody>'+tbody+'</tbody></table></div>';
 }
 function exportCityCSV(cityName,ufPart){
   var results=mapVals(siteMap).filter(function(s){return s.city&&s.city.toLowerCase()===cityName.toLowerCase()&&(!ufPart||s.uf===ufPart);});
-  dlCsv(['STATION ID,SITE,TECNOLOGIAS,REGIONAL,UF,CIDADE,VENDOR,OPERADORA,LAT,LON'].concat(results.map(function(s){return csvRow([s.id,getSiteNames(s).join('|'),siteTechsStr(s),s.reg,s.uf,s.city,siteVendList(s).join('|'),s.oper,s.lat,s.lon]);})).join('\n'),(cityName+(ufPart?'_'+ufPart:''))+'_sites.csv');
+  dlCsv(['STATION ID,SITE,TECNOLOGIAS,REGIONAL,UF,CIDADE,VENDOR,BSC/RNC,OPERADORA,LAT,LON'].concat(results.map(function(s){return csvRow([s.id,getSiteNames(s).join('|'),siteTechsStr(s),s.reg,s.uf,s.city,siteVendList(s).join('|'),siteBsc(s),s.oper,s.lat,s.lon]);})).join('\n'),(cityName+(ufPart?'_'+ufPart:''))+'_sites.csv');
 }
 // ── Busca por CI (coluna V do arquivo) ──────────────────────────────────────
 var _ciSearchData=[];
@@ -2293,10 +2304,11 @@ function renderCiResults(q,matches,partial){
       '<td style="color:var(--c4);font-weight:700;white-space:nowrap;">'+ciHtml(c.ci)+'</td>'+
       '<td style="white-space:nowrap;">'+ciHtml(c.cel||'—')+'</td>'+
       '<td style="white-space:nowrap;">'+ciHtml(s.city||'—')+'</td><td>'+ciHtml(s.uf||'—')+'</td><td style="white-space:nowrap;">'+ciHtml(s.reg||'—')+'</td>'+
-      '<td style="white-space:nowrap;">'+ciHtml((c.vend&&!isND(c.vend))?c.vend:(s.vend||'—'))+'</td></tr>';
+      '<td style="white-space:nowrap;">'+ciHtml((c.vend&&!isND(c.vend))?c.vend:(s.vend||'—'))+'</td>'+
+      '<td style="white-space:nowrap;">'+ciHtml(bscOf(c)||'—')+'</td></tr>';
   }).join('');
   var more=matches.length>500?'<div style="font-size:10px;color:var(--text3);font-family:\'DM Mono\',monospace;margin-top:6px;">Exibindo as primeiras 500 células — use o CSV para a lista completa.</div>':'';
-  var out=header+'<div class="tscroll" style="max-height:360px;overflow-y:auto;margin-top:10px;"><table class="dtbl"><thead><tr><th>STATION ID</th><th>SITE</th><th>TECH</th><th>CI</th><th>CÉLULA</th><th>CIDADE</th><th>UF</th><th>REGIONAL</th><th>VENDOR</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+more+
+  var out=header+'<div class="tscroll" style="max-height:360px;overflow-y:auto;margin-top:10px;"><table class="dtbl"><thead><tr><th>STATION ID</th><th>SITE</th><th>TECH</th><th>CI</th><th>CÉLULA</th><th>CIDADE</th><th>UF</th><th>REGIONAL</th><th>VENDOR</th><th>BSC/RNC</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+more+
     '<div style="margin-top:12px;"><button class="ebtn" onclick="exportCiCSV()">⬇ CSV</button></div>';
   if(nSites===1&&lastSite) out+='<div style="margin-top:14px;">'+renderSiteDetail(lastSite)+'</div>';
   return out;
@@ -2304,7 +2316,7 @@ function renderCiResults(q,matches,partial){
 function exportCiCSV(){
   if(!_ciSearchData.length) return;
   var q=document.getElementById('fin-inp').value.trim();
-  dlCsv(['STATION ID,SITE,TECH,CI,CELULA,CGI,CIDADE,UF,REGIONAL,VENDOR,FREQ,LARGURA'].concat(_ciSearchData.map(function(m){var s=m.site,c=m.cell;var vend=(c.vend&&!isND(c.vend))?c.vend:((s.vend&&!isND(s.vend))?s.vend:'N/D');return csvRow([s.id,getSiteNames(s).join('|'),c.tech,c.ci,c.cel,c.cgi,s.city,s.uf,s.reg,vend,c.freq,c.larg]);})).join('\n'),'busca_ci_'+q.replace(/[^\w.-]+/g,'_')+'.csv');
+  dlCsv(['STATION ID,SITE,TECH,CI,CELULA,CGI,CIDADE,UF,REGIONAL,VENDOR,BSC/RNC,FREQ,LARGURA'].concat(_ciSearchData.map(function(m){var s=m.site,c=m.cell;var vend=(c.vend&&!isND(c.vend))?c.vend:((s.vend&&!isND(s.vend))?s.vend:'N/D');return csvRow([s.id,getSiteNames(s).join('|'),c.tech,c.ci,c.cel,c.cgi,s.city,s.uf,s.reg,vend,bscOf(c),c.freq,c.larg]);})).join('\n'),'busca_ci_'+q.replace(/[^\w.-]+/g,'_')+'.csv');
 }
 // ── Busca por BSC/RNC (coluna J do arquivo) ─────────────────────────────────
 var _bscSearchData=[];
@@ -2360,10 +2372,10 @@ function renderFreqResults(q,matches){
   var sections=vendors.map(function(v){
     var rows=vendMap[v].map(function(m){
       var s=m.site,c=m.cell;
-      return '<tr><td class="hi" style="cursor:pointer;color:var(--c1);white-space:nowrap;" onclick="goFinder(\''+esc(s.id)+'\')">'+s.id+'</td><td style="max-width:200px;white-space:normal;word-break:break-word;">'+esc(getSiteNames(s).join(', '))+'</td><td style="white-space:nowrap;"><span class="tchip '+techChipClass(c.tech)+'">'+esc(c.tech||'—')+'</span></td><td style="white-space:nowrap;">'+esc(s.city||'—')+'</td><td style="white-space:nowrap;">'+esc(s.uf||'—')+'</td><td style="white-space:nowrap;">'+esc(s.reg||'—')+'</td><td style="color:var(--c4);font-weight:700;white-space:nowrap;">'+esc(c.freq||'—')+'</td><td style="white-space:nowrap;">'+esc(c.larg||'—')+'</td></tr>';
+      return '<tr><td class="hi" style="cursor:pointer;color:var(--c1);white-space:nowrap;" onclick="goFinder(\''+esc(s.id)+'\')">'+s.id+'</td><td style="max-width:200px;white-space:normal;word-break:break-word;">'+esc(getSiteNames(s).join(', '))+'</td><td style="white-space:nowrap;"><span class="tchip '+techChipClass(c.tech)+'">'+esc(c.tech||'—')+'</span></td><td style="white-space:nowrap;">'+esc(s.city||'—')+'</td><td style="white-space:nowrap;">'+esc(s.uf||'—')+'</td><td style="white-space:nowrap;">'+esc(s.reg||'—')+'</td><td style="white-space:nowrap;">'+esc(bscOf(c)||'—')+'</td><td style="color:var(--c4);font-weight:700;white-space:nowrap;">'+esc(c.freq||'—')+'</td><td style="white-space:nowrap;">'+esc(c.larg||'—')+'</td></tr>';
     }).join('');
     return '<div style="margin-top:14px;"><div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:6px;">🏭 '+esc(v)+' — '+vendMap[v].length+' célula(s)</div>'+
-      '<div class="tscroll" style="max-height:320px;overflow-y:auto;"><table class="dtbl" style="table-layout:fixed;width:100%;"><colgroup><col style="width:11%;"><col style="width:22%;"><col style="width:8%;"><col style="width:15%;"><col style="width:6%;"><col style="width:11%;"><col style="width:9%;"><col style="width:9%;"></colgroup><thead><tr><th>STATION ID</th><th>SITE</th><th>TECH</th><th>CIDADE</th><th>UF</th><th>REGIONAL</th><th>FREQ</th><th>LARGURA</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+      '<div class="tscroll" style="max-height:320px;overflow-y:auto;"><table class="dtbl" style="table-layout:fixed;width:100%;"><colgroup><col style="width:11%;"><col style="width:22%;"><col style="width:8%;"><col style="width:15%;"><col style="width:6%;"><col style="width:9%;"><col style="width:10%;"><col style="width:9%;"><col style="width:9%;"></colgroup><thead><tr><th>STATION ID</th><th>SITE</th><th>TECH</th><th>CIDADE</th><th>UF</th><th>REGIONAL</th><th>BSC/RNC</th><th>FREQ</th><th>LARGURA</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
   }).join('');
   return header+'<div class="kpi-grid" style="margin-top:10px;margin-bottom:0;">'+kpis+'</div>'+sections+
     '<div style="margin-top:12px;"><button class="ebtn" onclick="exportFreqCSV()">⬇ CSV</button></div>';
@@ -2371,7 +2383,7 @@ function renderFreqResults(q,matches){
 function exportFreqCSV(){
   if(!_freqSearchData.length) return;
   var q=document.getElementById('fin-inp').value.trim();
-  dlCsv(['STATION ID,SITE,TECH,CIDADE,UF,REGIONAL,VENDOR,FREQ,LARGURA'].concat(_freqSearchData.map(function(m){var s=m.site,c=m.cell;var vend=(c.vend&&!isND(c.vend))?c.vend:((s.vend&&!isND(s.vend))?s.vend:'N/D');return csvRow([s.id,getSiteNames(s).join('|'),c.tech,s.city,s.uf,s.reg,vend,c.freq,c.larg]);})).join('\n'),'busca_freq_'+q+'.csv');
+  dlCsv(['STATION ID,SITE,TECH,CIDADE,UF,REGIONAL,VENDOR,BSC/RNC,FREQ,LARGURA'].concat(_freqSearchData.map(function(m){var s=m.site,c=m.cell;var vend=(c.vend&&!isND(c.vend))?c.vend:((s.vend&&!isND(s.vend))?s.vend:'N/D');return csvRow([s.id,getSiteNames(s).join('|'),c.tech,s.city,s.uf,s.reg,vend,bscOf(c),c.freq,c.larg]);})).join('\n'),'busca_freq_'+q+'.csv');
 }
 // ── Busca por quantidade de células por tecnologia (agrupado por vendor) ───
 var _lteQtyData=[];
@@ -2405,10 +2417,10 @@ function runLteQtyFinder(){
   var sections=vendors.map(function(v){
     var rows=vendMap[v].map(function(m){
       var s=m.site;
-      return '<tr><td class="hi" style="cursor:pointer;color:var(--c1);" onclick="goFinder(\''+esc(s.id)+'\')">'+s.id+'</td><td>'+getSiteNames(s).join(', ')+'</td><td>'+(s.city||'—')+'</td><td>'+(s.uf||'—')+'</td><td>'+(s.reg||'—')+'</td><td style="text-align:center;color:var(--c3);font-weight:700;">'+m.n+'</td></tr>';
+      return '<tr><td class="hi" style="cursor:pointer;color:var(--c1);" onclick="goFinder(\''+esc(s.id)+'\')">'+s.id+'</td><td>'+getSiteNames(s).join(', ')+'</td><td>'+(s.city||'—')+'</td><td>'+(s.uf||'—')+'</td><td>'+(s.reg||'—')+'</td><td>'+siteBsc(s,tech)+'</td><td style="text-align:center;color:var(--c3);font-weight:700;">'+m.n+'</td></tr>';
     }).join('');
     return '<div style="margin-top:14px;"><div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:6px;">🏭 '+v+' — '+vendMap[v].length+' site(s)</div>'+
-      '<div class="tscroll" style="max-height:320px;overflow-y:auto;"><table class="dtbl"><thead><tr><th>STATION ID</th><th>SITE</th><th>CIDADE</th><th>UF</th><th>REGIONAL</th><th>QTD '+techLbl+'</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+      '<div class="tscroll" style="max-height:320px;overflow-y:auto;"><table class="dtbl"><thead><tr><th>STATION ID</th><th>SITE</th><th>CIDADE</th><th>UF</th><th>REGIONAL</th><th>BSC/RNC</th><th>QTD '+techLbl+'</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
   }).join('');
   el.innerHTML=header+'<div class="kpi-grid" style="margin-top:10px;margin-bottom:0;">'+kpis+'</div>'+sections+
     '<div style="margin-top:12px;"><button class="ebtn" onclick="exportLteQtyCSV()">⬇ CSV</button></div>';
@@ -2417,7 +2429,7 @@ function exportLteQtyCSV(){
   if(!_lteQtyData.length)return;
   var qty=document.getElementById('lte-qty-inp').value.trim();
   var tech=getLteQtyTech(),techLbl=_lteQtyTechLbl[tech]||tech;
-  dlCsv(['STATION ID,SITE,UF,CIDADE,REGIONAL,VENDOR,QTD_'+tech].concat(_lteQtyData.map(function(m){var s=m.site;return csvRow([s.id,getSiteNames(s).join('|'),s.uf,s.city,s.reg,(s.vend&&!isND(s.vend))?s.vend:'N/D',m.n]);})).join('\n'),'sites_'+qty+'_celulas_'+tech+'.csv');
+  dlCsv(['STATION ID,SITE,UF,CIDADE,REGIONAL,VENDOR,BSC/RNC,QTD_'+tech].concat(_lteQtyData.map(function(m){var s=m.site;return csvRow([s.id,getSiteNames(s).join('|'),s.uf,s.city,s.reg,(s.vend&&!isND(s.vend))?s.vend:'N/D',siteBsc(s,tech),m.n]);})).join('\n'),'sites_'+qty+'_celulas_'+tech+'.csv');
 }
 
 function renderSiteDetail(site){
@@ -5476,13 +5488,13 @@ function finFreqCombo(q,el){
     (pairChips?'<div class="fin-hist" style="display:flex;margin:0;"><span class="fh-t">Pares 2G · 3G:</span>'+pairChips+'</div>':'')+
     '<div style="font-size:9px;color:var(--text3);font-family:\'DM Mono\',monospace;margin-top:6px;">Separados = o vendor do 2G é diferente do vendor do 3G no mesmo site. Clique num item para filtrar a tabela.</div></div>';
   var LIM=2000;
-  var head='<tr><th>STATION ID</th><th>SITE</th><th>TECNOLOGIAS</th><th>UF</th><th>CIDADE</th><th>REGIONAL</th><th>VENDOR</th><th>VENDOR 2G</th><th>VENDOR 3G</th><th>2G × 3G</th>'+conds.map(function(c){return '<th>CÉLULAS '+ciHtml(c.label)+'</th>';}).join('')+'</tr>';
+  var head='<tr><th>STATION ID</th><th>SITE</th><th>TECNOLOGIAS</th><th>UF</th><th>CIDADE</th><th>REGIONAL</th><th>VENDOR</th><th>BSC/RNC</th><th>VENDOR 2G</th><th>VENDOR 3G</th><th>2G × 3G</th>'+conds.map(function(c){return '<th>CÉLULAS '+ciHtml(c.label)+'</th>';}).join('')+'</tr>';
   var rows=matches.slice(0,LIM).map(function(m){
     var s=m.site;
     return '<tr><td class="hi" style="white-space:nowrap;"><span style="cursor:pointer;color:var(--c1);" onclick="goFinderSid(\''+esc(s.id)+'\')">'+ciHtml(s.id)+'</span> '+
       '<span onclick="goMap(\'sid\',\''+esc(s.id)+'\')" title="Ver no mapa" style="cursor:pointer;font-size:11px;opacity:.7;">🗺️</span></td>'+
       '<td>'+ciHtml(getSiteNames(s).join(', ')||'—')+'</td><td>'+ciHtml(siteTechs(s).sort().join(', ')||'—')+'</td>'+
-      '<td>'+ciHtml(s.uf||'—')+'</td><td>'+ciHtml(s.city||'—')+'</td><td>'+ciHtml(s.reg||'—')+'</td><td>'+ciHtml(siteVendList(s).join(' / ')||s.vend||'—')+'</td>'+
+      '<td>'+ciHtml(s.uf||'—')+'</td><td>'+ciHtml(s.city||'—')+'</td><td>'+ciHtml(s.reg||'—')+'</td><td>'+ciHtml(siteVendList(s).join(' / ')||s.vend||'—')+'</td><td>'+ciHtml(siteBsc(s))+'</td>'+
       '<td>'+ciHtml(m.v2.join(' / ')||'—')+'</td><td>'+ciHtml(m.v3.join(' / ')||'—')+'</td>'+
       '<td style="font-weight:700;color:'+(sepColor[m.sep]||'var(--text2)')+';">'+m.sep+'</td>'+
       m.cnt.map(function(n){return '<td style="text-align:center;color:var(--c3);font-weight:700;">'+n+'</td>';}).join('')+'</tr>';
