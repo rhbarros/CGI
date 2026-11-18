@@ -90,23 +90,6 @@ zzzTemporary6 -2000000000
 zzzTemporaryList1 
 end
 
-crn ENodeBFunction=1,EUtraNetwork=1,EUtranFrequency=LTE_39450
-arfcnValueEUtranDl 39450
-caOffloadingEnabled false
-excludeAdditionalFreqBandList 
-extEndcAllowedPlmnListPolicy 
-mfbiFreqBandIndPrio false
-prioAdditionalFreqBandList 
-userLabel 
-zzzTemporary1 -2000000000
-zzzTemporary2 -2000000000
-zzzTemporary3 
-zzzTemporary4 -2000000000
-zzzTemporary5 -2000000000
-zzzTemporary6 -2000000000
-zzzTemporaryList1 
-end
-
 crn ENodeBFunction=1,EUtraNetwork=1,EUtranFrequency=LTE_39250
 arfcnValueEUtranDl 39250
 caOffloadingEnabled false
