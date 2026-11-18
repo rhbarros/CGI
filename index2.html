@@ -1817,9 +1817,9 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
   const M_SITE = ['1-Transport_interface_2.mos', '2-add_gps.mos', '3-ENodeBFunction.mos', '13-cabinet.mos', 'Bridge1.mos'];
   const M_END = ['12-FEATURE_baseline.mos', '14-ADD_ALARMS_SUP.mos'];
   const M_BAND = {
-    '26': { name: '2600', sec: { A: { rru: 1, port: 'A', file: '4-Equipamento_sector_1_2600.mos' }, B: { rru: 3, port: 'B', file: '5-Equipamento_sector_2_2600.mos' }, C: { rru: 5, port: 'C', file: '6-Equipamento_sector_3_2600.mos' } } },
+    '26': { name: '2600', sec: { A: { rru: 1, port: 'A', alt: 'G', file: '4-Equipamento_sector_1_2600.mos' }, B: { rru: 3, port: 'B', alt: 'H', file: '5-Equipamento_sector_2_2600.mos' }, C: { rru: 5, port: 'C', alt: 'J', file: '6-Equipamento_sector_3_2600.mos' } } },
     '18': { name: '1800', files: ['4-RRU_1800.mos', '5-AntennaUnitGroup_1800.mos', '7-SECTOR_1800.mos'], sec: { A: { rru: 17, aug: 9, sef: 9, port: 'D' }, B: { rru: 19, aug: 10, sef: 10, port: 'E' }, C: { rru: 21, aug: 11, sef: 11, port: 'F' } } },
-    '21': { name: '2100', sec: { A: { rru: 20, aug: 21, sef: 21, port: 'A', alt: 'G', file: '4-Equipamento_sector_1_2100.mos' }, B: { rru: 22, aug: 22, sef: 22, port: 'B', alt: 'H', file: '5-Equipamento_sector_2_2100.mos' }, C: { rru: 24, aug: 23, sef: 23, port: 'C', alt: 'J', file: '6-Equipamento_sector_3_2100.mos' } } },
+    '21': { name: '2100', sec: { A: { rru: 20, aug: 21, sef: 21, port: 'A', file: '4-Equipamento_sector_1_2100.mos' }, B: { rru: 22, aug: 22, sef: 22, port: 'B', file: '5-Equipamento_sector_2_2100.mos' }, C: { rru: 24, aug: 23, sef: 23, port: 'C', file: '6-Equipamento_sector_3_2100.mos' } } },
     '07': { name: '700', files: ['4-RRU_700.mos', '5-AntennaUnitGroup_700.mos', '7-SECTOR_700.mos'], sec: { A: { rru: 13, aug: 13, sef: 13, port: 'K' }, B: { rru: 14, aug: 14, sef: 14, port: 'L' }, C: { rru: 15, aug: 15, sef: 15, port: 'M' } } },
   };
   const secOf = (suffix) => ({ A: 'A', I: 'A', B: 'B', J: 'B', C: 'C', K: 'C' })[String(suffix).split('-')[1].replace(/^I(?=[ABC]$)/, '').slice(-1)] || '';
@@ -1926,8 +1926,8 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
     ['26', '21', '18', '07'].forEach((b) => {
       if (!have[b]) return; const B = M_BAND[b];
       const miss = Object.keys(B.sec).filter((x) => !have[b].has(x));
-      // 2100 usa as portas A/B/C; se o site também tem 2600 (A/B/C), o 2100 vai para G/H/J
-      Object.keys(B.sec).filter((x) => have[b].has(x)).forEach((x) => links.push({ rru: B.sec[x].rru, port: b === '21' && have['26'] ? B.sec[x].alt : B.sec[x].port, band: B.name }));
+      // 2100 sempre nas portas A/B/C; se o site também tem 2600, o 2600 vai para G/H/J
+      Object.keys(B.sec).filter((x) => have[b].has(x)).forEach((x) => links.push({ rru: B.sec[x].rru, port: b === '26' && have['21'] ? B.sec[x].alt : B.sec[x].port, band: B.name }));
       if (B.files) {
         const res = []; miss.forEach((x) => { const S = B.sec[x]; res.push(idRe('FieldReplaceableUnit', 'RRU-' + S.rru), idRe('AntennaUnitGroup', S.aug), idRe('SectorEquipmentFunction', S.sef)); });
         B.files.forEach((n) => { const t = need(n); if (t) files.push({ name: n, text: dropRefs(t, res), tpl: 'M/' + n }); });
