@@ -229,7 +229,7 @@ body.role-busca #page-busca [onclick*="goMap"]{display:none!important;}
         <div class="col-row"><span class="col-label">📍 LATITUDE</span><select class="col-select" id="c-lat"></select></div>
         <div class="col-row"><span class="col-label">📍 LONGITUDE</span><select class="col-select" id="c-lon"></select></div>
         <div class="col-row"><span class="col-label">🧭 AZIMUTE</span><select class="col-select" id="c-az"></select></div>
-        <div class="col-row"><span class="col-label">🖧 BSC/RNC</span><select class="col-select" id="c-bsc"></select></div>
+        <div class="col-row"><span class="col-label">🖧 BSC/RNC (col. J)</span><select class="col-select" id="c-bsc"></select></div>
         <div class="col-row"><span class="col-label">🗼 SITE</span><select class="col-select" id="c-site"></select></div>
         <div class="col-row"><span class="col-label">📻 CÉLULA</span><select class="col-select" id="c-cel"></select></div>
         <div class="col-row"><span class="col-label">🔗 CGI</span><select class="col-select" id="c-cgi"></select></div>
@@ -661,13 +661,14 @@ body.role-busca #page-busca [onclick*="goMap"]{display:none!important;}
 
     <div class="finder-box">
       <div style="font-size:13px;font-weight:700;margin-bottom:4px;">🔍 Busca Avançada</div>
-      <div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:11px;">Pesquise por Station ID, nome do Site, Cidade, FREQ ou CI</div>
+      <div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:11px;">Pesquise por Station ID, nome do Site, Cidade, FREQ, CI ou BSC/RNC</div>
       <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
         <label style="display:flex;align-items:center;gap:5px;font-size:10px;font-family:'DM Mono',monospace;color:var(--text2);cursor:pointer;"><input type="radio" name="fin-mode" value="sid" checked onchange="clearFinder()"> Station ID</label>
         <label style="display:flex;align-items:center;gap:5px;font-size:10px;font-family:'DM Mono',monospace;color:var(--text2);cursor:pointer;"><input type="radio" name="fin-mode" value="site" onchange="clearFinder()"> Nome do Site</label>
         <label style="display:flex;align-items:center;gap:5px;font-size:10px;font-family:'DM Mono',monospace;color:var(--text2);cursor:pointer;"><input type="radio" name="fin-mode" value="city" onchange="clearFinder()"> Cidade</label>
         <label style="display:flex;align-items:center;gap:5px;font-size:10px;font-family:'DM Mono',monospace;color:var(--text2);cursor:pointer;"><input type="radio" name="fin-mode" value="freq" onchange="clearFinder()"> 📊 FREQ</label>
         <label style="display:flex;align-items:center;gap:5px;font-size:10px;font-family:'DM Mono',monospace;color:var(--text2);cursor:pointer;"><input type="radio" name="fin-mode" value="ci" onchange="clearFinder()"> 🆔 CI</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:10px;font-family:'DM Mono',monospace;color:var(--text2);cursor:pointer;"><input type="radio" name="fin-mode" value="bsc" onchange="clearFinder()"> 🖧 BSC/RNC</label>
       </div>
       <div class="finder-row">
         <input class="finder-inp" id="fin-inp" placeholder="Digite para buscar..." oninput="onFinInp()" onkeydown="if(event.key==='Enter')runFinder()">
@@ -2146,6 +2147,14 @@ function onFinInp(){
     var freqMap={};
     mapVals(siteMap).forEach(function(s){s.cells.forEach(function(c){if(c.freq){var f=String(c.freq);if(f.toLowerCase().indexOf(q)>=0)freqMap[f]=(freqMap[f]||0)+1;}});});
     Object.keys(freqMap).sort().slice(0,12).forEach(function(f){suggestions.push({label:f+' ('+freqMap[f]+' célula(s))',value:f});});
+  } else if(mode==='bsc'){
+    var bscMap={};
+    mapVals(siteMap).forEach(function(s){s.cells.forEach(function(c){
+      var b=bscOf(c);if(!b||b.toLowerCase().indexOf(q)<0)return;
+      if(!bscMap[b])bscMap[b]={n:0,sites:{},ns:0};
+      bscMap[b].n++;if(!bscMap[b].sites[s.id]){bscMap[b].sites[s.id]=1;bscMap[b].ns++;}
+    });});
+    Object.keys(bscMap).sort().slice(0,12).forEach(function(b){suggestions.push({label:b+' ('+bscMap[b].ns+' site(s) · '+bscMap[b].n+' célula(s))',value:b});});
   } else {
     var cityUFMap={};
     mapVals(siteMap).forEach(function(s){var c=s.city||'',u=s.uf||'';if(!c)return;var ck=c.toLowerCase();if(!cityUFMap[ck])cityUFMap[ck]={city:c,ufs:{}};if(u)cityUFMap[ck].ufs[u]=1;});
@@ -2196,6 +2205,22 @@ function runFinder(){
     }
     if(!ciMatches.length){el.innerHTML=notFoundHTML(q);el.classList.add('show');return;}
     el.innerHTML=renderCiResults(q,ciMatches,ciPartial);el.classList.add('show');
+  } else if(mode==='bsc'){
+    if(!C||!C.bsc){el.innerHTML='<div class="info-banner">⚠️ Coluna BSC/RNC não mapeada. Recarregue o arquivo e selecione a coluna em "BSC/RNC (col. J)".</div>';el.classList.add('show');return;}
+    var bscTerms=q.split(/[\s,;]+/).filter(function(t){return t;}).map(function(t){return t.toLowerCase();});
+    var bscMatches=[],bscPartial=false;
+    mapVals(siteMap).forEach(function(s){s.cells.forEach(function(c){
+      var b=bscOf(c);if(b&&bscTerms.indexOf(b.toLowerCase())>=0)bscMatches.push({site:s,cell:c});
+    });});
+    if(!bscMatches.length){
+      bscPartial=true;
+      mapVals(siteMap).forEach(function(s){s.cells.forEach(function(c){
+        var b=bscOf(c);if(!b)return;var bl=b.toLowerCase();
+        if(bscTerms.some(function(t){return bl.indexOf(t)>=0;}))bscMatches.push({site:s,cell:c});
+      });});
+    }
+    if(!bscMatches.length){el.innerHTML=notFoundHTML(q);el.classList.add('show');return;}
+    el.innerHTML=renderBscResults(q,bscMatches,bscPartial);el.classList.add('show');
   } else if(mode==='freq'){
     if(q.indexOf(':')>=0||q.indexOf('|')>=0){finFreqCombo(q,el);return;}
     var qlow=q.toLowerCase();
@@ -2280,6 +2305,44 @@ function exportCiCSV(){
   if(!_ciSearchData.length) return;
   var q=document.getElementById('fin-inp').value.trim();
   dlCsv(['STATION ID,SITE,TECH,CI,CELULA,CGI,CIDADE,UF,REGIONAL,VENDOR,FREQ,LARGURA'].concat(_ciSearchData.map(function(m){var s=m.site,c=m.cell;var vend=(c.vend&&!isND(c.vend))?c.vend:((s.vend&&!isND(s.vend))?s.vend:'N/D');return csvRow([s.id,getSiteNames(s).join('|'),c.tech,c.ci,c.cel,c.cgi,s.city,s.uf,s.reg,vend,c.freq,c.larg]);})).join('\n'),'busca_ci_'+q.replace(/[^\w.-]+/g,'_')+'.csv');
+}
+// ── Busca por BSC/RNC (coluna J do arquivo) ─────────────────────────────────
+var _bscSearchData=[];
+function bscOf(c){var b=c&&c.bsc!==undefined&&c.bsc!==null?String(c.bsc).trim():'';return (b&&b!=='—'&&!isND(b))?b:'';}
+function renderBscResults(q,matches,partial){
+  _bscSearchData=matches;
+  var siteIds={},nSites=0,lastSite=null,bscs={},techCnt={};
+  matches.forEach(function(m){
+    if(!siteIds[m.site.id]){siteIds[m.site.id]=1;nSites++;lastSite=m.site;}
+    bscs[bscOf(m.cell)]=1;
+    var t=m.cell.tech||'—';techCnt[t]=(techCnt[t]||0)+1;
+  });
+  var bscList=Object.keys(bscs).sort();
+  var techChips=Object.keys(techCnt).sort().map(function(t){return '<span class="tchip '+techChipClass(t)+'">'+ciHtml(t)+': '+techCnt[t].toLocaleString('pt-BR')+'</span>';}).join('');
+  var header='<div class="info-banner">🖧 '+matches.length.toLocaleString('pt-BR')+' célula(s) em '+nSites.toLocaleString('pt-BR')+' site(s) para BSC/RNC "'+ciHtml(q)+'"'+(partial?' — correspondência parcial (nenhum BSC/RNC exato)':'')+'</div>'+
+    '<div style="margin-top:8px;font-size:10px;font-family:\'DM Mono\',monospace;color:var(--text3);">'+(bscList.length>1?'BSC/RNC: '+ciHtml(bscList.join(', '))+'<br>':'')+techChips+'</div>';
+  var rows=matches.slice(0,500).map(function(m){
+    var s=m.site,c=m.cell;
+    return '<tr><td class="hi" style="white-space:nowrap;"><span style="cursor:pointer;color:var(--c1);" onclick="goFinderSid(\''+esc(s.id)+'\')">'+ciHtml(s.id)+'</span> '+
+      '<span onclick="goMap(\'sid\',\''+esc(s.id)+'\')" title="Ver no mapa" style="cursor:pointer;font-size:11px;opacity:.7;user-select:none;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.7">🗺️</span></td>'+
+      '<td style="max-width:180px;white-space:normal;word-break:break-word;">'+ciHtml(getSiteNames(s).join(', ')||'—')+'</td>'+
+      '<td style="white-space:nowrap;"><span class="tchip '+techChipClass(c.tech)+'">'+ciHtml(c.tech||'—')+'</span></td>'+
+      '<td style="color:var(--c4);font-weight:700;white-space:nowrap;">'+ciHtml(bscOf(c))+'</td>'+
+      '<td style="white-space:nowrap;">'+ciHtml(c.cel||'—')+'</td>'+
+      '<td style="white-space:nowrap;">'+ciHtml(c.freq||'—')+'</td>'+
+      '<td style="white-space:nowrap;">'+ciHtml(s.city||'—')+'</td><td>'+ciHtml(s.uf||'—')+'</td><td style="white-space:nowrap;">'+ciHtml(s.reg||'—')+'</td>'+
+      '<td style="white-space:nowrap;">'+ciHtml((c.vend&&!isND(c.vend))?c.vend:(s.vend||'—'))+'</td></tr>';
+  }).join('');
+  var more=matches.length>500?'<div style="font-size:10px;color:var(--text3);font-family:\'DM Mono\',monospace;margin-top:6px;">Exibindo as primeiras 500 células — use o CSV para a lista completa.</div>':'';
+  var out=header+'<div class="tscroll" style="max-height:360px;overflow-y:auto;margin-top:10px;"><table class="dtbl"><thead><tr><th>STATION ID</th><th>SITE</th><th>TECH</th><th>BSC/RNC</th><th>CÉLULA</th><th>FREQ</th><th>CIDADE</th><th>UF</th><th>REGIONAL</th><th>VENDOR</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+more+
+    '<div style="margin-top:12px;"><button class="ebtn" onclick="exportBscCSV()">⬇ CSV</button></div>';
+  if(nSites===1&&lastSite) out+='<div style="margin-top:14px;">'+renderSiteDetail(lastSite)+'</div>';
+  return out;
+}
+function exportBscCSV(){
+  if(!_bscSearchData.length) return;
+  var q=document.getElementById('fin-inp').value.trim();
+  dlCsv(['STATION ID,SITE,TECH,BSC/RNC,CELULA,CGI,CI,CIDADE,UF,REGIONAL,VENDOR,FREQ,LARGURA'].concat(_bscSearchData.map(function(m){var s=m.site,c=m.cell;var vend=(c.vend&&!isND(c.vend))?c.vend:((s.vend&&!isND(s.vend))?s.vend:'N/D');return csvRow([s.id,getSiteNames(s).join('|'),c.tech,bscOf(c),c.cel,c.cgi,c.ci,s.city,s.uf,s.reg,vend,c.freq,c.larg]);})).join('\n'),'busca_bsc_rnc_'+q.replace(/[^A-Za-z0-9_-]+/g,'_')+'.csv');
 }
 // ── Busca por FREQ (coluna de frequência por célula) ────────────────────────
 var _freqSearchData=[];
@@ -5253,7 +5316,7 @@ function authLogin(){
 
 
 // ── Busca: histórico de pesquisas (não apaga ao trocar o tipo de busca) ─────
-var FIN_LBL={sid:'Station ID',site:'Site',city:'Cidade',freq:'FREQ',ci:'CI'};
+var FIN_LBL={sid:'Station ID',site:'Site',city:'Cidade',freq:'FREQ',ci:'CI',bsc:'BSC/RNC'};
 var _finHist=[],_finTxt={},_finPrevMode='sid';
 (function(){try{var h=JSON.parse(localStorage.getItem('cgi_fin_hist')||'[]');if(h&&h.length)_finHist=h.filter(function(x){return x&&x.m&&x.q;}).slice(0,20);}catch(e){}})();
 function finHistSave(){try{localStorage.setItem('cgi_fin_hist',JSON.stringify(_finHist));}catch(e){}}
