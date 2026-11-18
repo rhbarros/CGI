@@ -1741,10 +1741,37 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
 
   // ---------- frequências da regional (7-ADD_EUtraNetwork&UtraNetwork / EUtranFrequency) ----------
   const REGS = ['TLE', 'TNE', 'TNO', 'TSP', 'TCO', 'TSL', 'TRJ'];
+  // EARFCN DL declarados por regional (exports CVOA/CVOB/CVO x CGI, ver tools/earfcn no Git).
+  // Regra: entra o EARFCN que tem pelo menos 5% das células da banda na regional (mínimo 10 células).
+  // REG_FORCE: incluídos sempre, a pedido. O arquivo regional fica com exatamente esta lista de EUtranFrequency.
+  const REG_TOP = {"TCO": [400, 425, 1276, 1500, 1525, 2800, 3150, 3200, 9410], "TLE": [200, 375, 1425, 2560, 2585, 2800, 3150, 3200, 9410], "TNE": [75, 100, 200, 1450, 1474, 2560, 2585, 2800, 3150, 3200, 9410], "TNO": [50, 1350, 1375, 1576, 2800, 3150, 3200, 9410], "TSL": [1300, 1500, 3150], "TSP": [75, 225, 500, 1301, 1550, 1575, 2800, 3150, 3200, 9410]};
+  const REG_FORCE = { TNE: [2800, 3150] };
+  function regTop(reg, extra) { const a = REG_TOP[reg]; if (!a) return null; return [...new Set([...a, ...(REG_FORCE[reg] || []), ...(extra || []).map(Number).filter((x) => x > 0)])].sort((x, y) => x - y).map(String); }
+  function topEutra(txt, reg, extra) {
+    const want = regTop(reg, extra); if (!want || !txt) return { text: txt, added: [], removed: [] };
+    const nl = /\r\n/.test(txt) ? '\r\n' : '\n'; const L = txt.split(/\r?\n/); const blocks = [];
+    for (let i = 0; i < L.length; i++) { const m = L[i].match(/^crn ENodeBFunction=1,EUtraNetwork=1,EUtranFrequency=LTE_(\d+)\s*$/); if (!m) continue;
+      let j = i + 1; while (j < L.length && L[j].trim() !== 'end') j++; let k = j + 1; if (k < L.length && L[k].trim() === '') k++;
+      blocks.push({ i, k, id: m[1], lines: L.slice(i, j + 1) }); i = j; }
+    if (!blocks.length) return { text: txt, added: [], removed: [] };
+    const have = blocks.map((b) => b.id), removed = have.filter((x) => !want.includes(x)), added = want.filter((x) => !have.includes(x));
+    const proto = (dl) => (blocks.find((b) => bandOf(b.id, BAND_L) === bandOf(dl, BAND_L)) || blocks[0]).lines;
+    const mk = (dl, src) => src.map((l) => l.replace(/EUtranFrequency=LTE_\d+/, 'EUtranFrequency=LTE_' + dl).replace(/^arfcnValueEUtranDl \d+/, 'arfcnValueEUtranDl ' + dl));
+    const out = []; const drop = new Set(); blocks.forEach((b) => { for (let x = b.i; x < b.k; x++) drop.add(x); });
+    const at = blocks[0].i;
+    for (let x = 0; x < L.length; x++) {
+      if (x === at) want.forEach((dl) => { const b = blocks.find((y) => y.id === dl); out.push(...(b ? b.lines : mk(dl, proto(dl))), ''); });
+      if (!drop.has(x)) out.push(L[x]);
+    }
+    return { text: out.join(nl), added, removed };
+  }
   function regFiles(kit, site) {
     const reg = str(site.regional).toUpperCase().replace(/[^A-Z]/g, '');
     const e = kit['REG_' + reg + '_EUTRA'], m = kit['REG_' + reg + '_MME'];
-    return { reg, eutra: e || kit['EUtranFrequency.mos'] || '', mme: m || kit['MME.mos'] || '', own: !!(e && m), ownE: !!e, ownM: !!m };
+    // a frequência das próprias células do site entra sempre
+    const own = [...new Set(((site && site.cells) || []).map((c) => c.dl).filter(Boolean))];
+    const t = topEutra(e || kit['EUtranFrequency.mos'] || '', reg, own);
+    return { reg, eutra: t.text, mme: m || kit['MME.mos'] || '', own: !!(e && m), ownE: !!e, ownM: !!m, topAdded: t.added, topRemoved: t.removed, top: regTop(reg, own) };
   }
   function freqLists(txt) {
     const u = (re) => [...new Set((String(txt).match(re) || []).map((x) => x.replace(/^.*=/, '')))];
@@ -1903,10 +1930,10 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
     if (!opts.eng) w.push('Sem ENG-SI para este site: informe o IP S1X2 na tabela.');
     // regional: 7-ADD_EUtraNetwork&UtraNetwork e MME
     const RF0 = regFiles(kit, site);
-    const RF = { reg: RF0.reg, ownE: RF0.ownE, ownM: RF0.ownM, own: RF0.own, eutra: RF0.ownE ? RF0.eutra : K('7-ADD_EUtraNetwork&UtraNetwork.mos') || '', mme: RF0.ownM ? RF0.mme : K('MME.mos') || '', macro: true };
+    const RF = { reg: RF0.reg, ownE: RF0.ownE, ownM: RF0.ownM, own: RF0.own, eutra: RF0.ownE ? RF0.eutra : topEutra(K('7-ADD_EUtraNetwork&UtraNetwork.mos') || '', RF0.reg, [...new Set(site.cells.map((c) => c.dl).filter(Boolean))]).text, mme: RF0.ownM ? RF0.mme : K('MME.mos') || '', macro: true };
     if (!RF.own) notes.push(`Regional ${RF.reg || '(vazia na ePD)'} sem modelo próprio de ${!RF.ownE ? 'EUtraNetwork&UtraNetwork' : ''}${!RF.ownE && !RF.ownM ? ' e ' : ''}${!RF.ownM ? 'MME' : ''}: usei o do modelo macro (${MACRO_NATIVE}).`);
     // macro: cada tipo de relação (LTE/WCDMA/NR) só é refeito quando o modelo da célula cita frequência que não existe na regional
-    site._fl = RF.eutra ? freqLists(RF.eutra) : null; site._flOnlyForeign = true;
+    site._fl = RF.eutra ? freqLists(RF.eutra) : null; site._flOnlyForeign = !RF0.top;
     const fl = freqLists(RF.eutra);
     [...new Set(used.filter((c) => !isNb(c.suffix)).map((c) => c.dl))].forEach((dl) => { if (dl && !fl.lte.includes(String(dl))) w.push(`earfcnDl ${dl} não está no EUtraNetwork da regional ${RF.reg || ''}; a medição intra-frequência (PmUeMeasControl) fica como no modelo.`); });
     // bandas e setores presentes → equipamento
@@ -1972,7 +1999,8 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
     const need = (n) => { if (!kit[n]) notes.push(`Modelo ${n} não carregado.`); return kit[n]; };
     const RF = regFiles(kit, site); v.reg = RF;
     // TLE é a regional do próprio kit: as células ficam como no modelo. Nas outras regionais com arquivo próprio, as relações seguem o EUtraNetwork da regional.
-    site._fl = RF.ownE && RF.reg !== 'TLE' ? freqLists(RF.eutra) : null; site._flOnlyForeign = false;
+    // com a lista de EARFCN da regional: as relações da célula seguem exatamente a lista (cria as que faltam, tira as que não existem)
+    site._fl = RF.ownE || RF.top ? freqLists(RF.eutra) : null; site._flOnlyForeign = !RF.top && RF.reg === 'TLE';
     if (!RF.own) notes.push(`Regional ${RF.reg || '(vazia na ePD)'} sem modelo próprio de ${!RF.ownE ? 'EUtraNetwork&UtraNetwork' : ''}${!RF.ownE && !RF.ownM ? ' e ' : ''}${!RF.ownM ? 'MME' : ''}: usei o do kit (TLE).`);
     SITE_FILES.forEach((n) => {
       let t = n === 'EUtranFrequency.mos' ? RF.eutra : n === 'MME.mos' ? RF.mme : need(n); if (!t) { need(n); return; }
@@ -2007,14 +2035,14 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
   function summary(site, opts, res) {
     const RF = res.reg || {};
     const L = [`Site: ${site.node}   EnderecoID: ${site.enderecoId || '-'}   userLabel: ${userLabelOf(site) || '(modelo)'}`,
-      `Modelo: ${res.model === 'macro' ? 'macro (SCRIPT_MODELO_4G_6630)' : 'satélite 2 setores (SCRIPT_4G_MG_SATELITE_6630)'}   Regional: ${RF.reg || '-'}   EUtraNetwork&UtraNetwork e MME: ${RF.own ? 'da ' + RF.reg : RF.macro ? 'do modelo macro (TNO)' : 'do kit (TLE)'}`, `eNBId: ${site.enbId}   PLMN: ${site.plmn}   TAC: ${site.tac}   IP S1X2: ${opts.ip}`, '',
+      `Modelo: ${res.model === 'macro' ? 'macro (SCRIPT_MODELO_4G_6630)' : 'satélite 2 setores (SCRIPT_4G_MG_SATELITE_6630)'}   Regional: ${RF.reg || '-'}   EUtraNetwork&UtraNetwork e MME: ${RF.own ? 'da ' + RF.reg : RF.macro ? 'do modelo macro (TNO)' : 'do kit (TLE)'}`, `eNBId: ${site.enbId}   PLMN: ${site.plmn}   TAC: ${site.tac}   IP S1X2: ${opts.ip}`, `EUtranFrequency da regional (mais declarados nos servidores): ${freqLists(RF.eutra || '').lte.join(', ') || '-'}`, '',
       'Célula               cellId  PCI  Group Sub  RACH  earfcnDl/Ul    BW DL/UL     Modelo'];
     res.used.forEach((c) => { const p = Number(c.pci); L.push(`${c.name.padEnd(20)} ${String(c.cellIdUsed).padEnd(7)} ${String(c.pci).padEnd(4)} ${String(Math.floor(p / 3)).padEnd(5)} ${String(p % 3).padEnd(4)} ${String(c.pci).padEnd(5)} ${(c.dl + '/' + c.ul).padEnd(14)} ${(c.bwdl + '/' + c.bwul).padEnd(12)} ${res.model === 'macro' ? c.suffix + (/-I[ABC]$/.test(c.suffix) ? '.mos' : '.LIMPO.mos') : TPL_OF[c.suffix.slice(-1)]}`); });
     if (res.errors.length || res.warnings.length || res.notes.length) { L.push(''); res.errors.forEach((x) => L.push('ERRO: ' + x)); res.warnings.forEach((x) => L.push('AVISO: ' + x)); res.notes.forEach((x) => L.push('NOTA: ' + x)); }
     return L.join('\r\n') + '\r\n';
   }
 
-  const api = { generateMacro, wantMacro, hasMacro, M_BAND, regFiles, freqLists, relRebuild, relAdjust, userLabelOf, CELLID, TPL_OF, SITE_FILES, SYSF, CELL_TPLS, parseEpd4g, validate, generate, summary, bare, plmnParts };
+  const api = { regTop, topEutra, REG_TOP, generateMacro, wantMacro, hasMacro, M_BAND, regFiles, freqLists, relRebuild, relAdjust, userLabelOf, CELLID, TPL_OF, SITE_FILES, SYSF, CELL_TPLS, parseEpd4g, validate, generate, summary, bare, plmnParts };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Core4G = api;
 })(typeof window !== 'undefined' ? window : globalThis);

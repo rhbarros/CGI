@@ -186,3 +186,17 @@ Todos os EARFCN DL encontrados, por banda, do mais usado para o menos usado. For
 
 Arquivos: `EARFCN_RESUMO.csv` (visão geral acima), `EARFCN_<REGIONAL>.csv` (resumo por EARFCN) e `EARFCN_<REGIONAL>_celulas.csv` (célula a célula).
 
+
+## Lista usada no Script 4G (aba 05)
+
+O arquivo 7-ADD_EUtraNetwork&UtraNetwork / EUtranFrequency de cada regional sai com **exatamente** estes EUtranFrequency, e as EUtranFreqRelation das células seguem a mesma lista.
+Regra: EARFCN DL com pelo menos 5% das células da banda na regional (mínimo 10 células). TNE: 2800 e 3150 incluídos sempre, a pedido. A frequência das próprias células do site entra sempre.
+
+| Regional | EUtranFrequency (LTE_…) |
+|---|---|
+| TCO | 400, 425, 1276, 1500, 1525, 2800, 3150, 3200, 9410 |
+| TLE | 200, 375, 1425, 2560, 2585, 2800, 3150, 3200, 9410 |
+| TNE | 75, 100, 200, 1450, 1474, 2560, 2585, 2800, 3150, 3200, 9410 |
+| TNO | 50, 1350, 1375, 1576, 2800, 3150, 3200, 9410 |
+| TSL | 1300, 1500, 3150 |
+| TSP | 75, 225, 500, 1301, 1550, 1575, 2800, 3150, 3200, 9410 |
