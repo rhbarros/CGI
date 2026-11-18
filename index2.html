@@ -1746,24 +1746,34 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
   // REG_FORCE: incluídos sempre, a pedido. O arquivo regional fica com exatamente esta lista de EUtranFrequency.
   const REG_TOP = {"TCO": [400, 425, 1276, 1500, 1525, 2800, 3150, 3200, 9410], "TLE": [200, 375, 1425, 2560, 2585, 2800, 3150, 3200, 9410], "TNE": [75, 100, 200, 1450, 1474, 2560, 2585, 2800, 3150, 3200, 9410], "TNO": [50, 1350, 1375, 1576, 2800, 3150, 3200, 9410], "TSL": [1300, 1500, 3150], "TSP": [75, 225, 500, 1301, 1550, 1575, 2800, 3150, 3200, 9410]};
   const REG_FORCE = { TNE: [2800, 3150] };
+  // UtranFreqRelation (WCDMA) declarados por regional (exports UtranFreqRelationId CVOA/CVOB/CVO x CGI): UARFCN em pelo menos 5% das células LTE da regional (mínimo 10).
+  const REG_TOPU = {"TCO": ["10612", "10738", "10762"], "TLE": ["4413", "4437", "10638", "10662"], "TNE": ["4413", "4437", "10638", "10662"], "TNO": ["10563", "10588", "10612", "10662"], "TSL": ["4358", "4382", "10738", "10762"], "TSP": ["3088", "10638", "10662"]};
   function regTop(reg, extra) { const a = REG_TOP[reg]; if (!a) return null; return [...new Set([...a, ...(REG_FORCE[reg] || []), ...(extra || []).map(Number).filter((x) => x > 0)])].sort((x, y) => x - y).map(String); }
-  function topEutra(txt, reg, extra) {
-    const want = regTop(reg, extra); if (!want || !txt) return { text: txt, added: [], removed: [] };
+  const FREQK = { E: { re: /^crn ENodeBFunction=1,EUtraNetwork=1,EUtranFrequency=LTE_(\d+)\s*$/, tag: 'EUtranFrequency=LTE_', arfcn: 'arfcnValueEUtranDl', band: () => BAND_L },
+    U: { re: /^crn ENodeBFunction=1,UtraNetwork=1,UtranFrequency=WCDMA_(\d+)\s*$/, tag: 'UtranFrequency=WCDMA_', arfcn: 'arfcnValueUtranDl', band: () => BAND_U } };
+  function topFreq(txt, want, kind) {
+    const F = FREQK[kind]; if (!want || !txt) return { text: txt, added: [], removed: [] };
     const nl = /\r\n/.test(txt) ? '\r\n' : '\n'; const L = txt.split(/\r?\n/); const blocks = [];
-    for (let i = 0; i < L.length; i++) { const m = L[i].match(/^crn ENodeBFunction=1,EUtraNetwork=1,EUtranFrequency=LTE_(\d+)\s*$/); if (!m) continue;
-      let j = i + 1; while (j < L.length && L[j].trim() !== 'end') j++; let k = j + 1; if (k < L.length && L[k].trim() === '') k++;
+    for (let i = 0; i < L.length; i++) { const m = L[i].match(F.re); if (!m) continue;
+      let j = i + 1; while (j < L.length && L[j].trim() !== 'end') j++; let k = j + 1; while (k < L.length && L[k].trim() === '') k++;
       blocks.push({ i, k, id: m[1], lines: L.slice(i, j + 1) }); i = j; }
     if (!blocks.length) return { text: txt, added: [], removed: [] };
     const have = blocks.map((b) => b.id), removed = have.filter((x) => !want.includes(x)), added = want.filter((x) => !have.includes(x));
-    const proto = (dl) => (blocks.find((b) => bandOf(b.id, BAND_L) === bandOf(dl, BAND_L)) || blocks[0]).lines;
-    const mk = (dl, src) => src.map((l) => l.replace(/EUtranFrequency=LTE_\d+/, 'EUtranFrequency=LTE_' + dl).replace(/^arfcnValueEUtranDl \d+/, 'arfcnValueEUtranDl ' + dl));
+    const T = F.band(); const proto = (n) => (blocks.find((b) => bandOf(b.id, T) === bandOf(n, T)) || blocks[0]).lines;
+    const rx = new RegExp(F.tag.replace(/[=]/g, '=') + '\\d+'), ra = new RegExp('^' + F.arfcn + ' \\d+');
+    const mk = (n, src) => src.map((l) => l.replace(rx, F.tag + n).replace(ra, F.arfcn + ' ' + n));
     const out = []; const drop = new Set(); blocks.forEach((b) => { for (let x = b.i; x < b.k; x++) drop.add(x); });
     const at = blocks[0].i;
     for (let x = 0; x < L.length; x++) {
-      if (x === at) want.forEach((dl) => { const b = blocks.find((y) => y.id === dl); out.push(...(b ? b.lines : mk(dl, proto(dl))), ''); });
+      if (x === at) want.forEach((n) => { const b = blocks.find((y) => y.id === n); out.push(...(b ? b.lines : mk(n, proto(n))), ''); });
       if (!drop.has(x)) out.push(L[x]);
     }
     return { text: out.join(nl), added, removed };
+  }
+  function regTopU(reg) { const a = REG_TOPU[reg]; return a ? [...a].map(String) : null; }
+  function topEutra(txt, reg, extra) {
+    const e = topFreq(txt, regTop(reg, extra), 'E'); const u = topFreq(e.text, regTopU(reg), 'U');
+    return { text: u.text, added: e.added, removed: e.removed, addedU: u.added, removedU: u.removed };
   }
   function regFiles(kit, site) {
     const reg = str(site.regional).toUpperCase().replace(/[^A-Z]/g, '');
@@ -2035,14 +2045,14 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
   function summary(site, opts, res) {
     const RF = res.reg || {};
     const L = [`Site: ${site.node}   EnderecoID: ${site.enderecoId || '-'}   userLabel: ${userLabelOf(site) || '(modelo)'}`,
-      `Modelo: ${res.model === 'macro' ? 'macro (SCRIPT_MODELO_4G_6630)' : 'satélite 2 setores (SCRIPT_4G_MG_SATELITE_6630)'}   Regional: ${RF.reg || '-'}   EUtraNetwork&UtraNetwork e MME: ${RF.own ? 'da ' + RF.reg : RF.macro ? 'do modelo macro (TNO)' : 'do kit (TLE)'}`, `eNBId: ${site.enbId}   PLMN: ${site.plmn}   TAC: ${site.tac}   IP S1X2: ${opts.ip}`, `EUtranFrequency da regional (mais declarados nos servidores): ${freqLists(RF.eutra || '').lte.join(', ') || '-'}`, '',
+      `Modelo: ${res.model === 'macro' ? 'macro (SCRIPT_MODELO_4G_6630)' : 'satélite 2 setores (SCRIPT_4G_MG_SATELITE_6630)'}   Regional: ${RF.reg || '-'}   EUtraNetwork&UtraNetwork e MME: ${RF.own ? 'da ' + RF.reg : RF.macro ? 'do modelo macro (TNO)' : 'do kit (TLE)'}`, `eNBId: ${site.enbId}   PLMN: ${site.plmn}   TAC: ${site.tac}   IP S1X2: ${opts.ip}`, `EUtranFrequency da regional (mais declarados nos servidores): ${freqLists(RF.eutra || '').lte.join(', ') || '-'}`, `UtranFrequency da regional (mais declarados nos servidores): ${freqLists(RF.eutra || '').wcdma.join(', ') || '-'}`, '',
       'Célula               cellId  PCI  Group Sub  RACH  earfcnDl/Ul    BW DL/UL     Modelo'];
     res.used.forEach((c) => { const p = Number(c.pci); L.push(`${c.name.padEnd(20)} ${String(c.cellIdUsed).padEnd(7)} ${String(c.pci).padEnd(4)} ${String(Math.floor(p / 3)).padEnd(5)} ${String(p % 3).padEnd(4)} ${String(c.pci).padEnd(5)} ${(c.dl + '/' + c.ul).padEnd(14)} ${(c.bwdl + '/' + c.bwul).padEnd(12)} ${res.model === 'macro' ? c.suffix + (/-I[ABC]$/.test(c.suffix) ? '.mos' : '.LIMPO.mos') : TPL_OF[c.suffix.slice(-1)]}`); });
     if (res.errors.length || res.warnings.length || res.notes.length) { L.push(''); res.errors.forEach((x) => L.push('ERRO: ' + x)); res.warnings.forEach((x) => L.push('AVISO: ' + x)); res.notes.forEach((x) => L.push('NOTA: ' + x)); }
     return L.join('\r\n') + '\r\n';
   }
 
-  const api = { regTop, topEutra, REG_TOP, generateMacro, wantMacro, hasMacro, M_BAND, regFiles, freqLists, relRebuild, relAdjust, userLabelOf, CELLID, TPL_OF, SITE_FILES, SYSF, CELL_TPLS, parseEpd4g, validate, generate, summary, bare, plmnParts };
+  const api = { regTop, regTopU, topEutra, REG_TOP, REG_TOPU, generateMacro, wantMacro, hasMacro, M_BAND, regFiles, freqLists, relRebuild, relAdjust, userLabelOf, CELLID, TPL_OF, SITE_FILES, SYSF, CELL_TPLS, parseEpd4g, validate, generate, summary, bare, plmnParts };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Core4G = api;
 })(typeof window !== 'undefined' ? window : globalThis);
