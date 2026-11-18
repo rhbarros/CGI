@@ -1641,6 +1641,8 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
   // sufixo da célula → cellId padrão TIM
   const CELLID = { '26-A': 1, '26-B': 2, '26-C': 3, '26-I': 121, '26-J': 122, '26-K': 123, '07-A': 13, '07-B': 14, '07-C': 15,
     '18-A': 9, '18-B': 10, '18-C': 11, '18-I': 129, '18-J': 130, '18-K': 131, '21-A': 21, '21-B': 22, '21-C': 23 };
+  // 1800: cellId fixo pela tabela acima (18-A 9, 18-B 10, 18-C 11, 18-I 129, 18-J 130, 18-K 131), mesmo que a ePD traga outro valor
+  const FIXED_ID = (suffix) => /^18-[ABCIJK]$/.test(suffix);
   // letra do setor → modelo de célula do kit (satélite: 2 setores)
   const TPL_OF = { A: '26-A_V2.mos', I: '26-A_V2.mos', B: '26-B_V2.mos', J: '26-B_V2.mos' };
   const SITE_FILES = ['1-Transport_interface_2.mos', '2-add_gps.mos', '3-ENodeBFunction.mos', '4-Equipamento_sector_1_2600.mos',
@@ -1712,7 +1714,8 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
       const std = CELLID[c.suffix];
       if (c.cellId === '' && std != null) c.cellIdUsed = String(std);
       else c.cellIdUsed = c.cellId;
-      if (std != null && c.cellId !== '' && String(std) !== String(c.cellId)) w.push(`${c.name}: cellId ${c.cellId} na ePD, padrão para ${c.suffix} é ${std}. Usei o da ePD.`);
+      if (FIXED_ID(c.suffix) && std != null) { if (c.cellId !== '' && String(std) !== String(c.cellId)) w.push(`${c.name}: cellId ${c.cellId} na ePD, padrão para ${c.suffix} é ${std}. Usei o padrão.`); c.cellIdUsed = String(std); }
+      else if (std != null && c.cellId !== '' && String(std) !== String(c.cellId)) w.push(`${c.name}: cellId ${c.cellId} na ePD, padrão para ${c.suffix} é ${std}. Usei o da ePD.`);
       const p = Number(c.pci);
       if (c.pci === '' || !Number.isInteger(p) || p < 0 || p > 503) e.push(`${c.name}: PCI inválido para LTE ("${c.pci}", faixa 0–503).`);
       if (!c.dl || !c.ul) e.push(`${c.name}: earfcnDl/earfcnUl vazio.`);
@@ -1879,8 +1882,9 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
       if (!K(mTplOf(c.suffix))) { w.push(`${c.name}: o modelo macro não tem ${mTplOf(c.suffix)}. Esta célula ficou de fora.`); return; }
       const nb = isNb(c.suffix), std = CELLID[c.suffix];
       c.cellIdUsed = c.cellId === '' && std != null ? String(std) : c.cellId;
+      if (FIXED_ID(c.suffix) && std != null) { if (c.cellId !== '' && String(std) !== String(c.cellId)) w.push(`${c.name}: cellId ${c.cellId} na ePD, padrão para ${c.suffix} é ${std}. Usei o padrão.`); c.cellIdUsed = String(std); }
+      else if (std != null && c.cellId !== '' && String(std) !== String(c.cellId)) w.push(`${c.name}: cellId ${c.cellId} na ePD, padrão para ${c.suffix} é ${std}. Usei o da ePD.`);
       if (c.cellIdUsed === '') e.push(`${c.name}: cellId vazio na ePD.`);
-      if (std != null && c.cellId !== '' && String(std) !== String(c.cellId)) w.push(`${c.name}: cellId ${c.cellId} na ePD, padrão para ${c.suffix} é ${std}. Usei o da ePD.`);
       const p = Number(c.pci);
       if (c.pci === '' || !Number.isInteger(p) || p < 0 || p > 503) e.push(`${c.name}: PCI inválido ("${c.pci}", faixa 0–503).`);
       if (!nb) { if (!c.dl || !c.ul) e.push(`${c.name}: earfcnDl/earfcnUl vazio.`); if (!c.bwdl || !c.bwul) e.push(`${c.name}: largura de banda DL/UL vazia.`); }
