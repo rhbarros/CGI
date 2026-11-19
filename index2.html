@@ -5054,6 +5054,7 @@ function tabsDraw(){
 }
 function tabShow(){
   const tb = T();
+  try { if (typeof NODE_SRV_BASE !== "undefined") autoSrv(tb); } catch (e) {}
   $("ossNode").value = tb.node; $("ossSrv").value = String(tb.srv); nodePwSync();
   $("ossBar").style.width = tb.bar + "%"; $("ossProg").textContent = tb.prog;
   $("ossMsg").innerHTML = tb.msg || ""; $("ossConfirm").innerHTML = "";
@@ -5077,9 +5078,15 @@ $("ossNode").addEventListener("change", () => { const tb = T(); tb.node = node()
 function isBsc(n){ n = String(n || "").toUpperCase(); return !!n && ((CGI.bsc && CGI.bsc.has(n)) || /^BSC/.test(n)); }
 function autoSrv(tb){
   const n = tb.node; if (!n) return;
-  const set = (i, why) => { if (i < 0 || i === tb.srv) return; tb.srv = i; if (isAct(tb)) { $("ossSrv").value = String(i); save({ srv: i }); status(); setMsg(tb, `<div class="msg">${escH(n)} ${why}: esta aba agora usa o servidor <b>${escH(servers[i].name)}</b>.</div>`); } };
+  const set = (i, why) => { if (i < 0 || i === tb.srv || tb.busy) return; tb.srv = i; try { tabsSave(); tabsDraw(); } catch (e) {} if (isAct(tb)) { $("ossSrv").value = String(i); save({ srv: i }); status(); setMsg(tb, `<div class="msg">${escH(n)} ${why}: esta aba agora usa o servidor <b>${escH(servers[i].name)}</b>.</div>`); } };
   const g = servers.findIndex((s) => is2g(s) && s.host);
   if (isBsc(n)) return set(g, "é BSC (2G)");
+  // nó com servidor conhecido (lista CVOA/CVOB/CVO ou busca automática): a aba vai para ele (não mexe em aba do 2G)
+  if (!is2g(servers[tb.srv])) {
+    let w = ""; try { const W = where(); w = W[n] || (CGI.map && cgiFind(n) ? W[cgiFind(n).node] : "") || ""; } catch (e) {}
+    const wi = w ? servers.findIndex((s) => s.host && !is2g(s) && String(s.name).toUpperCase() === String(w).toUpperCase()) : -1;
+    if (wi >= 0) return set(wi, `está no ${w}`);
+  }
   if (is2g(servers[tb.srv]) && CGI.map && cgiFind(n)) {
     const w = where()[cgiFind(n).node]; const wi = w ? servers.findIndex((s) => s.name === w && s.host) : -1;
     set(wi >= 0 ? wi : servers.findIndex((s) => s.host && !is2g(s) && SS.some((x) => x.key === keyOf(s) && x.logged)), "é nó 3G/4G/5G");
@@ -5840,6 +5847,8 @@ if (load().bkPar) $("bkPar").value = String(load().bkPar);
 bkDraw();
 cgiLoad("cache").then((ok) => { if (ok && BK.rows.some((r) => r.auto && !r.reg)) bkRefresh(); });
 
+// abas salvas com servidor diferente do conhecido para o nó (ex.: SP3421 aberto no CVOA): corrige ao carregar
+try { TABS.forEach((t) => autoSrv(t)); tabsDraw(); tabShow(); } catch (e) {}
 status(); setInterval(() => { if (!O.busy && !BK.running) status(); else if (BK.running) status(); }, 15000);
 })();
 
