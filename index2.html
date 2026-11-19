@@ -745,7 +745,7 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
     <section class="panel">
       <div class="ph"><span class="step">4</span><h2>Nó e ações</h2><p>Informe o nó como no AMOS (ex.: <code>4G-UBUR18</code>). Leituras rodam direto; qualquer comando de alteração (<code>set</code>, <code>crn</code>, <code>del</code>, <code>bl</code>, <code>deb</code>, <code>acc</code>, <code>run</code>…) só sai depois da sua confirmação, e as perguntas [y/n] do AMOS aparecem aqui para você responder.</p></div>
       <div class="oss-tabs" id="ossTabs" role="tablist" aria-label="Abas do moshell"></div>
-      <div class="row" style="margin:0"><input type="text" id="ossNode" list="ossNodes" placeholder="Nó (ex.: 4G-UBUR18)" style="max-width:280px;text-transform:uppercase" autocomplete="off" spellcheck="false"><datalist id="ossNodes"></datalist><label class="note" style="margin:0"><input type="checkbox" id="ossLt" checked> rodar <code>lt all</code> antes</label><span class="note" id="ossCur" style="margin:0"></span><button class="btn" id="ossClose" disabled>Fechar AMOS do nó</button></div>
+      <div class="row" style="margin:0"><input type="text" id="ossNode" list="ossNodes" placeholder="Nó (ex.: 4G-UBUR18)" style="max-width:280px;text-transform:uppercase" autocomplete="off" spellcheck="false"><datalist id="ossNodes"></datalist><input type="password" id="ossNodePw" placeholder="Senha deste nó (opcional)" title="Se o nó tem senha própria (ou não está na CGI), digite aqui: ela é testada primeiro. Fica só neste navegador." style="max-width:210px" autocomplete="new-password" spellcheck="false"><label class="note" style="margin:0"><input type="checkbox" id="ossLt" checked> rodar <code>lt all</code> antes</label><span class="note" id="ossCur" style="margin:0"></span><button class="btn" id="ossClose" disabled>Fechar AMOS do nó</button></div>
       <details><summary>Como abrir e trocar de nó</summary>
         <div class="oss-grid" style="margin-top:8px">
           <label class="note" style="margin:0">Abrir o primeiro nó <input type="text" id="ossOpenT" spellcheck="false"></label>
@@ -4848,7 +4848,7 @@ render();
 
 // ================= EXECUTAR NO OSS (AMOS via helper local) =================
 (function(){
-const HELPER = "http://127.0.0.1:8766", MINV = 2.5, OSK = LSK + ":oss";
+const HELPER = "http://127.0.0.1:8766", MINV = 2.6, OSK = LSK + ":oss";
 const WRITE = /^\s*(set|sete|crn|cr|del|rdel|bl|deb|acc|run|ldeb|lbl|lset|lcr|ldel|restart|confb\+?|trun|upgrade|cvms|cvmk|cvrm|cvset)\b/i;
 const O = { online: false, logged: false, job: null, out: "", outName: "", logLen: 0, log: [], busy: false, files: [], after: null };
 const load = () => { try { return JSON.parse(localStorage.getItem(OSK) || "{}"); } catch (e) { return {}; } };
@@ -4885,12 +4885,17 @@ $("ossNUser").value = cfg.nodeUser || ""; $("ossNPwds").value = (cfg.nodePwds ||
 // senha do nó por regional (TNE=..., TSP=...): fica só neste navegador; a regional do site vem da CGI
 const regPwds = () => { const o = {}; $("ossNReg").value.split("\n").forEach((l) => { const m = l.match(/^\s*(T[A-Z]{2})\s*[=:\-–]\s*(\S+)\s*$/i); if (m) o[m[1].toUpperCase()] = m[2]; }); return o; };
 function regOf(n, reg){ if (reg) return reg; try { const f = CGI.map && cgiFind(n); return f ? f.reg : ""; } catch (e) { return ""; } }
+// senha própria de um site (digitada quando todas as da lista falham): vai primeiro para aquele nó
+const NODEPW = Object.assign({}, cfg.nodeSite || {});
+const sitePw = (n) => (n && NODEPW[String(n).toUpperCase()]) || "";
 const nodeCreds = (n, reg) => { const base = $("ossNPwds").value.split("\n").map((x) => x.trim()).filter(Boolean), rp = regPwds();
-  const all = base.concat(Object.values(rp).filter((x) => !base.includes(x)));
-  const pref = n ? rp[regOf(n, reg)] || "" : "";
+  let all = base.concat(Object.values(rp).filter((x) => !base.includes(x)));
+  const sp = sitePw(n);
+  if (sp) all = [sp].concat(all.filter((x) => x !== sp)); else if (!n) Object.values(NODEPW).forEach((x) => { if (x && !all.includes(x)) all.push(x); });
+  const pref = n ? sp || rp[regOf(n, reg)] || "" : "";
   return { nodeUser: $("ossNUser").value.trim(), nodePwds: all, nodePwdPref: pref }; };
 function saveCreds(){ const rem = $("ossNRem").checked, base = $("ossNPwds").value.split("\n").map((x) => x.trim()).filter(Boolean), rp = regPwds();
-  save({ nodeRemember: rem, nodeUser: rem ? $("ossNUser").value.trim() : "", nodePwds: rem ? base : [], nodeReg: rem ? $("ossNReg").value : "" });
+  save({ nodeRemember: rem, nodeUser: rem ? $("ossNUser").value.trim() : "", nodePwds: rem ? base : [], nodeReg: rem ? $("ossNReg").value : "", ...(rem ? {} : { nodeSite: {} }) });
   $("ossNInfo").textContent = `${base.length} senha(s) · ${Object.keys(rp).length} regional(is)` + (rem ? " · guardadas neste navegador" : " · só nesta sessão"); }
 ["ossNUser", "ossNPwds", "ossNReg"].forEach((id) => $(id).onchange = saveCreds); $("ossNRem").onchange = saveCreds;
 $("ossNShow").onclick = () => { const on = $("ossNPwds").style.webkitTextSecurity !== "none"; $("ossNPwds").style.webkitTextSecurity = on ? "none" : "disc"; $("ossNReg").style.webkitTextSecurity = on ? "none" : "disc"; $("ossNShow").textContent = on ? "Ocultar senhas" : "Mostrar senhas"; };
@@ -5049,7 +5054,7 @@ function tabsDraw(){
 }
 function tabShow(){
   const tb = T();
-  $("ossNode").value = tb.node; $("ossSrv").value = String(tb.srv);
+  $("ossNode").value = tb.node; $("ossSrv").value = String(tb.srv); nodePwSync();
   $("ossBar").style.width = tb.bar + "%"; $("ossProg").textContent = tb.prog;
   $("ossMsg").innerHTML = tb.msg || ""; $("ossConfirm").innerHTML = "";
   askDraw(tb); conShow(); tabsDraw(); status();
@@ -5089,6 +5094,7 @@ function start(body, label, after){
   const tb = T(); if (tb.busy) return;
   if (body.node) { tb.node = body.node; autoSrv(tb); }  // BSC sempre vai para o 2G
   const s = servers[tb.srv];
+  tb.last = { body: Object.assign({}, body), label, after };
   tb.busy = true; tb.out = ""; tb.outName = label; tb.after = after || null; tb.logLen = 0; tb.tlog = []; tb.lbl = { label, node: body.node || "", srv: s ? s.name : "", cmds: body.cmds || [] }; tb.kg = null; tb.ask = null; tb.live = ""; tb.liveLen = 0; tb.liveHead = "";
   askDraw(tb); setMsg(tb, ""); btns(); tabsDraw(); if (isAct(tb)) conShow();
   log(`[${tabName(tb)}] ▶ ${label} em ${body.node || ""} (${s ? s.name : "?"})`, "cmd");
@@ -5099,8 +5105,9 @@ function start(body, label, after){
 function start2(tb, s, body){
   if (body.node) { Object.assign(body, nodeCreds(body.node), nodeOpts());
     if (!is2g(s)) { const reg = regOf(body.node), rp = regPwds();
-      if (body.nodePwdPref) log(`[${tabName(tb)}] Regional ${reg} (CGI): a senha da ${reg} vai primeiro.` + (O.hver && O.hver < 2.4 ? " ATENÇÃO: o helper deste PC é antigo e ignora isso; atualize o helper." : ""));
-      else if (Object.keys(rp).length) log(`[${tabName(tb)}] ${reg ? `Sem senha cadastrada para a regional ${reg}` : `Não achei ${body.node} na CGI`}: vai testar as senhas da lista.`, "er"); } }
+      if (sitePw(body.node)) log(`[${tabName(tb)}] Usando a senha própria cadastrada para ${body.node}.`);
+      else if (body.nodePwdPref) log(`[${tabName(tb)}] Regional ${reg} (CGI): a senha da ${reg} vai primeiro.` + (O.hver && O.hver < 2.4 ? " ATENÇÃO: o helper deste PC é antigo e ignora isso; atualize o helper." : ""));
+      else if (Object.keys(rp).length) log(`[${tabName(tb)}] ${reg ? `Sem senha cadastrada para a regional ${reg}` : `Não achei ${body.node} na CGI`}: vai testar as senhas da lista. Se o nó tem senha própria, digite em "Senha deste nó" (ao lado do nome) que ela vai primeiro.`, "er"); } }
   if (is2g(s)) { body.mode = "mml"; body.openCmd = $("ossMmlT").value.trim() || "eaw {no}"; body.cmds = (body.cmds || []).filter((c) => c !== "lt all"); tb.lbl.cmds = body.cmds; }
   body.server = keyOf(s); body.lane = laneOf(tb);
   call("/job", body).then((r) => {
@@ -5168,7 +5175,7 @@ function pollEnd(tb, j){
     if (j.state === "done" && tb.lbl && tb.lbl.node && nodeOpts().keepOpen) tb.curNode = tb.lbl.node; else if (j.state === "error") tb.curNode = "";
     btns(); tabsDraw(); status();
     conAdd(tb, txt, j);
-    if (j.state === "error") { setMsg(tb, `<div class="msg bad">${escH(j.error)}</div>`); return; }
+    if (j.state === "error") { setMsg(tb, `<div class="msg bad">${escH(j.error)}</div>` + (/senha/i.test(j.error || "") && tb.lbl && tb.lbl.node && !is2g(servers[tb.srv]) ? npwForm(tb.lbl.node) : "")); return; }
     if (tb.after) tb.after(txt, j, tb);
   });
 }
@@ -5231,6 +5238,37 @@ async function toKgDcgk(txt, j, tb){
     setMsg(tb, `<div class="msg ok">dcgk de ${escH(tb.lbl ? tb.lbl.node : "")} trazido do servidor (${fs.map((f) => escH(f.name) + " · " + (f.size / 1048576).toFixed(1) + " MB").join(", ")}) e aberto na aba 06. <button class="btn" data-kdl="1">Baixar o pacote</button></div>`);
   } catch (e) { setMsg(tb, `<div class="msg bad">${escH(e.message || e)}</div>`); }
 }
+
+
+// "Senha deste nó" ao lado do nome: vai primeiro para aquele nó (mesma lista das senhas próprias digitadas após falha)
+function nodePwSync(){ const n = String($("ossNode").value || "").trim().toUpperCase(); const el = $("ossNodePw"); if (!el) return; el.value = n ? (NODEPW[n] || "") : ""; el.dataset.n = n; }
+$("ossNode").addEventListener("input", nodePwSync);
+$("ossNodePw").addEventListener("change", () => {
+  const el = $("ossNodePw"), n = el.dataset.n || String($("ossNode").value || "").trim().toUpperCase(); if (!n) return;
+  const v = el.value, keep = load().nodeSite || {};
+  if (v) { NODEPW[n] = v; if ($("ossNRem").checked) keep[n] = v; } else { delete NODEPW[n]; delete keep[n]; }
+  save({ nodeSite: keep });
+  log(v ? `Senha própria de ${n} cadastrada${$("ossNRem").checked ? " (lembrada neste navegador)" : " (só nesta sessão)"}: ela será testada primeiro.` : `Senha própria de ${n} apagada.`);
+});
+// quando o nó recusa todas as senhas: campo para digitar a senha só deste site e tentar de novo
+function npwForm(n){
+  return `<div class="msg warn" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">Senha própria de <b>${escH(n)}</b>:
+    <input type="password" data-npw="${escH(n)}" autocomplete="off" placeholder="senha do nó" style="width:auto;flex:1;min-width:150px">
+    <label class="note" style="margin:0;display:flex;gap:4px;align-items:center"><input type="checkbox" data-npwrem checked style="width:auto"> lembrar neste navegador</label>
+    <button class="btn primary" type="button" data-npwgo>Tentar de novo</button></div>`;
+}
+function npwGo(){
+  const tb = T(), inp = $("ossMsg").querySelector("[data-npw]"); if (!inp || !tb.last || tb.busy) return;
+  const n = inp.dataset.npw, v = inp.value; if (!v) { inp.focus(); return; }
+  NODEPW[n.toUpperCase()] = v;
+  const rem = $("ossMsg").querySelector("[data-npwrem]"); const keep = load().nodeSite || {};
+  if (rem && rem.checked && $("ossNRem").checked) keep[n.toUpperCase()] = v; else delete keep[n.toUpperCase()];
+  save({ nodeSite: keep }); nodePwSync();
+  log(`[${tabName(tb)}] Senha própria de ${n} cadastrada${rem && rem.checked && $("ossNRem").checked ? " (lembrada neste navegador)" : " (só nesta sessão)"}: tentando de novo.`);
+  start(Object.assign({}, tb.last.body), tb.last.label, tb.last.after);
+}
+$("ossMsg").addEventListener("click", (e) => { if (e.target.closest && e.target.closest("[data-npwgo]")) npwGo(); });
+$("ossMsg").addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.dataset && e.target.dataset.npw != null) npwGo(); });
 $("ossMsg").addEventListener("click", async (e) => { if (!e.target.dataset.kdl || !T().kfiles) return; const tb = T();
   offer(await Promise.all(tb.kfiles.map(async (f) => ({ name: f.name, data: new Uint8Array(await f.arrayBuffer()) }))), $("ossMsg")); });
 function toKg(txt){

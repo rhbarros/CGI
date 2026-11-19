@@ -136,7 +136,7 @@ import argparse, json, os, re, shlex, sys, threading, time, uuid
 from urllib.parse import urlparse, parse_qs
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "2.5"
+VERSION = "2.6"
 LOCAL_PORT = 8766
 LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "helper.log")
 
@@ -708,16 +708,25 @@ def run_job(job):
                 close_amos(job, out)
             job["state"] = "done"; job["log"].append("Concluido." + (" AMOS continua aberto em %s." % node if keep and S.cur_node else ""))
     except Exception as e:
-        job["state"] = "error"; job["error"] = str(e); job["log"].append("ERRO: " + str(e)); logf("job erro: %s" % e)
-        try:
+        # limpa a sessao ANTES de avisar a pagina do erro, e com a sessao travada: senao um "Tentar de novo"
+        # imediato pegava a sessao ainda com o no anterior ("AMOS ja aberto") e ficava parado
+        job["log"].append("ERRO: " + str(e)); logf("job erro: %s" % e)
+        ss = getattr(_TL, "s", None)
+        lk = ss.lock if ss is not None else threading.Lock()
+        with lk:
+          try:
             if S.logged:
                 S.chan.send("\x03"); time.sleep(0.4)
                 for _ in range(max(1, S.depth) + 2):
                     S.chan.send("q\n"); _t, rr = S.read_until(amos_prompt(S.cur_node or node), maxsec=15, idle=0.6)
                     if rr == "shell": break
+          except Exception as e2:
+            logf("limpeza apos erro: %s" % e2)
+          try:  # sempre esquece o no aberto: a proxima execucao abre o AMOS de novo
             S.cur_node = None; S.lt_done = False; S.depth = 0
-        except Exception:
+          except Exception:
             pass
+        job["error"] = str(e); job["state"] = "error"
     finally:
         txt = "".join(out)
         for sec in job.get("_secrets", []):
