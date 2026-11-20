@@ -70,6 +70,7 @@ textarea:focus{border-color:var(--c1)}
 .note{font:11px var(--f-mono);color:var(--text3)}
 .msg{font:11px/1.6 var(--f-mono);padding:8px 12px;border-radius:7px;border:1px solid var(--border2);color:var(--text2);background:var(--bg4)}
 .msg+.msg{margin-top:6px}
+.rxdiag th,.rxdiag td{padding:3px 8px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}.rxdiag th{color:var(--text3);font-weight:500}
 .msg.ok{background:rgba(16,185,129,.07);border-color:rgba(16,185,129,.2);color:var(--c3)}
 .msg.warn{background:rgba(245,158,11,.07);border-color:rgba(245,158,11,.22);color:var(--c4)}
 .msg.bad{background:rgba(239,68,68,.07);border-color:rgba(239,68,68,.22);color:var(--c5)}
@@ -5175,6 +5176,81 @@ function pollAsk(tb, j){
   if (q !== tb.ask) { tb.ask = q; askDraw(tb); }
   setTimeout(() => poll(tb), j.state === "ask" ? 600 : 800);
 }
+// ---------- Diagnóstico do RXMSP (2G Ericsson): lê o MANAGED OBJECT STATUS e aponta MOs fora e possíveis causas ----------
+// Só leitura: não muda nada no nó. Os comandos sugeridos são de consulta (print) e vão para o campo de comando ao clicar.
+const RX_MO = { TG: "grupo de transceptores (o site/célula 2G)", CF: "função central (DXU/controle do site)", IS: "interface switch (DXU)", CON: "concentrador LAPD (DXU)",
+  DP: "digital path (PCM do Abis)", TF: "timing function (sincronismo)", TRX: "transceptor (TRU/dTRU/DRU)", TX: "transmissor do TRX", RX: "receptor do TRX", TS: "timeslot do TRX", MCTR: "multicarrier (MCTR)", AT: "abis transport" };
+function rxmspParse(txt){
+  const out = []; let cols = null, tg = "";
+  String(txt || "").replace(/ /g, " ").split(/\r?\n/).forEach((l) => {
+    const c = l.match(/RXMSP:MO=RXOTG-(\d+)/i); if (c) { tg = c[1]; cols = null; }
+    if (/^\s*MO\s+STATE\b/i.test(l)) { cols = {}; ["STATE", "BLSTATE", "BLO", "BLA", "LMO", "BTS", "CONF"].forEach((k) => { const i = l.search(new RegExp("\\b" + k + "\\b")); cols[k] = i; }); return; }
+    const m = l.match(/^\s*(RXO([A-Z]+)-([\d-]+))\s+/i); if (!m || !cols) return;
+    const ks = Object.keys(cols).filter((k) => cols[k] >= 0).sort((a, b) => cols[a] - cols[b]);
+    const r = { mo: m[1].toUpperCase(), type: m[2].toUpperCase(), id: m[3], tg: tg || m[3].split("-")[0] };
+    ks.forEach((k, i) => { const a = cols[k], b = i + 1 < ks.length ? cols[ks[i + 1]] : undefined; r[k] = l.slice(a, b).trim().split(/\s+/)[0] || ""; });
+    if (!r.STATE) { const t = l.trim().split(/\s+/); r.STATE = t[1] || ""; }
+    out.push(r);
+  });
+  return out;
+}
+function rxmspDiag(txt){
+  const R = rxmspParse(txt); if (!R.length) return "";
+  const z = (v) => !v || /^0+$/.test(v);
+  const okState = (s) => /^(OPER|COM)$/i.test(s);
+  const bad = (r) => !okState(r.STATE) || /BLO|MBL/i.test(r.BLSTATE || "") || !z(r.BLO) || !z(r.BLA) || (r.LMO && !z(r.LMO));
+  const byTg = {}; R.forEach((r) => (byTg[r.tg] = byTg[r.tg] || []).push(r));
+  let h = "";
+  Object.keys(byTg).forEach((t) => {
+    const L = byTg[t], B = L.filter(bad), cnt = (ty) => L.filter((r) => r.type === ty).length;
+    const trxOf = (r) => r.type === "TS" ? r.id.split("-").slice(0, 2).join("-") : (/^(TRX|TX|RX)$/.test(r.type) ? r.id : "");
+    const tgBad = B.find((r) => r.type === "TG" || r.type === "CF");
+    const trxBad = new Set(B.filter((r) => r.type === "TRX").map((r) => r.id));
+    const causes = [], cmds = new Set([`RXASP:MO=RXOTG-${t};`]);
+    const add = (titulo, txts, cs) => { causes.push({ titulo, txts }); (cs || []).forEach((c) => cmds.add(c)); };
+    if (tgBad) add(`${tgBad.mo} ${tgBad.STATE}: o site está sem operar`, [
+      "Perda da transmissão Abis (PCM/DIP caído ou com erro) entre o site e a BSC.",
+      "Falta de energia no site ou DXU/CF com falha ou reiniciando.",
+      "Link LAPD (OML/RSL) caído ou mal configurado.",
+      "TG bloqueado manualmente (BLSTATE BLO)."], [`RXMFP:MO=RXOCF-${t};`, `RXMFP:MO=RXOCF-${t},SUBORD,FAULTY;`, "ALLIP;"]);
+    B.filter((r) => /^(DP|TF|IS|CON|AT)$/.test(r.type)).forEach((r) => add(`${r.mo} ${r.STATE}${r.BLSTATE ? " " + r.BLSTATE : ""}: ${RX_MO[r.type]}`, ({
+      DP: ["PCM do Abis com falha, perda de sinal ou taxa de erro alta.", "DIP/DCP não definido ou caído na BSC."],
+      TF: ["Perda da referência de sincronismo (PCM/GPS); o site pode operar com degradação ou parar.", "Problema na DXU (relógio interno)."],
+      IS: ["Falha interna da DXU (interface switch).", "Configuração do IS incompatível com o hardware."],
+      CON: ["Concentrador LAPD com falha ou mal definido (LAPD concentration).", "Timeslots do Abis do concentrador ausentes."],
+      AT: ["Transporte Abis (IP/TDM) com falha."] })[r.type], [`RXMFP:MO=${r.mo};`]));
+    B.filter((r) => r.type === "TRX").forEach((r) => add(`${r.mo} ${r.STATE}${r.BLSTATE ? " " + r.BLSTATE : ""}: transceptor fora (todos os timeslots dele caem junto)`, [
+      "TRU/dTRU/DRU com falha de hardware ou sem alimentação.", "Cabo de bus/RF ou backplane com problema.",
+      "TRX bloqueado manualmente ou por alarme (veja BLSTATE e RXMFP).", "TRX definido na BSC sem o hardware correspondente no site."], [`RXMFP:MO=${r.mo};`, `RXMFP:MO=${r.mo},SUBORD,FAULTY;`]));
+    B.filter((r) => r.type === "TX" && !trxBad.has(r.id)).forEach((r) => add(`${r.mo} ${r.STATE}${r.BLSTATE ? " " + r.BLSTATE : ""}: transmissor fora`, [
+      "Falha do transmissor/amplificador de potência.", "VSWR alto: conector, jumper, alimentador, antena ou combinador com problema.", "TX bloqueado por alarme ou manualmente."], [`RXMFP:MO=${r.mo};`]));
+    B.filter((r) => r.type === "RX" && !trxBad.has(r.id)).forEach((r) => add(`${r.mo} ${r.STATE}${r.BLSTATE ? " " + r.BLSTATE : ""}: receptor fora`, [
+      "Falha de recepção/diversidade no TRX.", "Alimentador RX, TMA ou splitter com problema.", "RX bloqueado por alarme ou manualmente."], [`RXMFP:MO=${r.mo};`]));
+    const tsB = B.filter((r) => r.type === "TS" && !trxBad.has(trxOf(r)));
+    const tsByTrx = {}; tsB.forEach((r) => (tsByTrx[trxOf(r)] = tsByTrx[trxOf(r)] || []).push(r));
+    Object.keys(tsByTrx).forEach((x) => { const A = tsByTrx[x], all = L.filter((r) => r.type === "TS" && trxOf(r) === x).length;
+      const parentTxRx = B.some((r) => /^(TX|RX)$/.test(r.type) && r.id === x);
+      add(`${A.length === 1 ? A[0].mo : A.length + " timeslots do RXOTRX-" + x} ${A[0].STATE}${A[0].BLSTATE ? " " + A[0].BLSTATE : ""}${A.length < all ? ` (${A.length} de ${all} do TRX)` : " (todos do TRX)"}`,
+        parentTxRx ? ["Consequência do TX/RX do mesmo TRX fora (acima)."] : A.length < all ? [
+          "Timeslot sem canal no Abis: TS do Abis não alocado ou com falha (DIP/DCP).",
+          "Timeslot bloqueado manualmente ou pela BSC (BLSTATE BLO).",
+          A.some((r) => /UNCONF/i.test(r.CONF || "")) ? "UNCONF: a BTS não configurou o timeslot (canal lógico não definido para esse TS ou aguardando configuração)." : "Canal lógico sem definição para esse timeslot."] : [
+          "Todos os timeslots do TRX fora com o TRX em operação: falta de canais no Abis para o TRX ou bloqueio do TRX pela BSC."], [`RXMFP:MO=RXOTRX-${x},SUBORD,FAULTY;`]); });
+    B.filter((r) => /^(MCTR)$/.test(r.type)).forEach((r) => add(`${r.mo} ${r.STATE}: multicarrier fora`, ["Falha da unidade de rádio multicarrier ou do link CPRI.", "Bloqueio manual ou por alarme."], [`RXMFP:MO=${r.mo};`]));
+    const sum = `TG ${t}: ${L.length} MOs · ${cnt("TRX")} TRX · ${cnt("TS")} timeslots · ${B.length ? `<b style="color:var(--bad,#ef4444)">${B.length} fora de operação/bloqueado(s)</b>` : `<b style="color:var(--ok,#10b981)">tudo em operação</b>`}`;
+    const rows = B.map((r) => `<tr><td class="mono">${escH(r.mo)}</td><td>${escH(RX_MO[r.type] || r.type)}</td><td class="mono">${escH(r.STATE)}</td><td class="mono">${escH(r.BLSTATE || "")}</td><td class="mono">${escH([r.BLO, r.BLA, r.LMO].filter((x) => x != null && x !== "").join(" / "))}</td><td class="mono">${escH(r.BTS || "")}</td><td class="mono">${escH(r.CONF || "")}</td></tr>`).join("");
+    h += `<div class="msg ${B.length ? "warn" : ""}" style="text-align:left"><b>Diagnóstico RXMSP</b> · ${sum}`;
+    if (B.length) {
+      h += `<div style="overflow:auto;margin:6px 0"><table style="font-size:11px;border-collapse:collapse;min-width:100%" class="rxdiag"><tr><th>MO</th><th>o que é</th><th>STATE</th><th>BLSTATE</th><th>BLO / BLA / LMO</th><th>BTS</th><th>CONF</th></tr>${rows}</table></div>`;
+      h += causes.map((c) => `<div style="margin-top:6px"><b>${escH(c.titulo)}</b> · possíveis causas:<ul style="margin:2px 0 0 18px">${c.txts.map((x) => `<li>${escH(x)}</li>`).join("")}</ul></div>`).join("");
+      h += `<div style="margin-top:6px">Para confirmar (só consulta, clique para colocar no campo de comando): ${[...cmds].map((c) => `<button class="btn" type="button" data-rxcmd="${escH(c)}" style="margin:2px">${escH(c)}</button>`).join("")}</div>`;
+      h += `<div class="note" style="margin-top:4px">BLO/BLA/LMO são os códigos de bloqueio em hexa (0000 = sem bloqueio). Se o MO foi bloqueado de propósito, o desbloqueio (RXBLE) é comando de alteração e pede confirmação.</div>`;
+    }
+    h += "</div>";
+  });
+  return h;
+}
+$("ossMsg").addEventListener("click", (e) => { const b = e.target.closest && e.target.closest("[data-rxcmd]"); if (!b) return; $("ossCmd").value = b.dataset.rxcmd; $("ossCmd").focus(); });
 function pollEnd(tb, j){
   tb.ask = null; askDraw(tb);
   call("/job/out?id=" + tb.job).then((txt) => {
@@ -5184,6 +5260,7 @@ function pollEnd(tb, j){
     conAdd(tb, txt, j);
     if (j.state === "error") { setMsg(tb, `<div class="msg bad">${escH(j.error)}</div>` + (/senha/i.test(j.error || "") && tb.lbl && tb.lbl.node && !is2g(servers[tb.srv]) ? npwForm(tb.lbl.node) : "")); return; }
     if (tb.after) tb.after(txt, j, tb);
+    try { if (is2g(servers[tb.srv]) && /MANAGED OBJECT STATUS/i.test(txt)) { const d = rxmspDiag(txt); if (d) setMsg(tb, (tb.msg || "") + d); } } catch (e) {}
   });
 }
 // saída parcial enquanto o comando roda (helper 2.1+)
