@@ -746,7 +746,7 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
     <section class="panel">
       <div class="ph"><span class="step">4</span><h2>Nó e ações</h2><p>Informe o nó como no AMOS (ex.: <code>4G-UBUR18</code>). Leituras rodam direto; qualquer comando de alteração (<code>set</code>, <code>crn</code>, <code>del</code>, <code>bl</code>, <code>deb</code>, <code>acc</code>, <code>run</code>…) só sai depois da sua confirmação, e as perguntas [y/n] do AMOS aparecem aqui para você responder.</p></div>
       <div class="oss-tabs" id="ossTabs" role="tablist" aria-label="Abas do moshell"></div>
-      <div class="row" style="margin:0"><input type="text" id="ossNode" list="ossNodes" placeholder="Nó (ex.: 4G-UBUR18)" style="max-width:280px;text-transform:uppercase" autocomplete="off" spellcheck="false"><datalist id="ossNodes"></datalist><input type="password" id="ossNodePw" placeholder="Senha deste nó (opcional)" title="Se o nó tem senha própria (ou não está na CGI), digite aqui: ela é testada primeiro. Fica só neste navegador." style="max-width:210px" autocomplete="new-password" spellcheck="false"><span class="note" id="ossNodeIp" style="margin:0 0 0 6px;align-self:center"></span><label class="note" style="margin:0"><input type="checkbox" id="ossLt" checked> rodar <code>lt all</code> antes</label><span class="note" id="ossCur" style="margin:0"></span><button class="btn" id="ossClose" disabled>Fechar AMOS do nó</button></div>
+      <div class="row" style="margin:0"><input type="text" id="ossNode" list="ossNodes" placeholder="Nó (ex.: 4G-UBUR18)" style="max-width:280px;text-transform:uppercase" autocomplete="off" spellcheck="false"><datalist id="ossNodes"></datalist><input type="password" id="ossNodePw" placeholder="Senha deste nó (opcional)" title="Se o nó tem senha própria (ou não está na CGI), digite aqui: ela é testada primeiro. Fica só neste navegador." style="max-width:210px" autocomplete="new-password" spellcheck="false"><select id="ossVia" title="Acessar o nó pelo nome (no servidor dele) ou pelo IP de gerência a partir do servidor escolhido" style="max-width:210px"></select><span class="note" id="ossNodeIp" style="margin:0 0 0 6px;align-self:center"></span><label class="note" style="margin:0"><input type="checkbox" id="ossLt" checked> rodar <code>lt all</code> antes</label><span class="note" id="ossCur" style="margin:0"></span><button class="btn" id="ossClose" disabled>Fechar AMOS do nó</button></div>
       <details><summary>Como abrir e trocar de nó</summary>
         <div class="oss-grid" style="margin-top:8px">
           <label class="note" style="margin:0">Abrir o primeiro nó <input type="text" id="ossOpenT" spellcheck="false"></label>
@@ -5039,12 +5039,12 @@ function needNode(){ const n = node(); if (!/^[\w.\-]{3,}$/.test(n)) { $("ossMsg
 // Uma aba ocupada não trava as outras: cada uma usa o seu terminal (faixa 10+id no helper).
 var TID = 0, TABS = [], act = 0;
 function newTab(o){ const id = o && o.id != null ? o.id : TID; TID = Math.max(TID, id + 1);
-  return { id, srv: o && o.srv != null ? o.srv : (+$("ossSrv").value || 0), node: (o && o.node) || "", job: null, busy: false, out: "", outName: "", after: null, logLen: 0, lbl: null, kg: null, con: "", tlog: [], curNode: "", prog: "Nada em execução.", bar: 0, ask: null, msg: "", kfiles: null }; }
+  return { id, srv: o && o.srv != null ? o.srv : (+$("ossSrv").value || 0), node: (o && o.node) || "", via: (o && o.via) || "", job: null, busy: false, out: "", outName: "", after: null, logLen: 0, lbl: null, kg: null, con: "", tlog: [], curNode: "", prog: "Nada em execução.", bar: 0, ask: null, msg: "", kfiles: null }; }
 function T(){ return TABS[act]; }
 const laneOf = (tb) => 10 + tb.id;
 const tabName = (tb) => tb.node || `Aba ${TABS.indexOf(tb) + 1}`;
 const isAct = (tb) => tb === T();
-function tabsSave(){ save({ tabs: TABS.map((t) => ({ id: t.id, srv: t.srv, node: t.node })), tabAct: act }); }
+function tabsSave(){ save({ tabs: TABS.map((t) => ({ id: t.id, srv: t.srv, node: t.node, via: t.via || "" })), tabAct: act }); }
 function tabsDraw(){
   $("ossTabs").innerHTML = TABS.map((t, i) => `<div class="oss-tab" role="tab" tabindex="0" aria-selected="${i === act}" data-tab="${i}" title="${escH((servers[t.srv] || {}).name || "")}${t.curNode ? " · AMOS em " + escH(t.curNode) : ""}"><span class="d ${t.busy ? "run" : t.curNode ? "open" : ""}"></span>${escH(tabName(t))}<span class="note" style="margin:0;font-size:10px">${escH((servers[t.srv] || {}).name || "")}</span>${TABS.length > 1 ? `<button class="x" data-tx="${i}" aria-label="Fechar aba ${escH(tabName(t))}">✕</button>` : ""}</div>`).join("") + `<button class="oss-tab add" id="ossTabAdd" title="Abrir outro terminal">+ Nova aba</button>`;
   $("ossTabs").querySelectorAll("[data-tab]").forEach((el) => { el.onclick = (e) => { if (e.target.dataset.tx == null) tabGo(+el.dataset.tab); }; el.onkeydown = (e) => { if (e.key === "Enter") tabGo(+el.dataset.tab); }; });
@@ -5056,7 +5056,7 @@ function tabsDraw(){
 function tabShow(){
   const tb = T();
   try { if (typeof NODE_SRV_BASE !== "undefined") autoSrv(tb); } catch (e) {}
-  $("ossNode").value = tb.node; $("ossSrv").value = String(tb.srv); nodePwSync();
+  $("ossNode").value = tb.node; $("ossSrv").value = String(tb.srv); nodePwSync(); try { viaDraw(); } catch (e) {}
   $("ossBar").style.width = tb.bar + "%"; $("ossProg").textContent = tb.prog;
   $("ossMsg").innerHTML = tb.msg || ""; $("ossConfirm").innerHTML = "";
   askDraw(tb); conShow(); tabsDraw(); status();
@@ -5082,6 +5082,7 @@ function autoSrv(tb){
   const set = (i, why) => { if (i < 0 || i === tb.srv || tb.busy) return; tb.srv = i; try { tabsSave(); tabsDraw(); } catch (e) {} if (isAct(tb)) { $("ossSrv").value = String(i); save({ srv: i }); status(); setMsg(tb, `<div class="msg">${escH(n)} ${why}: esta aba agora usa o servidor <b>${escH(servers[i].name)}</b>.</div>`); } };
   const g = servers.findIndex((s) => is2g(s) && s.host);
   if (isBsc(n)) return set(g, "é BSC (2G)");
+  if (tb.via) { const vi = servers.findIndex((s) => s.host && !is2g(s) && String(s.name).toUpperCase() === String(tb.via).toUpperCase()); if (vi >= 0) { if (vi !== tb.srv && !tb.busy) { tb.srv = vi; if (isAct(tb)) $("ossSrv").value = String(vi); try { tabsSave(); tabsDraw(); } catch (e) {} } return; } }
   // nó com servidor conhecido (lista CVOA/CVOB/CVO ou busca automática): a aba vai para ele (não mexe em aba do 2G)
   if (!is2g(servers[tb.srv])) {
     let w = ""; try { const W = where(); w = W[n] || (CGI.map && cgiFind(n) ? W[cgiFind(n).node] : "") || ""; } catch (e) {}
@@ -5116,6 +5117,10 @@ function start2(tb, s, body){
       if (sitePw(body.node)) log(`[${tabName(tb)}] Usando a senha própria cadastrada para ${body.node}.`);
       else if (body.nodePwdPref) log(`[${tabName(tb)}] Regional ${reg} (CGI): a senha da ${reg} vai primeiro.` + (O.hver && O.hver < 2.4 ? " ATENÇÃO: o helper deste PC é antigo e ignora isso; atualize o helper." : ""));
       else if (Object.keys(rp).length) log(`[${tabName(tb)}] ${reg ? `Sem senha cadastrada para a regional ${reg}` : `Não achei ${body.node} na CGI`}: vai testar as senhas da lista. Se o nó tem senha própria, digite em "Senha deste nó" (ao lado do nome) que ela vai primeiro.`, "er"); } }
+  if (body.node && tb.via && !is2g(s)) { const n = String(body.node).toUpperCase(); let ip = NODE_IP[n];
+    if (!ip && CGI.map && cgiFind(n)) ip = NODE_IP[String(cgiFind(n).node).toUpperCase()];
+    if (ip) { body.openCmd = `amos ${ip}`; body.switchCmd = `!amos ${ip}`; log(`[${tabName(tb)}] Acesso pelo IP: ${body.node} = ${ip}, a partir do ${s.name}.`); }
+    else log(`[${tabName(tb)}] Não tenho o IP de gerência de ${body.node}: abrindo pelo nome no ${s.name}.`, "er"); }
   if (is2g(s)) { body.mode = "mml"; body.openCmd = $("ossMmlT").value.trim() || "eaw {no}"; body.cmds = (body.cmds || []).filter((c) => c !== "lt all"); tb.lbl.cmds = body.cmds; }
   body.server = keyOf(s); body.lane = laneOf(tb);
   call("/job", body).then((r) => {
@@ -5334,6 +5339,14 @@ $("ossNodePw").addEventListener("change", () => {
   save({ nodeSite: keep });
   log(v ? `Senha própria de ${n} cadastrada${$("ossNRem").checked ? " (lembrada neste navegador)" : " (só nesta sessão)"}: ela será testada primeiro.` : `Senha própria de ${n} apagada.`);
 });
+// "Acessar": pelo nome no servidor do nó (como sempre foi) ou pelo IP de gerência a partir de um servidor escolhido (ex.: CVOA, onde ficam os scripts)
+function viaDraw(){ const el = $("ossVia"); if (!el) return; const tb = T();
+  const opts = servers.filter((s) => s.host && !is2g(s)).map((s) => s.name);
+  el.innerHTML = `<option value="">Pelo nome (servidor do nó)</option>` + opts.map((n) => `<option value="${escH(n)}">${escH(n)} pelo IP</option>`).join("");
+  el.value = opts.includes(tb.via) ? tb.via : ""; }
+$("ossVia").addEventListener("change", () => { const tb = T(); if (tb.busy) { viaDraw(); return; } tb.via = $("ossVia").value;
+  if (tb.via) autoSrv(tb); else { autoSrv(tb); } tabsSave(); tabsDraw(); $("ossSrv").value = String(tb.srv);
+  setMsg(tb, `<div class="msg">${tb.via ? `Esta aba acessa os nós pelo IP de gerência a partir do <b>${escH(tb.via)}</b>.` : "Esta aba acessa os nós pelo nome, no servidor de cada nó."}</div>`); });
 // quando o nó recusa todas as senhas: campo para digitar a senha só deste site e tentar de novo
 function npwForm(n){
   return `<div class="msg warn" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">Senha própria de <b>${escH(n)}</b>:
