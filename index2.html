@@ -5262,18 +5262,27 @@ const FAULTDB = {"RBS6000":{"SO CF I1A:0":{"t":"Reset, Automatic Recovery","d":"
 const RX_FMO = { CF: "SO CF", TRX: "SO TRXC", TX: "AO TX", RX: "AO RX", TS: "AO TS", TF: "AO TF", CON: "AO CON", MCTR: "AO MCTR", DP: "AO DP", IS: "AO IS" };
 const RX_CLS = { I1A: "afeta o funcionamento · hardware do próprio MO", I1B: "afeta o funcionamento · origem fora do MO (a causa aparece no 2A do CF/TRX)", I2A: "não derruba o MO (degradação/aviso)", EC1: "condição externa ao site que afeta o funcionamento", EC2: "condição externa ao site que não derruba o MO", RU: "unidade suspeita (trocar/verificar)" };
 function rxmfpParse(txt){
-  const out = []; let mo = null, cls = "";
+  const out = []; let mo = null, cls = "", sect = "";
   String(txt || "").replace(/ /g, " ").split(/\r?\n/).forEach((l) => {
     let m = l.match(/^\s*(RXO([A-Z]+)-[\d-]+)\b/i);
-    if (m && !/^\s*RXMFP/i.test(l)) { mo = { mo: m[1].toUpperCase(), type: m[2].toUpperCase(), f: [] }; out.push(mo); cls = ""; return; }
+    if (m && !/^\s*<?\s*RXMFP/i.test(l)) { mo = { mo: m[1].toUpperCase(), type: m[2].toUpperCase(), f: [], hw: [], state: "", bl: "", inter: "" }; out.push(mo); cls = ""; sect = ""; return; }
     if (!mo) return;
-    if (/^\s*END\s*$/i.test(l) || /^\s*MO\s/i.test(l)) { cls = ""; return; }
+    if (/^\s*END\s*$/i.test(l) || /^\s*MO\s/i.test(l)) { cls = ""; sect = ""; return; }
+    // tabela das unidades (RU / RUREVISION / RUSERIALNO, depois RUPOSITION / RULOGICALID) e o estado do MO
+    if (/^\s*RU\s+RUREVISION/i.test(l)) { sect = "ru"; cls = ""; return; }
+    if (/^\s*RUPOSITION\s+RULOGICALID/i.test(l)) { sect = "pos"; return; }
+    if (/^\s*RULOGICALIDEXT/i.test(l)) { sect = ""; return; }
+    if (/^\s*STATE\s+BLSTATE/i.test(l)) { sect = "st"; cls = ""; return; }
+    if (sect === "ru") { const r = l.match(/^\s*(\d+)\s*(.*)$/); if (r) { const c = r[2].trim().split(/\s{2,}/); mo.hw.push({ n: r[1], prod: c[0] || "", rev: c[1] || "", sn: c[2] || "", pos: "", lid: "" }); sect = ""; } return; }
+    if (sect === "pos") { if (l.trim()) { const H = mo.hw[mo.hw.length - 1], pm = l.trim().match(/^(C:\S*\s+R:\S*\s+SH:\S*\s+SL:\s*\S*)\s+(.*)$/), c = pm ? [pm[1], pm[2]] : l.trim().split(/\s{2,}/);
+      if (H) { H.pos = (c[0] || "").replace(/\s+/g, " "); H.lid = (c.slice(1).join(" ") || "").replace(/\s+/g, " ").trim(); } sect = ""; } return; }
+    if (sect === "st") { if (l.trim()) { const t = l.trim().split(/\s+/); mo.state = (t[0] || "").toUpperCase(); if (t[1] && /^[A-Z]+$/i.test(t[1])) { mo.bl = t[1].toUpperCase(); mo.inter = t[2] || ""; } else mo.inter = t[1] || ""; sect = ""; } return; }
     if (/REPLACEMENT UNIT/i.test(l)) { cls = "RU"; l = l.replace(/.*REPLACEMENT UNITS?/i, ""); }
     else { m = l.match(/(EXTERNAL|CONDITION)?[^\d]*CLASS\s+(\w+)/i); if (m && /FAULT|CLASS/i.test(l)) { const c = m[2].toUpperCase(); cls = /EXTERNAL|CONDITION|^EC/i.test(l) || /^\d$/.test(c) ? "EC" + c.replace(/\D/g, "") : "I" + c; l = l.slice(l.search(/CLASS\s+\w+/i)).replace(/CLASS\s+\w+/i, ""); } }
     if (cls && /^[\s\d]+$/.test(l) && /\d/.test(l)) l.trim().split(/\s+/).forEach((n) => { if (!mo.f.some((x) => x.cls === cls && x.n === n)) mo.f.push({ cls, n }); });
     else if (cls && l.trim() && !/^[\s\d]*$/.test(l)) cls = "";
   });
-  return out.filter((x) => x.f.length);
+  return out.filter((x) => x.f.length || (x.state && !/^(OPER|COM)$/.test(x.state)) || /BLO|MBL/.test(x.bl));
 }
 function rxmfpLook(type, cls, n){
   const so = RX_FMO[type] || ""; const key = (cls === "RU" ? (type === "CF" || type === "TRX" ? so : (/^(TX|RX|TS)$/.test(type) ? "SO TRXC" : "SO CF")) : so) + " " + cls + ":" + n;
@@ -5283,10 +5292,18 @@ function rxmfpLook(type, cls, n){
 function rxmfpDiag(txt){
   const M = rxmfpParse(txt); if (!M.length) return "";
   const e = (s) => escH(s || "");
-  let h = `<div class="msg warn" style="text-align:left"><b>Diagnóstico RXMFP</b> · ${M.length} MO(s) com falha · códigos traduzidos pela Fault List RBS 6000/2000 (G18.Q4, em inglês)`;
+  let h = `<div class="msg warn" style="text-align:left"><b>Diagnóstico RXMFP</b> · ${M.length} MO(s) com falha ou fora de operação · códigos traduzidos pela Fault List RBS 6000/2000 (G18.Q4, em inglês)`;
   const sev = { I1A: 0, EC1: 1, I1B: 2, I2A: 3, EC2: 4, RU: 5 };
+  const hwOf = (x) => { const u = x.hw.find((k) => k.sn || k.lid); if (u) return u; const t = (x.mo.match(/-(\d+-\d+)$/) || [])[1]; const T = t && M.find((y) => y.type === "TRX" && y.mo.endsWith("-" + t)); return T ? T.hw.find((k) => k.sn || k.lid) : null; };
+  const down = M.filter((x) => (x.state && !/^(OPER|COM)$/.test(x.state)) || x.bl);
+  if (down.length) h += `<div style="margin-top:6px"><b>Fora de operação:</b> ${down.map((x) => { const u = hwOf(x); return `<span class="mono">${e(x.mo)}</span> ${e(x.state)}${x.bl ? " " + e(x.bl) : ""}${u ? ` (${e(u.lid)}${u.sn ? ", S/N " + e(u.sn) : ""})` : ""}`; }).join(" · ")}</div>`;
+  else h += `<div style="margin-top:6px">Nenhum MO fora de operação; só falhas que não derrubam o serviço.</div>`;
   M.forEach((x) => {
-    h += `<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:6px"><b class="mono">${e(x.mo)}</b> · ${e(RX_MO[x.type] || x.type)}`;
+    const stBad = x.state && !/^(OPER|COM)$/.test(x.state);
+    h += `<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:6px"><b class="mono">${e(x.mo)}</b> · ${e(RX_MO[x.type] || x.type)}${x.state ? ` · estado <b class="mono" style="color:${stBad || x.bl ? "var(--bad,#ef4444)" : "inherit"}">${e(x.state)}${x.bl ? " " + e(x.bl) : ""}</b>` : ""}${x.inter && !/^0+$/.test(x.inter) ? ` · interrupções ${e(String(+x.inter))}` : ""}`;
+    const hw = x.hw.filter((u) => u.prod || u.lid);
+    if (hw.length) h += `<div class="note" style="margin:2px 0 0 8px">Hardware: ${hw.map((u) => `${e(u.lid || "?")}${u.prod ? " · " + e(u.prod) : ""}${u.rev ? " " + e(u.rev) : ""}${u.sn ? " · S/N " + e(u.sn) : ""}`).join(" | ")}</div>`;
+    if (!x.f.length && stBad) h += `<div style="margin:6px 0 0 8px">Sem código de falha próprio. ${x.state === "FAIL" ? "FAIL: o MO falhou na inicialização ou perdeu contato com a BTS" : "Fora de operação"}${x.bl ? " e está bloqueado (" + e(x.bl) + ")" : ""}. Veja os códigos do CF e do MCTR/TRX do mesmo rádio; se o bloqueio for manual, o desbloqueio (RXBLE) pede confirmação.</div>`;
     const F = x.f.slice().sort((p, q) => (sev[p.cls] ?? 9) - (sev[q.cls] ?? 9));
     const rus = F.filter((f) => f.cls === "RU"), fl = F.filter((f) => f.cls !== "RU");
     fl.forEach((f) => { const L = rxmfpLook(x.type, f.cls, f.n), d = L.a || L.b;
