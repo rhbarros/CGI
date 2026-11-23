@@ -2498,6 +2498,7 @@ function exportLteQtyCSV(){
 }
 
 function renderSiteDetail(site){
+  setTimeout(function(){try{anatelFinFill();}catch(e){}},0);
   var techs=siteTechs(site).sort();
   var freqByTech={};
   site.cells.forEach(function(c){var t=c.tech||'?';if(!freqByTech[t])freqByTech[t]={};if(c.freq||c.larg)freqByTech[t][(c.freq||'—')+' / '+(c.larg||'—')+' MHz']=1;});
@@ -2540,6 +2541,7 @@ function renderSiteDetail(site){
     '<div style="margin:5px 0;">'+chips+'</div>'+
     (site.oper&&site.oper.toUpperCase()!=='TIM'?'<div style="margin-top:5px;"><span style="background:rgba(236,72,153,.12);color:#ec4899;border:1px solid rgba(236,72,153,.25);padding:3px 10px;border-radius:12px;font-size:10px;font-weight:700;">📡 RAN: '+site.oper+'</span></div>':'')+
     '<div style="font-size:10px;color:var(--text3);font-family:\'DM Mono\',monospace;margin-top:6px;">📍 '+(site.lat||'—')+' / '+(site.lon||'—')+'</div>'+
+    '<div class="fin-anatel" data-lat="'+escXml(String(site.lat||''))+'" data-lon="'+escXml(String(site.lon||''))+'" style="font-size:10px;font-family:\'DM Mono\',monospace;color:var(--text2);margin-top:6px;line-height:1.9;"></div>'+
     (freqLines?'<div style="font-size:10px;font-family:\'DM Mono\',monospace;color:var(--text3);margin-top:6px;line-height:1.8;">📊 FREQ/LARG:<br>'+freqLines+'</div>':'')+
     '</div>'+
     '<button onclick="goMap(\'sid\',\''+esc(site.id)+'\')" style="background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.25);color:var(--c1);font-size:10px;font-weight:700;padding:6px 12px;border-radius:7px;cursor:pointer;font-family:\'DM Mono\',monospace;white-space:nowrap;flex-shrink:0;">🗺️ Ver no Mapa</button>'+
@@ -4043,6 +4045,30 @@ function anatelFill(lat,lon){
        .addTo(ANATEL.layer);}
     ANATEL.layer.addTo(map);
   }catch(err){}
+}
+// ── Busca: operadoras na mesma coordenada do site (ERBs ANATEL) ──────────────
+var ANATEL_FIN_RAIO=50;
+function anatelFinFill(){
+  var els=document.querySelectorAll('.fin-anatel');if(!els.length)return;
+  if(ANATEL.st!=='ok'){
+    for(var i=0;i<els.length;i++)els[i].innerHTML='<span style="color:var(--text3);">⏳ Carregando ERBs da ANATEL…</span>';
+    anatelLoad(function(){if(ANATEL.st==='ok')anatelFinFill();else{var e2=document.querySelectorAll('.fin-anatel');for(var k=0;k<e2.length;k++)e2[k].innerHTML='<span style="color:#ef4444;">ANATEL.zip não encontrado ao lado do index.html.</span>';}});
+    return;
+  }
+  for(var j=0;j<els.length;j++){
+    var el=els[j],lat=parseFloat(String(el.getAttribute('data-lat')).replace(',','.')),lon=parseFloat(String(el.getAttribute('data-lon')).replace(',','.'));
+    if(isNaN(lat)||isNaN(lon)){el.innerHTML='<span style="color:var(--text3);">📡 Sem coordenada para comparar com a ANATEL.</span>';continue;}
+    var near=anatelNear(lat,lon,ANATEL_FIN_RAIO),ops={};
+    for(var n=0;n<near.length;n++){var o=near[n].r.op;if(!ops[o])ops[o]={d:near[n].d,n:0,tec:{}};ops[o].n++;var t=(near[n].r.tec||'').match(/\dG/g)||[];for(var q=0;q<t.length;q++)ops[o].tec[t[q]]=1;}
+    var chip=function(o,info){var c=ANATEL_COR[o]||'#9ca3af';
+      return info?'<span style="display:inline-flex;align-items:center;gap:4px;background:'+c+'1f;border:1px solid '+c+'66;color:'+c+';padding:2px 9px;border-radius:12px;font-weight:700;margin:2px 4px 2px 0;">✓ '+escXml(o)+' <span style="font-weight:400;opacity:.85;">'+Math.round(info.d)+' m · '+Object.keys(info.tec).sort().join('/')+(info.n>1?' · '+info.n+' ERBs':'')+'</span></span>'
+                 :'<span style="display:inline-flex;align-items:center;gap:4px;border:1px solid var(--border2);color:var(--text3);padding:2px 9px;border-radius:12px;margin:2px 4px 2px 0;">✗ '+escXml(o)+'</span>';};
+    var h='📡 Operadoras na mesma coordenada (até <select onchange="ANATEL_FIN_RAIO=+this.value;anatelFinFill()" style="font-size:10px;background:var(--bg3);color:var(--text);border:1px solid var(--border2);border-radius:4px;padding:0 3px;">'+
+      [20,50,100,200,500].map(function(v){return '<option value="'+v+'"'+(v===ANATEL_FIN_RAIO?' selected':'')+'>'+v+' m</option>';}).join('')+'</select>):<br>';
+    ['VIVO','CLARO','OI'].forEach(function(o){h+=chip(o,ops[o]);});
+    Object.keys(ops).forEach(function(o){if(o!=='VIVO'&&o!=='CLARO'&&o!=='OI')h+=chip(o,ops[o]);});
+    el.innerHTML=h;
+  }
 }
 // ── Popup ──────────────────────────────────────────────────────────────────
 function showMapPopup(s,coord){
