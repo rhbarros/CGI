@@ -587,7 +587,7 @@ body.role-busca #page-busca [onclick*="goMap"]{display:none!important;}
     <div style="position:relative;">
       <div id="map-container" style="width:100%;height:580px;border-radius:10px;border:1px solid var(--border);background:#1a1a2e;overflow:hidden;"></div>
       <!-- Popup -->
-      <div id="map-popup" style="display:none;position:absolute;z-index:500;background:var(--bg2);border:1px solid var(--border2);border-radius:10px;padding:0;min-width:280px;max-width:340px;box-shadow:0 8px 32px rgba(0,0,0,.6);pointer-events:auto;">
+      <div id="map-popup" style="display:none;position:absolute;z-index:500;max-height:560px;overflow:auto;background:var(--bg2);border:1px solid var(--border2);border-radius:10px;padding:0;min-width:280px;max-width:340px;box-shadow:0 8px 32px rgba(0,0,0,.6);pointer-events:auto;">
         <div id="map-popup-content"></div>
         <button onclick="document.getElementById('map-popup').style.display='none'" style="position:absolute;top:8px;right:8px;background:rgba(255,255,255,.08);border:none;color:var(--text2);border-radius:4px;cursor:pointer;font-size:11px;padding:2px 7px;line-height:1.4;">✕</button>
       </div>
@@ -3969,6 +3969,81 @@ function _buildAzLayer(){
   setTimeout(doAzChunk,0);
 }
 
+
+// ── Operadoras no local (ERBs ANATEL, ANATEL.zip na mesma pasta) ──────────────
+// Ao abrir um site no Mapa, lista as operadoras com estação licenciada perto dele (raio escolhido) e marca as ERBs no mapa.
+var ANATEL={st:'',rows:null,grid:null,cbs:[],raio:500,show:true,layer:null,fonte:''};
+var ANATEL_COR={VIVO:'#8b5cf6',TIM:'#3b82f6',CLARO:'#ef4444',BRISANET:'#f97316',CTBC:'#10b981',SERCOMTEL:'#eab308',OI:'#facc15',OUTRAS:'#9ca3af'};
+function anatelLoad(cb){
+  if(ANATEL.st==='ok'){cb();return;}
+  ANATEL.cbs.push(cb);if(ANATEL.st==='load')return;
+  ANATEL.st='load';
+  var urls=['ANATEL.zip','https://rhbarros.github.io/CGI/ANATEL.zip'];
+  var tryUrl=function(i){
+    if(i>=urls.length){ANATEL.st='err';var c=ANATEL.cbs;ANATEL.cbs=[];for(var k=0;k<c.length;k++)c[k]();return;}
+    if(typeof fetch==='undefined'||typeof JSZip==='undefined'){tryUrl(urls.length);return;}
+    fetch(urls[i],{cache:'no-cache'}).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.arrayBuffer();})
+    .then(function(b){return JSZip.loadAsync(b);})
+    .then(function(z){var f=z.file('ANATEL_ERBS.csv'),l=z.file('LEIAME.txt');return Promise.all([f.async('string'),l?l.async('string'):'']);})
+    .then(function(a){anatelParse(a[0]);var m=/Fonte:\s*(.*)/.exec(a[1]||'');ANATEL.fonte=m?m[1]:'';ANATEL.st='ok';var c=ANATEL.cbs;ANATEL.cbs=[];for(var k=0;k<c.length;k++)c[k]();})
+    ['catch'](function(){tryUrl(i+1);});
+  };
+  tryUrl(0);
+}
+function anatelParse(txt){
+  var L=txt.split(/\r?\n/),rows=[],grid={};
+  for(var i=1;i<L.length;i++){
+    if(!L[i])continue;var c=L[i].split(';');var lat=parseFloat(c[2]),lon=parseFloat(c[3]);if(isNaN(lat)||isNaN(lon))continue;
+    var r={op:c[0],ent:c[1],lat:lat,lon:lon,tec:c[4],uf:c[5],mun:c[6],est:c[7]};rows.push(r);
+    var k=Math.floor(lat*100)+'_'+Math.floor(lon*100);(grid[k]||(grid[k]=[])).push(r);
+  }
+  ANATEL.rows=rows;ANATEL.grid=grid;
+}
+function anatelDist(a,b,c,d){var R=6371000,p=Math.PI/180,x=(d-b)*p*Math.cos((a+c)/2*p),y=(c-a)*p;return Math.sqrt(x*x+y*y)*R;}
+function anatelNear(lat,lon,raio){
+  var out=[],n=Math.ceil(raio/1000)+1,bi=Math.floor(lat*100),bj=Math.floor(lon*100);
+  for(var i=bi-n;i<=bi+n;i++)for(var j=bj-n;j<=bj+n;j++){var g=ANATEL.grid[i+'_'+j];if(!g)continue;
+    for(var k=0;k<g.length;k++){var d=anatelDist(lat,lon,g[k].lat,g[k].lon);if(d<=raio)out.push({r:g[k],d:d});}}
+  out.sort(function(a,b){return a.d-b.d;});return out;
+}
+function anatelFill(lat,lon){
+  var box=document.getElementById('map-anatel');if(!box)return;
+  if(ANATEL.st!=='ok'){
+    box.innerHTML='<div style="font-size:9px;color:var(--text3);font-family:\'DM Mono\',monospace;">⏳ Carregando ERBs da ANATEL…</div>';
+    anatelLoad(function(){if(ANATEL.st==='ok')anatelFill(lat,lon);else{var b=document.getElementById('map-anatel');if(b)b.innerHTML='<div style="font-size:9px;color:#ef4444;font-family:\'DM Mono\',monospace;">ANATEL.zip não encontrado ao lado do index.html.</div>';}});
+    return;
+  }
+  var near=anatelNear(lat,lon,ANATEL.raio),ops={},ordem=[];
+  for(var i=0;i<near.length;i++){var x=near[i],o=x.r.op||'?';
+    if(!ops[o]){ops[o]={n:0,d:x.d,tec:{},ents:{}};ordem.push(o);}
+    var e=ops[o];e.n++;var t=(x.r.tec||'').match(/\dG/g)||[];for(var q=0;q<t.length;q++)e.tec[t[q]]=1;if(x.r.ent)e.ents[x.r.ent]=1;}
+  var sel='<select onchange="ANATEL.raio=+this.value;anatelFill('+lat+','+lon+')" style="font-size:9px;background:var(--bg3);color:var(--text);border:1px solid var(--border2);border-radius:4px;padding:1px 3px;">'+
+    [200,500,1000,2000,5000].map(function(v){return '<option value="'+v+'"'+(v===ANATEL.raio?' selected':'')+'>'+(v<1000?v+' m':(v/1000)+' km')+'</option>';}).join('')+'</select>';
+  var h='<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;font-size:10px;font-weight:700;color:var(--text2);">📡 Operadoras no local '+sel+
+    '<label style="font-size:9px;font-weight:400;color:var(--text3);display:flex;align-items:center;gap:3px;cursor:pointer;"><input type="checkbox" '+(ANATEL.show?'checked':'')+' onchange="ANATEL.show=this.checked;anatelFill('+lat+','+lon+')">no mapa</label></div>';
+  if(!ordem.length)h+='<div style="font-size:9px;color:var(--text3);font-family:\'DM Mono\',monospace;">Nenhuma ERB licenciada neste raio.</div>';
+  for(var j=0;j<ordem.length;j++){var o2=ordem[j],e2=ops[o2],cor=ANATEL_COR[o2]||'#9ca3af';
+    var ents=Object.keys(e2.ents);
+    h+='<div style="display:flex;align-items:center;gap:6px;font-size:10px;font-family:\'DM Mono\',monospace;padding:2px 0;">'+
+      '<span style="width:9px;height:9px;border-radius:50%;background:'+cor+';flex-shrink:0;"></span>'+
+      '<b style="color:'+cor+';min-width:68px;">'+escXml(o2)+'</b>'+
+      '<span style="color:var(--text2);">'+e2.n+' ERB'+(e2.n>1?'s':'')+' · '+(e2.d<1?'0':Math.round(e2.d))+' m · '+Object.keys(e2.tec).sort().join('/')+'</span></div>'+
+      (ents.length?'<div style="font-size:8px;color:var(--text3);font-family:\'DM Mono\',monospace;margin:0 0 2px 15px;">'+escXml(ents.slice(0,3).join(' · '))+(ents.length>3?' …':'')+'</div>':'');}
+  h+='<div style="font-size:8px;color:var(--text3);font-family:\'DM Mono\',monospace;margin-top:3px;">Distância da ERB mais próxima de cada operadora · fonte ANATEL '+escXml(ANATEL.fonte.replace(/^Operadoras_TABELAS\s*/,'').replace(/\.xlsb$/,''))+'</div>';
+  box.innerHTML=h;
+  // ERBs no mapa
+  try{
+    var map=_mapState.map;if(!map)return;
+    if(ANATEL.layer){map.removeLayer(ANATEL.layer);ANATEL.layer=null;}
+    if(!ANATEL.show||!near.length)return;
+    ANATEL.layer=L.layerGroup();
+    for(var m=0;m<near.length;m++){var y=near[m],c2=ANATEL_COR[y.r.op]||'#9ca3af';
+      L.circleMarker([y.r.lat,y.r.lon],{radius:6,color:'#fff',weight:1.5,fillColor:c2,fillOpacity:.95})
+       .bindTooltip(escXml(y.r.op+(y.r.ent?' · '+y.r.ent:''))+'<br>'+escXml(y.r.tec||'')+' · '+Math.round(y.d)+' m · estação '+escXml(y.r.est||''))
+       .addTo(ANATEL.layer);}
+    ANATEL.layer.addTo(map);
+  }catch(err){}
+}
 // ── Popup ──────────────────────────────────────────────────────────────────
 function showMapPopup(s,coord){
   var popup=document.getElementById('map-popup');
@@ -3996,8 +4071,10 @@ function showMapPopup(s,coord){
     (ranOper?'<div style="margin-bottom:5px;"><span style="background:rgba(236,72,153,.12);color:#ec4899;border:1px solid rgba(236,72,153,.25);padding:2px 8px;border-radius:10px;font-size:9px;font-weight:700;">🤝 RAN: '+escXml(ranOper)+'</span></div>':'')+
     '<div style="font-size:9px;color:var(--text3);font-family:\'DM Mono\',monospace;margin-bottom:8px;">📍 '+sf(coord.lat,6)+' / '+sf(coord.lon,6)+'</div>'+
     '<button onclick="goFinder(\''+esc(s.id)+'\')" style="width:100%;background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.25);color:var(--c1);font-size:10px;font-weight:700;padding:6px;border-radius:6px;cursor:pointer;font-family:\'DM Mono\',monospace;">🔍 Ver detalhes</button>'+
+    '<div id="map-anatel" style="margin-top:9px;padding-top:8px;border-top:1px solid var(--border);"></div>'+
     '</div>';
   document.getElementById('map-popup-content').innerHTML=html;
+  try{anatelFill(+coord.lat,+coord.lon);}catch(e){}
   popup.style.display='block';
   var mapRect=document.getElementById('map-container').getBoundingClientRect();
   var px=_mapState.map.latLngToContainerPoint([coord.lat,coord.lon]);
