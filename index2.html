@@ -758,13 +758,14 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
       <div class="ph"><span class="step">3</span><h2>Execução <span class="note" id="ossTabName" style="margin:0;font-weight:400"></span></h2></div>
       <div class="oss-prog"><span id="ossBar" style="width:0"></span></div>
       <div class="row" style="margin:0"><span class="note" id="ossProg">Nada em execução.</span><button class="btn" id="ossStop" disabled>Parar após o comando atual</button><button class="btn" id="ossKill" disabled>Parar agora (Ctrl-C)</button></div>
-      <div id="ossAsk"></div>
       <div class="oss-log" id="ossLog"></div>
       <div class="row" style="margin:0"><button class="btn" id="ossToIn" disabled>Enviar saída para a Entrada</button><button class="btn" id="ossToKg" disabled>Enviar saída para o KGET Analyzer</button><button class="btn" id="ossDl" disabled>Baixar saída (.txt)</button><button class="btn" id="ossLogDl">Exportar log (.txt)</button><button class="btn" id="ossConDl" disabled>Baixar tela inteira (.txt)</button><button class="btn" id="ossConClr" disabled>Limpar tela</button></div>
       <pre class="oss-out" id="ossOut" hidden></pre>
       <h3 class="sub" id="ossCmdH">Comandos AMOS <span class="note" id="ossCmdTab" style="margin:0;font-weight:400"></span></h3>
       <div class="row" style="margin:0"><input type="text" id="ossCmd" list="ossCmdHist" autocomplete="off" placeholder="ex.: get EUtranCellFDD qRxLevMin  (vários: separe com ;) · ↑ ↓ = histórico · Enter executa" spellcheck="false"><datalist id="ossCmdHist"></datalist><button class="btn" id="ossRun">Executar</button><button class="btn" id="ossHistB" aria-expanded="false">Histórico</button></div>
       <div id="ossHistBox" hidden style="max-height:220px;overflow:auto;border:1px solid var(--bg4);border-radius:6px;padding:6px"></div>
+      <div id="ossConfirm"></div>
+      <div id="ossAsk"></div>
       <div id="ossMsg"></div>
     </section>
 
@@ -790,7 +791,6 @@ hget ^NRCellDU cellLocalId|nRPCI|nRTAC|nCI|secondaryCellOnly|cellState|ssbFreque
       <div class="row" style="margin:0"><input type="file" id="ossFile" accept=".mos,.txt" multiple><span class="note" id="ossFileN"></span></div>
       <textarea id="ossScript" spellcheck="false" placeholder="Cole o script .mos aqui ou escolha os arquivos acima (ex.: os scripts gerados nas abas 03 e 05). Vários arquivos rodam na ordem do nome."></textarea>
       <div class="row" style="margin:0"><button class="btn" id="ossScan">Revisar alterações</button><span class="note" id="ossScanN"></span></div>
-      <div id="ossConfirm"></div>
     </section>
   </div>
   <div id="p-bk" style="display:none;flex-direction:column;gap:13px">
@@ -5199,6 +5199,7 @@ function askDraw(tb){
   if (!isAct(tb)) return;
   if (!tb.ask) { $("ossAsk").innerHTML = ""; return; }
   $("ossAsk").innerHTML = `<div class="oss-ask" id="ossAskBox"><b>O AMOS está perguntando (${escH(tabName(tb))}):</b><pre class="oss-out" style="max-height:140px">${escH(tb.ask)}</pre><div class="row" style="margin:0"><button class="btn primary" id="ossYes">Sim (y)</button><button class="btn" id="ossNo">Não (n)</button></div></div>`;
+  if (tb._askSeen !== tb.ask) { tb._askSeen = tb.ask; try { $("ossAsk").scrollIntoView({ block: "center", behavior: "smooth" }); } catch (e) {} }
   $("ossYes").onclick = () => answer(tb, "y"); $("ossNo").onclick = () => answer(tb, "n");
 }
 function pollAsk(tb, j){
@@ -5501,6 +5502,7 @@ $("ossScript").oninput = () => { O.files = []; $("ossFileN").textContent = ""; $
 function confirmBox(writes, go){
   $("ossConfirm").innerHTML = `<div class="oss-ask"><b>Confirme as alterações em ${escH(node())}</b><span class="note" style="margin:0">${writes.length} comando(s) de alteração. Revise antes de rodar no nó:</span><pre class="oss-out" style="max-height:200px">${escH(writes.slice(0, 200).join("\n"))}${writes.length > 200 ? "\n…" : ""}</pre>
     <label class="note" style="margin:0"><input type="checkbox" id="ossOk"> Conferi o nó e os comandos e quero executar</label><div class="row" style="margin:0"><button class="btn primary" id="ossGo" disabled>Executar no nó</button><button class="btn" id="ossCancel">Cancelar</button></div></div>`;
+  try { $("ossConfirm").scrollIntoView({ block: "center", behavior: "smooth" }); } catch (e) {}
   $("ossOk").onchange = () => $("ossGo").disabled = !$("ossOk").checked;
   $("ossCancel").onclick = () => $("ossConfirm").innerHTML = "";
   $("ossGo").onclick = () => { $("ossConfirm").innerHTML = ""; go(); };
