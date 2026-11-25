@@ -574,6 +574,19 @@ body.role-busca #page-busca [onclick*="goMap"]{display:none!important;}
       <button class="rbtn" onclick="clearMapCoords()">✕ Remover pontos</button>
       <span id="map-coord-msg" style="font-size:10px;font-family:'DM Mono',monospace;color:var(--text3);"></span>
     </div>
+    <!-- Planejamento de PCI / NRPCI / TAC para sites novos -->
+    <details style="margin-bottom:10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 13px;">
+      <summary style="cursor:pointer;font-size:11px;font-weight:700;color:var(--text2);">🧮 Gerar PCI / NRPCI, RACH e TAC para sites novos</summary>
+      <div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;margin:8px 0;line-height:1.6;">Suba uma planilha com <b>SITE, FREQ, LATITUDE, LONGITUDE</b> (opcional: CELULA, TECNO, AZIMUTE ou QTD SETORES; sem célula/azimute, cada linha vira 3 setores A/B/C).
+      O PCI sai como 3×grupo + setor, com o grupo que deixa o mesmo PCI na mesma frequência o mais longe possível (base atual da CGI + PCI.zip); no 4G o RACH segue o PCI, no 5G a raiz mais distante de quem usa a mesma faixa. TAC = o mais comum entre as células da mesma tecnologia a até 2 km.</div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <input type="file" id="pci-file" accept=".xlsx,.xls,.csv" onchange="pciPlanFile(this)" style="font-size:10px;color:var(--text2);">
+        <button class="rbtn" onclick="pciModelo()">⬇ Baixar modelo</button>
+        <span style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;">Passo RACH 5G <select id="pci-step" onchange="if(PCIPLAN.rows)pciPlanRun()" style="font-size:10px;background:var(--bg2);color:var(--text);border:1px solid var(--border2);border-radius:4px;"><option>4</option><option selected>8</option><option>12</option><option>16</option></select></span>
+        <span id="pci-msg" style="font-size:10px;font-family:'DM Mono',monospace;color:var(--text3);"></span>
+      </div>
+      <div id="pci-res"></div>
+    </details>
     <!-- Legenda de cores -->
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 13px;">
       <span style="font-size:9px;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);font-family:'DM Mono',monospace;">Legenda:</span>
@@ -4070,6 +4083,203 @@ function anatelFinFill(){
     el.innerHTML=h;
   }
 }
+
+// ── PCI / NRPCI / RACH (PCI.zip, das planilhas "lógico" dos vendors) ─────────────────────────
+// 1) No Mapa: o quadro do site mostra PCI/NRPCI e RACH de cada célula 4G/5G.
+// 2) Planejamento: sobe uma planilha de sites novos (site, freq, coordenada) e devolve PCI/NRPCI, RACH e TAC.
+var PCIDB={st:'',m:null,cbs:[],data:''};
+function pciLoad(cb){
+  if(PCIDB.st==='ok'){cb();return;}
+  PCIDB.cbs.push(cb);if(PCIDB.st==='load')return;
+  PCIDB.st='load';
+  var urls=['PCI.zip','https://rhbarros.github.io/CGI/PCI.zip'];
+  var fim=function(){var c=PCIDB.cbs;PCIDB.cbs=[];for(var k=0;k<c.length;k++)c[k]();};
+  var tryUrl=function(i){
+    if(i>=urls.length||typeof fetch==='undefined'||typeof JSZip==='undefined'){PCIDB.st='err';fim();return;}
+    fetch(urls[i],{cache:'no-cache'}).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.arrayBuffer();})
+    .then(function(b){return JSZip.loadAsync(b);})
+    .then(function(z){var l=z.file('LEIAME.txt');return Promise.all([z.file('PCI.csv').async('string'),l?l.async('string'):'']);})
+    .then(function(a){
+      var L=a[0].split(/\r?\n/),m={};
+      for(var i2=1;i2<L.length;i2++){if(!L[i2])continue;var c=L[i2].split(';');m[c[0]]={p:+c[1],r:c[2]===''?null:+c[2],f:c[3]};}
+      PCIDB.m=m;var d=/Data:\s*(\S+)/.exec(a[1]||'');PCIDB.data=d?d[1]:'';PCIDB.st='ok';fim();})
+    ['catch'](function(){tryUrl(i+1);});
+  };
+  tryUrl(0);
+}
+function pciOf(cel){if(!PCIDB.m||!cel)return null;return PCIDB.m[String(cel).trim().toUpperCase()]||null;}
+
+// ── quadro do site no Mapa ──
+function pciPopupFill(s){
+  var box=document.getElementById('map-pci');if(!box)return;
+  var mono='font-family:\'DM Mono\',monospace;';
+  if(PCIDB.st!=='ok'){
+    box.innerHTML='<div style="font-size:9px;color:var(--text3);'+mono+'">⏳ Carregando PCI…</div>';
+    pciLoad(function(){if(PCIDB.st==='ok')pciPopupFill(s);else{var b=document.getElementById('map-pci');if(b)b.innerHTML='<div style="font-size:9px;color:#ef4444;'+mono+'">PCI.zip não encontrado ao lado do index.html.</div>';}});
+    return;
+  }
+  var rows=[],seen={};
+  for(var i=0;i<s.cells.length;i++){var c=s.cells[i];if(c.tech!=='4G'&&c.tech!=='5G')continue;var k=String(c.cel||'').toUpperCase();if(!k||seen[k])continue;seen[k]=1;rows.push(c);}
+  if(!rows.length){box.innerHTML='';return;}
+  rows.sort(function(a,b){return (a.tech+String(a.freq)+a.cel)<(b.tech+String(b.freq)+b.cel)?-1:1;});
+  var h='<div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:4px;">📶 PCI / NRPCI · RACH</div>'+
+    '<table style="width:100%;border-collapse:collapse;font-size:9px;'+mono+'"><tr style="color:var(--text3);"><td>CÉLULA</td><td>FREQ</td><td style="text-align:right;">PCI</td><td style="text-align:right;">RACH</td><td style="text-align:right;">TAC</td></tr>';
+  var sem=0;
+  for(var j=0;j<rows.length;j++){var r=rows[j],d=pciOf(r.cel);if(!d)sem++;
+    h+='<tr style="border-top:1px solid var(--border);"><td style="color:var(--text);padding:1px 0;">'+escXml(r.cel)+'</td><td style="color:'+(TC[r.tech]||'var(--text2)')+';">'+escXml(r.tech+' '+(r.freq||''))+'</td>'+
+       '<td style="text-align:right;color:var(--c1);font-weight:700;">'+(d?d.p:'—')+'</td><td style="text-align:right;color:var(--text2);">'+(d&&d.r!==null?d.r:'—')+'</td><td style="text-align:right;color:var(--text2);">'+escXml(r.tac||'—')+'</td></tr>';}
+  h+='</table><div style="font-size:8px;color:var(--text3);'+mono+'margin-top:3px;">PCI das planilhas lógico de '+escXml(PCIDB.data)+(sem?' · '+sem+' célula(s) sem PCI na base':'')+'</div>';
+  box.innerHTML=h;
+}
+
+// ── Planejamento de PCI / NRPCI / RACH / TAC para sites novos ──
+var PCIPLAN={rows:null,res:null,layer:null,nome:''};
+function pciFreqNorm(v){
+  var s=String(v||'').toUpperCase().replace(/\s+/g,'').replace(/MHZ/,'');
+  var B={'B28':'700','B5':'850','B8':'900','B3':'1800','B1':'2100','B7':'2600','N78':'3500','N40':'2300','N3':'1800','N28':'700','N1':'2100','N7':'2600'};
+  if(B[s])return B[s];
+  if(/^3[.,]5/.test(s))return '3500';
+  var m=/(\d{3,4})/.exec(s);return m?m[1]:s;
+}
+function pciCol(h,re){for(var i=0;i<h.length;i++)if(re.test(String(h[i]||'').trim().toUpperCase()))return i;return -1;}
+function pciDist(a,b,c,d){var p=Math.PI/180,x=(d-b)*p*Math.cos((a+c)/2*p),y=(c-a)*p;return Math.sqrt(x*x+y*y)*6371;}
+function pciModelo(){
+  var ws=XLSX.utils.aoa_to_sheet([['SITE','CELULA','TECNO','FREQ','LATITUDE','LONGITUDE','AZIMUTE'],
+    ['NOVO01','4G-NOVO01-07-A','4G','700',-8.05,-34.9,0],['NOVO01','4G-NOVO01-07-B','4G','700',-8.05,-34.9,120],['NOVO01','4G-NOVO01-07-C','4G','700',-8.05,-34.9,240],
+    ['NOVO01','5G-NOVO01-35-MA','5G','3500',-8.05,-34.9,0],['NOVO02','','4G','1800',-8.06,-34.91,'']]);
+  var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'SITES_NOVOS');XLSX.writeFile(wb,'modelo_pci_sites_novos.xlsx');
+}
+function pciPlanFile(inp){
+  var f=inp.files&&inp.files[0];if(!f)return;PCIPLAN.nome=f.name.replace(/\.[^.]+$/,'');
+  var msg=document.getElementById('pci-msg');msg.textContent='Lendo '+f.name+'…';
+  var rd=new FileReader();
+  rd.onload=function(e){
+    try{
+      var wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+      var aoa=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:''});
+      PCIPLAN.rows=aoa;PCIPLAN.res=null;
+      msg.textContent=f.name+': '+Math.max(0,aoa.length-1)+' linha(s). Gerando…';
+      pciPlanRun();
+    }catch(err){msg.textContent='Não consegui ler a planilha: '+err.message;}
+  };
+  rd.readAsArrayBuffer(f);inp.value='';
+}
+function pciPlanRun(){
+  var msg=document.getElementById('pci-msg');
+  if(!siteMap||!siteMap.size){msg.textContent='Carregue a CGI primeiro.';return;}
+  if(PCIDB.st!=='ok'){msg.textContent='Carregando a base de PCI…';pciLoad(function(){if(PCIDB.st==='ok')pciPlanRun();else msg.textContent='PCI.zip não encontrado ao lado do index.html.';});return;}
+  var aoa=PCIPLAN.rows;if(!aoa||aoa.length<2){msg.textContent='Planilha vazia.';return;}
+  var h=aoa[0],C={site:pciCol(h,/^(SITE|STATION ?ID|NOME|ENODEB|GNODEB|SITE ?NAME|SITE_NAME)$/),cel:pciCol(h,/CELULA|CÉLULA|CELL/),tec:pciCol(h,/TECN|TECH|^RAT$/),
+    freq:pciCol(h,/FREQ|BANDA|BAND/),lat:pciCol(h,/^LAT/),lon:pciCol(h,/^LON|^LNG/),az:pciCol(h,/AZIM/),set:pciCol(h,/^SETOR$|^SECTOR$/),nset:pciCol(h,/QTD|SETORES|N.? ?SETOR/)};
+  if(C.site<0)C.site=pciCol(h,/SITE/);
+  if(C.freq<0||C.lat<0||C.lon<0){msg.textContent='Preciso das colunas FREQ, LATITUDE e LONGITUDE (e SITE). Baixe o modelo.';return;}
+  var RACHSTEP=+(document.getElementById('pci-step')||{value:8}).value||8;
+  // ---- base existente por camada (tecnologia|freq) ----
+  var lay={},tacs={'4G':[],'5G':[]},allc={'4G':[],'5G':[]},nBase=0,nSem=0;
+  var getL=function(k){return lay[k]||(lay[k]={pci:{},rach:[]});};
+  siteMap.forEach(function(s){
+    for(var i=0;i<s.cells.length;i++){var c=s.cells[i];if(c.tech!=='4G'&&c.tech!=='5G')continue;
+      var co=normCoord(c.lat||s.lat,c.lon||s.lon);if(!co)continue;
+      var tc=String(c.tac||'').trim();if(/^\d+$/.test(tc))tacs[c.tech].push({lat:co.lat,lon:co.lon,tac:tc,sid:s.id});
+      var d=pciOf(c.cel);allc[c.tech].push({lat:co.lat,lon:co.lon,ok:!!d});if(!d){nSem++;continue;}nBase++;
+      var L=getL(c.tech+'|'+pciFreqNorm(c.freq));(L.pci[d.p]||(L.pci[d.p]=[])).push({lat:co.lat,lon:co.lon,cel:c.cel});
+      if(c.tech==='5G'&&d.r!==null)L.rach.push({r:d.r,lat:co.lat,lon:co.lon,cel:c.cel});}
+  });
+  // ---- linhas da planilha -> células novas ----
+  var cells=[],sites={},ordem=[],LET='ABCDEFGHIJKL';
+  for(var r=1;r<aoa.length;r++){var R=aoa[r];if(!R||!R.length)continue;
+    var co=normCoord(R[C.lat],R[C.lon]);var site=String(C.site>=0?R[C.site]:'').trim()||(co?co.lat.toFixed(5)+','+co.lon.toFixed(5):'linha '+(r+1));
+    var fq=pciFreqNorm(R[C.freq]);var tv=String(C.tec>=0?R[C.tec]:'').toUpperCase();
+    var tec=/5|NR/.test(tv)?'5G':(/4|LTE/.test(tv)?'4G':((fq==='3500'||fq==='2300')?'5G':'4G'));
+    var base={row:r,site:site,tec:tec,freq:fq,co:co,orig:R};
+    var porCel=(C.cel>=0&&String(R[C.cel]).trim())||(C.set>=0&&String(R[C.set]).trim())||(C.az>=0&&String(R[C.az]).trim()!=='');
+    var n=porCel?1:(C.nset>=0&&+R[C.nset]>0?+R[C.nset]:3);
+    for(var k=0;k<n;k++){var x={};for(var q in base)x[q]=base[q];
+      x.cel=porCel?String(C.cel>=0?R[C.cel]:'').trim():'';x.set=porCel?String(C.set>=0?R[C.set]:'').trim():LET.charAt(k);
+      x.az=C.az>=0&&String(R[C.az]).trim()!==''?toNum(R[C.az]):(porCel?NaN:k*360/n);x.gen=!porCel;
+      if(!sites[site]){sites[site]=[];ordem.push(site);}sites[site].push(x);cells.push(x);}
+  }
+  // ---- escolha do grupo (PCI = 3*grupo + 0/1/2) maximizando a distância de reuso na mesma freq ----
+  var nearSame=function(L,p,co){var a=L.pci[p];if(!a)return {d:999,cel:''};var best=999,bc='';for(var i=0;i<a.length;i++){var d=pciDist(co.lat,co.lon,a[i].lat,a[i].lon);if(d<best){best=d;bc=a[i].cel;}}return {d:best,cel:bc};};
+  for(var si=0;si<ordem.length;si++){
+    var S=sites[ordem[si]];var byTec={'4G':{},'5G':{}};
+    for(var i=0;i<S.length;i++){var c2=S[i];if(!c2.co){c2.err='coordenada inválida';continue;}(byTec[c2.tec][c2.freq]||(byTec[c2.tec][c2.freq]=[])).push(c2);}
+    ['4G','5G'].forEach(function(tec){
+      var fqs=Object.keys(byTec[tec]);if(!fqs.length)return;
+      var NG=tec==='4G'?168:336;
+      fqs.forEach(function(f){byTec[tec][f].sort(function(a,b){var x=isNaN(a.az)?999:a.az,y=isNaN(b.az)?999:b.az;return x-y||(a.set+a.cel<b.set+b.cel?-1:1);});});
+      var nChunk=0;fqs.forEach(function(f){nChunk=Math.max(nChunk,Math.ceil(byTec[tec][f].length/3));});
+      // grupo já usado no próprio local (célula existente a <100 m, mesma tecnologia): preferido, para manter o PCI entre bandas
+      var pref={};var co0=byTec[tec][fqs[0]][0].co;
+      for(var key in lay){if(key.indexOf(tec+'|')!==0)continue;var P=lay[key].pci;for(var p in P){var A=P[p];for(var a=0;a<A.length;a++)if(pciDist(co0.lat,co0.lon,A[a].lat,A[a].lon)<0.1){pref[Math.floor(p/3)]=1;break;}}}
+      for(var ch=0;ch<nChunk;ch++){
+        var best=-1,bestG=0,bestSum=-1,score={};
+        for(var g=0;g<NG;g++){var mn=999,sum=0;
+          for(var fi=0;fi<fqs.length;fi++){var arr=byTec[tec][fqs[fi]].slice(ch*3,ch*3+3);var L2=getL(tec+'|'+fqs[fi]);
+            for(var j=0;j<arr.length;j++){var d2=nearSame(L2,3*g+j,arr[j].co).d;if(d2<mn)mn=d2;sum+=Math.min(d2,100);}}
+          score[g]=mn;if(mn>best||(mn===best&&sum>bestSum)){best=mn;bestG=g;bestSum=sum;}}
+        var pg=null;for(var pk in pref){pk=+pk;if(score[pk]!==undefined&&score[pk]>=Math.min(best*0.8,best)&&(pg===null||score[pk]>score[pg]))pg=pk;}
+        if(pg!==null&&score[pg]>=0.8*best)bestG=pg;
+        for(var fj=0;fj<fqs.length;fj++){var arr2=byTec[tec][fqs[fj]].slice(ch*3,ch*3+3);var L3=getL(tec+'|'+fqs[fj]);
+          for(var jj=0;jj<arr2.length;jj++){var x2=arr2[jj],pci=3*bestG+jj,nr=nearSame(L3,pci,x2.co);x2.pci=pci;x2.reuso=nr.d;x2.reusoCel=nr.cel;
+            (L3.pci[pci]||(L3.pci[pci]=[])).push({lat:x2.co.lat,lon:x2.co.lon,cel:x2.cel||(x2.site+' '+x2.set)});}}
+      }
+      // RACH: 4G = PCI (padrão da base); 5G = raiz com a maior distância para quem usa a mesma faixa [r, r+passo)
+      fqs.forEach(function(f){var L4=getL(tec+'|'+f);byTec[tec][f].forEach(function(x3){
+        if(tec==='4G'){x3.rach=x3.pci;return;}
+        var bestR=0,bestD=-1;
+        for(var rr=0;rr+RACHSTEP<=838;rr+=RACHSTEP){var dm=999;
+          for(var t=0;t<L4.rach.length;t++){var e=L4.rach[t];if(Math.abs(e.r-rr)<RACHSTEP){var dd=pciDist(x3.co.lat,x3.co.lon,e.lat,e.lon);if(dd<dm)dm=dd;}}
+          if(dm>bestD){bestD=dm;bestR=rr;}}
+        x3.rach=bestR;x3.rachReuso=bestD;L4.rach.push({r:bestR,lat:x3.co.lat,lon:x3.co.lon,cel:x3.cel});});});
+    });
+    // cobertura da base: quantas células da mesma tecnologia a até 5 km têm PCI conhecido (sem PCI, o reuso calculado não é confiável)
+    for(var vi=0;vi<S.length;vi++){var x5=S[vi];if(!x5.co)continue;var A5=allc[x5.tec],tot=0,ok=0;
+      for(var w=0;w<A5.length;w++)if(pciDist(x5.co.lat,x5.co.lon,A5[w].lat,A5[w].lon)<=5){tot++;if(A5[w].ok)ok++;}
+      x5.cob=tot?ok/tot:null;x5.cobTxt=tot?Math.round(100*ok/tot)+'% ('+ok+'/'+tot+')':'sem células a 5 km';}
+    // TAC: o mais comum entre as células da mesma tecnologia a até 2 km; senão a mais próxima (até 30 km)
+    for(var ti=0;ti<S.length;ti++){var x4=S[ti];if(!x4.co)continue;var T=tacs[x4.tec],cnt={},near=null,nd=999;
+      for(var u=0;u<T.length;u++){var dt=pciDist(x4.co.lat,x4.co.lon,T[u].lat,T[u].lon);if(dt<=2)cnt[T[u].tac]=(cnt[T[u].tac]||0)+1;if(dt<nd){nd=dt;near=T[u];}}
+      var bt=null,bn=0;for(var tk in cnt)if(cnt[tk]>bn){bn=cnt[tk];bt=tk;}
+      if(bt){x4.tac=bt;x4.tacRef=bn+' célula(s) a até 2 km';}else if(near&&nd<=30){x4.tac=near.tac;x4.tacRef=near.sid+' a '+nd.toFixed(1)+' km';}else{x4.tac='';x4.tacRef='sem célula '+x4.tec+' a até 30 km';}}
+  }
+  PCIPLAN.res=cells;
+  var baixa=[];for(var bi=0;bi<cells.length;bi++)if(cells[bi].cob!==null&&cells[bi].cob!==undefined&&cells[bi].cob<0.7&&baixa.indexOf(cells[bi].site)<0)baixa.push(cells[bi].site);
+  msg.innerHTML=cells.length+' célula(s) planejada(s) em '+ordem.length+' site(s). Base: '+nBase.toLocaleString('pt-BR')+' células com PCI'+(nSem?' · '+nSem.toLocaleString('pt-BR')+' células 4G/5G da CGI sem PCI na base (não entram no cálculo)':'')+'.';
+  if(baixa.length)msg.innerHTML+='<br><span style="color:#ef4444;">⚠ Base de PCI incompleta perto de: '+escXml(baixa.join(', '))+' (menos de 70% das células vizinhas têm PCI nas planilhas). Confira o reuso antes de usar.</span>';
+  pciPlanDraw();
+}
+function pciPlanDraw(){
+  var R=PCIPLAN.res,box=document.getElementById('pci-res');if(!R||!box)return;
+  var h='<div style="display:flex;gap:6px;margin:8px 0;flex-wrap:wrap;"><button class="rbtn" onclick="pciPlanXlsx()" style="background:var(--c3);color:#000;font-weight:700;border-color:var(--c3);">⬇ Baixar Excel preenchido</button><button class="rbtn" onclick="pciPlanMap()">📍 Mostrar no mapa</button></div>'+
+    '<div class="tscroll" style="max-height:340px;overflow:auto;"><table class="dtbl"><thead><tr><th>SITE</th><th>CÉLULA / SETOR</th><th>TEC</th><th>FREQ</th><th>AZ</th><th style="color:var(--c1);">PCI</th><th style="color:var(--c1);">NRPCI</th><th>RACH</th><th>TAC</th><th>REUSO PCI</th><th title="Células da mesma tecnologia a até 5 km com PCI conhecido na base">BASE PCI 5 km</th><th>REF. TAC</th></tr></thead><tbody>';
+  for(var i=0;i<R.length;i++){var x=R[i];
+    h+='<tr><td class="hi">'+escXml(x.site)+'</td><td>'+escXml(x.cel||x.set)+'</td><td>'+x.tec+'</td><td>'+escXml(x.freq)+'</td><td>'+(isNaN(x.az)?'—':Math.round(x.az)+'°')+'</td>'+
+      (x.err?'<td colspan="6" style="color:#ef4444;">'+escXml(x.err)+'</td>':
+      '<td style="color:var(--c1);font-weight:700;">'+(x.tec==='4G'?x.pci:'')+'</td><td style="color:var(--c1);font-weight:700;">'+(x.tec==='5G'?x.pci:'')+'</td><td>'+x.rach+'</td><td>'+escXml(x.tac)+'</td>'+
+      '<td style="color:'+(x.reuso<5?'#ef4444':x.reuso<10?'#f59e0b':'var(--c3)')+';">'+(x.reuso>=999?'sem reuso':x.reuso.toFixed(1)+' km')+(x.reusoCel&&x.reuso<999?' <span style="color:var(--text3);">('+escXml(x.reusoCel)+')</span>':'')+'</td>')+
+      '<td style="color:'+(x.cob===null||x.cob===undefined?'var(--text3)':x.cob<0.7?'#ef4444':x.cob<0.9?'#f59e0b':'var(--c3)')+';">'+escXml(x.cobTxt||'')+'</td><td style="color:var(--text3);">'+escXml(x.tacRef||'')+'</td></tr>';}
+  box.innerHTML=h+'</tbody></table></div>';
+}
+function pciPlanXlsx(){
+  var R=PCIPLAN.res;if(!R)return;var aoa=PCIPLAN.rows,h=(aoa[0]||[]).slice();
+  var out=[h.concat(['SETOR (gerado)','PCI','NRPCI','RACH','TAC','REUSO PCI (km)','CELULA DO REUSO','BASE PCI 5 km','REF. TAC'])];
+  for(var i=0;i<R.length;i++){var x=R[i],row=(x.orig||[]).slice();while(row.length<h.length)row.push('');
+    out.push(row.concat([x.gen?x.set:'',x.tec==='4G'&&!x.err?x.pci:'',x.tec==='5G'&&!x.err?x.pci:'',x.err?'':x.rach,x.err?'':x.tac,x.err?x.err:(x.reuso>=999?'sem reuso':+x.reuso.toFixed(2)),x.reusoCel||'',x.cobTxt||'',x.tacRef||'']));}
+  var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(out),'PCI_PLANEJADO');
+  XLSX.writeFile(wb,(PCIPLAN.nome||'sites_novos')+'_PCI.xlsx');
+}
+function pciPlanMap(){
+  var R=PCIPLAN.res,map=_mapState.map;if(!R)return;
+  if(!map){document.getElementById('pci-msg').textContent='Abra o mapa (Filtrar) antes de mostrar os sites novos.';return;}
+  if(PCIPLAN.layer){map.removeLayer(PCIPLAN.layer);}
+  PCIPLAN.layer=L.layerGroup();var by={},b=[];
+  for(var i=0;i<R.length;i++){var x=R[i];if(!x.co||x.err)continue;var k=x.site;(by[k]||(by[k]={co:x.co,c:[]})).c.push(x);}
+  for(var k2 in by){var g=by[k2],lbl=g.c.map(function(x){return x.tec+' '+x.freq+' '+(x.cel||x.set)+': '+(x.tec==='5G'?'NRPCI ':'PCI ')+x.pci+' · RACH '+x.rach+' · TAC '+x.tac;}).join('<br>');
+    L.marker([g.co.lat,g.co.lon],{icon:L.divIcon({className:'',html:'<div style="background:#f59e0b;color:#000;font:700 10px \'DM Mono\',monospace;padding:2px 6px;border-radius:10px;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.5);">🆕 '+escXml(k2)+' · '+g.c.map(function(x){return x.pci;}).join('/')+'</div>',iconSize:null})})
+      .bindPopup('<b>'+escXml(k2)+'</b> (site novo)<br>'+lbl).addTo(PCIPLAN.layer);b.push([g.co.lat,g.co.lon]);}
+  PCIPLAN.layer.addTo(map);if(b.length)map.fitBounds(b,{maxZoom:14,padding:[40,40]});
+}
 // ── Popup ──────────────────────────────────────────────────────────────────
 function showMapPopup(s,coord){
   var popup=document.getElementById('map-popup');
@@ -4097,10 +4307,12 @@ function showMapPopup(s,coord){
     (ranOper?'<div style="margin-bottom:5px;"><span style="background:rgba(236,72,153,.12);color:#ec4899;border:1px solid rgba(236,72,153,.25);padding:2px 8px;border-radius:10px;font-size:9px;font-weight:700;">🤝 RAN: '+escXml(ranOper)+'</span></div>':'')+
     '<div style="font-size:9px;color:var(--text3);font-family:\'DM Mono\',monospace;margin-bottom:8px;">📍 '+sf(coord.lat,6)+' / '+sf(coord.lon,6)+'</div>'+
     '<button onclick="goFinder(\''+esc(s.id)+'\')" style="width:100%;background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.25);color:var(--c1);font-size:10px;font-weight:700;padding:6px;border-radius:6px;cursor:pointer;font-family:\'DM Mono\',monospace;">🔍 Ver detalhes</button>'+
+    '<div id="map-pci" style="margin-top:9px;padding-top:8px;border-top:1px solid var(--border);"></div>'+
     '<div id="map-anatel" style="margin-top:9px;padding-top:8px;border-top:1px solid var(--border);"></div>'+
     '</div>';
   document.getElementById('map-popup-content').innerHTML=html;
   try{anatelFill(+coord.lat,+coord.lon);}catch(e){}
+  try{pciPopupFill(s);}catch(e){}
   popup.style.display='block';
   var mapRect=document.getElementById('map-container').getBoundingClientRect();
   var px=_mapState.map.latLngToContainerPoint([coord.lat,coord.lon]);
