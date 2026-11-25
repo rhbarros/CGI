@@ -462,7 +462,7 @@ body.role-busca #page-busca [onclick*="goMap"]{display:none!important;}
       <div class="card-title"><span>Sites com RS — TIM detentora</span><span style="display:flex;gap:6px;"><button class="ebtn" onclick="rsTimXlsx(false)">⬇ Excel (sites)</button><button class="ebtn" onclick="rsTimXlsx(true)">⬇ Excel (células)</button></span></div>
       <div id="dt-rstim"></div>
       <div class="tscroll" style="max-height:420px;overflow-y:auto;">
-        <table class="dtbl"><thead><tr><th>STATION ID</th><th>SITE</th><th>REGIONAL</th><th>UF</th><th>CIDADE</th><th>VENDOR</th><th>4C</th><th>4R</th><th>4N</th><th>FREQ RS</th><th>CÉLULAS RS</th><th>LATITUDE</th><th>LONGITUDE</th></tr></thead><tbody id="rstim-tbody"></tbody></table>
+        <table class="dtbl"><thead><tr><th>STATION ID</th><th>OPERADORA</th><th>TECNO</th><th>REGIONAL</th><th>UF</th><th>CIDADE</th><th>VENDOR</th><th>BSC/RNC</th><th>FREQ 2G</th><th>FREQ 3G</th><th>FREQ 4G</th><th>FREQ 5G</th><th>LARGURA 2G</th><th>LARGURA 3G</th><th>LARGURA 4G</th><th>LARGURA 5G</th><th>LATITUDE</th><th>LONGITUDE</th><th>4C</th><th>4R</th><th>4N</th><th>FREQ RS</th><th>CÉLULAS RS</th></tr></thead><tbody id="rstim-tbody"></tbody></table>
       </div>
     </div>
   </div>
@@ -5062,17 +5062,21 @@ function rsTimBuild(){
   };
   bar('rstimRegChart','reg',true);bar('rstimUFChart','uf',false,27);
   rsTimRender(rows);
+  var _fl={};var flOf=function(r){return _fl[r.id]||(_fl[r.id]=siteFqLg(r.s));};
   dtHdrInit('rstim','dt-rstim','rstim-tbody',[
-    function(r){return [r.id];},function(r){return [r.site];},function(r){return [r.reg];},function(r){return [r.uf];},function(r){return [r.city];},function(r){return [r.vend];},
+    function(r){return [r.id];},function(r){return ['TIM'];},function(r){return techCombo(siteTechs(r.s).join(', '));},
+    function(r){return [r.reg];},function(r){return [r.uf];},function(r){return [r.city];},function(r){return vendCombo(siteVendList(r.s).join(' / '));},function(r){return dtCombo(siteBsc(r.s));}
+  ].concat(dtFqLgCols(flOf),[function(r){return [r.lat];},function(r){return [r.lon];},
     function(r){return [String(r.n['4C'])];},function(r){return [String(r.n['4R'])];},function(r){return [String(r.n['4N'])];},
-    function(r){return r.fq?r.fq.split(', '):[''];},function(r){return [r.cels];},function(r){return [r.lat];},function(r){return [r.lon];}
-  ],rows,function(v){rsTimRender(v);},500);
+    function(r){return r.fq?r.fq.split(', '):[''];},function(r){return [r.cels];}]),
+  rows,function(v){rsTimRender(v);},500);
 }
 function rsTimRender(v){
   var num=function(x){return '<td style="text-align:center;'+(x?'color:#10b981;font-weight:700;':'color:var(--text3);')+'">'+(x||'—')+'</td>';};
   document.getElementById('rstim-tbody').innerHTML=v.slice(0,500).map(function(r){
-    return '<tr><td class="hi" style="cursor:pointer;color:var(--c1);" onclick="goFinder(\''+esc(r.id)+'\')">'+r.id+'</td><td>'+(r.site||'—')+'</td><td>'+(r.reg||'—')+'</td><td>'+(r.uf||'—')+'</td><td>'+(r.city||'—')+'</td><td>'+(r.vend||'—')+'</td>'+
-      num(r.n['4C'])+num(r.n['4R'])+num(r.n['4N'])+'<td style="color:var(--c4);">'+(r.fq||'—')+'</td><td style="font-family:\'DM Mono\',monospace;font-size:9px;max-width:340px;white-space:normal;">'+escXml(r.cels)+'</td><td style="color:var(--text3);">'+(r.lat||'—')+'</td><td style="color:var(--text3);">'+(r.lon||'—')+'</td></tr>';
+    var s=r.s,chips=siteTechs(s).sort().map(function(t){return '<span class="tchip '+techChipClass(t)+'">'+t+'</span>';}).join('')||'—';
+    return '<tr><td class="hi" style="cursor:pointer;color:var(--c1);" onclick="goFinder(\''+esc(r.id)+'\')">'+r.id+'</td><td><span style="background:rgba(16,185,129,.12);color:#10b981;border:1px solid rgba(16,185,129,.3);padding:2px 8px;border-radius:12px;font-size:10px;font-weight:700;">TIM</span></td><td>'+chips+'</td><td>'+(r.reg||'—')+'</td><td>'+(r.uf||'—')+'</td><td>'+(r.city||'—')+'</td><td>'+(siteVendList(s).join(' / ')||s.vend||'—')+'</td><td>'+siteBsc(s)+'</td>'+regTechTds(siteFqLg(s))+'<td style="color:var(--text3);">'+(r.lat||'—')+'</td><td style="color:var(--text3);">'+(r.lon||'—')+'</td>'+
+      num(r.n['4C'])+num(r.n['4R'])+num(r.n['4N'])+'<td style="color:var(--c4);">'+(r.fq||'—')+'</td><td style="font-family:\'DM Mono\',monospace;font-size:9px;min-width:220px;white-space:normal;">'+escXml(r.cels)+'</td></tr>';
   }).join('');
 }
 function rsTimXlsx(porCelula){
@@ -5080,8 +5084,8 @@ function rsTimXlsx(porCelula){
   var aoa;
   if(porCelula){aoa=[['STATION ID','SITE','CELULA','PREFIXO','REGIONAL','UF','CIDADE','CGI','FREQ','LARGURA','VENDOR','TAC','ENODEBID','AZIMUTE','LATITUDE','LONGITUDE']];
     RSTIM.cells.forEach(function(x){var c=x.c;aoa.push([x.s.id,c.siteName||'',c.cel||'',x.p,c.reg||'',c.uf||'',c.city||'',c.cgi||'',c.freq||'',c.larg||'',c.vend||'',c.tac||'',c.enodeb||'',c.az||'',c.lat||'',c.lon||'']);});}
-  else{aoa=[['STATION ID','SITE','REGIONAL','UF','CIDADE','VENDOR','4C','4R','4N','FREQ RS','CELULAS RS','LATITUDE','LONGITUDE']];
-    RSTIM.rows.forEach(function(r){aoa.push([r.id,r.site,r.reg,r.uf,r.city,r.vend,r.n['4C'],r.n['4R'],r.n['4N'],r.fq,r.cels,r.lat,r.lon]);});}
+  else{aoa=[['STATION ID','OPERADORA','TECNOLOGIAS','REGIONAL','UF','CIDADE','VENDOR','BSC/RNC','FREQ 2G','FREQ 3G','FREQ 4G','FREQ 5G','LARGURA 2G','LARGURA 3G','LARGURA 4G','LARGURA 5G','LATITUDE','LONGITUDE','SITE','4C','4R','4N','FREQ RS','CELULAS RS']];
+    RSTIM.rows.forEach(function(r){var s=r.s;aoa.push([r.id,'TIM',siteTechsStr(s),r.reg,r.uf,r.city,(siteVendList(s).join(' / ')||s.vend),String(siteBsc(s)).replace(/<[^>]*>/g,'')].concat(regTechVals(siteFqLg(s)),[r.lat,r.lon,r.site,r.n['4C'],r.n['4R'],r.n['4N'],r.fq,r.cels]));});}
   var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(aoa),porCelula?'Celulas RS TIM':'Sites RS TIM');
   XLSX.writeFile(wb,porCelula?'rs_tim_detentora_celulas.xlsx':'rs_tim_detentora_sites.xlsx');
 }
