@@ -2517,6 +2517,20 @@ function exportLteQtyCSV(){
   dlCsv(['STATION ID,SITE,UF,CIDADE,REGIONAL,VENDOR,BSC/RNC,QTD_'+tech].concat(_lteQtyData.map(function(m){var s=m.site;return csvRow([s.id,getSiteNames(s).join('|'),s.uf,s.city,s.reg,(s.vend&&!isND(s.vend))?s.vend:'N/D',siteBsc(s,tech),m.n]);})).join('\n'),'sites_'+qty+'_celulas_'+tech+'.csv');
 }
 
+// RAN Sharing no site: células 4C/4R/4N = RS com a TIM detentora; células com OPERADORA ≠ TIM (ex.: VIVO) = RS com a outra operadora detentora
+function rsInfoHtml(site){
+  var tim={},nt=0,out={},no=0;
+  site.cells.forEach(function(c){
+    var cel=String(c.cel||'').toUpperCase(),p=cel.substr(0,2),op=String(c.oper||'').toUpperCase();
+    if(p==='4C'||p==='4R'||p==='4N'){tim[p]=(tim[p]||0)+1;nt++;}
+    if(op&&op!=='TIM'){out[op]=(out[op]||0)+1;no++;}
+  });
+  if(!nt&&!no)return '';
+  var st='display:inline-block;margin:5px 4px 0 0;padding:3px 10px;border-radius:12px;font-size:10px;font-weight:700;',h='<div>';
+  if(nt)h+='<span style="'+st+'background:rgba(16,185,129,.12);color:#10b981;border:1px solid rgba(16,185,129,.3);" title="Células com prefixo 4C/4R/4N">🤝 RAN Sharing — TIM detentora · '+Object.keys(tim).sort().map(function(k){return k+': '+tim[k];}).join(' · ')+' cél.</span>';
+  if(no)h+='<span style="'+st+'background:rgba(236,72,153,.12);color:#ec4899;border:1px solid rgba(236,72,153,.25);">🤝 RAN Sharing — detentora '+Object.keys(out).sort().join(' / ')+' · '+no+' cél.</span>';
+  return h+'</div>';
+}
 function renderSiteDetail(site){
   setTimeout(function(){try{anatelFinFill();}catch(e){}},0);
   var techs=siteTechs(site).sort();
@@ -2560,6 +2574,7 @@ function renderSiteDetail(site){
     (siteVendList(site).length>1?'<div style="margin-top:5px;"><span style="background:rgba(245,158,11,.12);color:#f59e0b;border:1px solid rgba(245,158,11,.3);padding:3px 10px;border-radius:12px;font-size:10px;font-weight:700;">🏭 Múltiplos vendors: '+siteVendByTechStr(site)+'</span></div>':'')+
     '<div style="margin:5px 0;">'+chips+'</div>'+
     (site.oper&&site.oper.toUpperCase()!=='TIM'?'<div style="margin-top:5px;"><span style="background:rgba(236,72,153,.12);color:#ec4899;border:1px solid rgba(236,72,153,.25);padding:3px 10px;border-radius:12px;font-size:10px;font-weight:700;">📡 RAN: '+site.oper+'</span></div>':'')+
+    rsInfoHtml(site)+
     '<div style="font-size:10px;color:var(--text3);font-family:\'DM Mono\',monospace;margin-top:6px;">📍 '+(site.lat||'—')+' / '+(site.lon||'—')+'</div>'+
     '<div class="fin-anatel" data-lat="'+escXml(String(site.lat||''))+'" data-lon="'+escXml(String(site.lon||''))+'" style="font-size:10px;font-family:\'DM Mono\',monospace;color:var(--text2);margin-top:6px;line-height:1.9;"></div>'+
     (freqLines?'<div style="font-size:10px;font-family:\'DM Mono\',monospace;color:var(--text3);margin-top:6px;line-height:1.8;">📊 FREQ/LARG:<br>'+freqLines+'</div>':'')+
