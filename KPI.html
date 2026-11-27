@@ -225,6 +225,10 @@ html[data-theme="light"] .kmbtn{background:#fff;color:var(--text);border-color:v
 html[data-theme="light"] .kmbtn.on{background:#a78bfa;color:#fff;border-color:#a78bfa!important;}
 html[data-theme="light"] .hl-tb{background:#0f1626;border-radius:8px;padding:4px 10px;box-sizing:content-box;}
 html[data-theme="light"] #sel-panel{box-shadow:0 8px 24px rgba(15,23,42,.15)!important;}
+.slac{padding:5px 8px!important;}
+.th-inline{font-size:10px;font-family:'DM Mono',monospace;color:var(--text2);display:inline-flex;align-items:center;gap:4px;}
+.th-inline input{width:62px;background:var(--bg2);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-family:'DM Mono',monospace;font-size:10.5px;padding:3px 5px;}
+#sla-tbl thead tr:first-child th{top:0;}#sla-tbl thead tr+tr th{top:27px;}
 #theme-btn{position:fixed;left:12px;bottom:10px;z-index:100000;display:flex;align-items:center;gap:6px;background:var(--bg2);border:1px solid var(--border2);color:var(--text2);border-radius:20px;padding:6px 12px;font:11px 'DM Mono',monospace;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.18);}
 #theme-btn:hover{color:var(--text);border-color:var(--c1);}
 @media print{#theme-btn{display:none!important;}}
@@ -327,6 +331,7 @@ body.role-busca #pg-site{display:block!important;}
   <div class="ms" data-k="mun"></div>
   <div class="ms" data-k="vendor"></div>
   <div class="ms" data-k="classe"></div>
+  <div class="ms" data-k="prio"></div>
   <div class="ms" data-k="status"></div>
   <button class="rbtn" id="btn-clear">✕ Limpar filtros</button>
   <span class="flabel" id="f-count" style="margin-left:auto"></span>
@@ -336,6 +341,7 @@ body.role-busca #pg-site{display:block!important;}
   <div class="tab" data-p="map">Mapa</div>
   <div class="tab" data-p="tr">Tendências</div>
   <div class="tab" data-p="city">Cidades</div>
+  <div class="tab" data-p="sla">SLA Cidades (TIM)</div>
   <div class="tab" data-p="site">Sites</div>
   <div class="tab" data-p="off">Ofensores</div>
   <div class="tab" data-p="tx">Transporte</div>
@@ -401,6 +407,23 @@ body.role-busca #pg-site{display:block!important;}
    <div class="tools"><input class="sbox" id="city-q" placeholder="Filtrar município…"><select class="fsel" id="city-min"><option value="1">≥ 1 site</option><option value="3" selected>≥ 3 sites</option><option value="10">≥ 10 sites</option><option value="30">≥ 30 sites</option></select><button class="rbtn" id="city-exp">⬇ Exportar CSV</button></div>
    <div class="tscroll"><table class="dtbl" id="city-tbl"></table></div>
    <div class="pager" id="city-pg"></div>
+  </div>
+ </div>
+
+ <!-- SLA Cidades (visão TIM) -->
+ <div class="page" id="pg-sla">
+  <div class="kpi-grid" id="sla-sum"></div>
+  <div class="card">
+   <div class="card-title">KPI Dashboard TIM · 4G Target 1 por cidade e semana <small id="sla-sub"></small></div>
+   <div class="tools">
+    <input class="sbox" id="sla-q" placeholder="Pesquisar cidade…">
+    <label class="note" style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" id="sla-bad"> só cidades fora da meta</label>
+    <button class="rbtn" id="sla-exp">⬇ Exportar CSV</button>
+    <button class="rbtn" id="sla-load">⬆ Carregar ZIP</button><input type="file" id="fi-sla" accept=".zip" style="display:none">
+    <span class="note">Filtros aplicados: Regional, UF, Município e Prioridade · clique na cidade para ver os sites</span>
+   </div>
+   <div id="sla-body"><div class="tscroll" style="max-height:calc(100vh - 330px);overflow:auto"><table class="dtbl" id="sla-tbl"></table></div><div class="pager" id="sla-pg"></div></div>
+   <div class="tools" style="margin-top:10px"><span class="flabel">Metas (verde/vermelho)</span><span id="sla-rules" style="display:flex;gap:10px;flex-wrap:wrap"></span><button class="rbtn" id="sla-apply">Aplicar</button></div>
   </div>
  </div>
 
@@ -579,7 +602,7 @@ var REF_KPI=[
 /* ── estado global ── */
 var TH={};
 var D=null;          // dataset
-var FILTER={tech:{},regional:{},uf:{},anf:{},mun:{},vendor:{},classe:{},status:{}};
+var FILTER={tech:{},prio:{},regional:{},uf:{},anf:{},mun:{},vendor:{},classe:{},status:{}};
 var FS=[];           // índices de sites filtrados
 var DI=0;            // índice do dia de referência
 var WIN=14;
@@ -897,8 +920,8 @@ function strip(si,d0,d1){var h='<span class="strip">';for(var d=d0;d<=d1;d++){va
 function winStart(){return Math.max(0,DI-WIN+1);}
 
 /* ═════════════ FILTROS ═════════════ */
-var MS_LABEL={tech:'Tecnologia',regional:'Regional',uf:'UF',anf:'ANF',mun:'Município',vendor:'Vendor',classe:'Classe',status:'Status'};
-function siteVal(s,si,k){if(k==='status')return ST_NAME[D.ST[si*D.ND+DI]];if(k==='mun')return s.mun+' ('+s.uf+')';return s[k];}
+var MS_LABEL={tech:'Tecnologia',regional:'Regional',uf:'UF',anf:'ANF',mun:'Município',vendor:'Vendor',classe:'Classe',prio:'Prioridade',status:'Status'};
+function siteVal(s,si,k){if(k==='prio')return s.prio||'Sem prioridade';if(k==='status')return ST_NAME[D.ST[si*D.ND+DI]];if(k==='mun')return s.mun+' ('+s.uf+')';return s[k];}
 function passes(si,except){
  var s=D.sites[si];
  for(var k in FILTER){if(k===except)continue;var f=FILTER[k];var any=false;for(var x in f){any=true;break;}if(!any)continue;if(!f[siteVal(s,si,k)])return false;}
@@ -953,7 +976,7 @@ function buildMS(){
 }
 function closeAllMS(){var p=document.querySelectorAll('.ms-pop.open');for(var i=0;i<p.length;i++)p[i].classList.remove('open');}
 function setFilter(k,vals){FILTER[k]={};for(var i=0;i<vals.length;i++)FILTER[k][vals[i]]=1;refresh();}
-function refresh(){applyFilters();var p=['ov','map','tr','city','site','off','tx','cap'];for(var i=0;i<p.length;i++)DIRTY[p[i]]=1;render(CUR);}
+function refresh(){applyFilters();var p=['ov','map','tr','city','site','off','tx','cap','sla'];for(var i=0;i<p.length;i++)DIRTY[p[i]]=1;render(CUR);}
 
 /* ═════════════ NAVEGAÇÃO ═════════════ */
 function go(p){
@@ -967,7 +990,7 @@ function render(p){
  if(p==='th'){renderTH();return;}
  if(!DIRTY[p])return;DIRTY[p]=0;
  busy(true);
- setTimeout(function(){try{({ov:renderOV,map:renderMap,tr:renderTR,city:renderCity,site:renderSite,off:renderOff,tx:renderTX,cap:renderCap})[p]();}catch(e){console.error(e);toast('Erro ao renderizar: '+e.message,5000);}busy(false);},10);
+ setTimeout(function(){try{({ov:renderOV,map:renderMap,tr:renderTR,city:renderCity,site:renderSite,off:renderOff,tx:renderTX,cap:renderCap,sla:renderSLA})[p]();}catch(e){console.error(e);toast('Erro ao renderizar: '+e.message,5000);}busy(false);},10);
 }
 
 /* ═════════════ CHART HELPERS ═════════════ */
@@ -1126,7 +1149,7 @@ function persistent(n,m){
 function cityAgg(list,d){
  var m={},a=[];
  for(var i=0;i<list.length;i++){var s=D.sites[list[i]],k=s.uf+'|'+s.mun;var c=m[k];if(!c){c=m[k]={key:k,mun:s.mun,uf:s.uf,anf:s.anf,classe:s.classe,regional:s.regional,sites:[],c:[0,0,0,0,0,0]};a.push(c);}c.sites.push(list[i]);c.c[D.ST[list[i]*D.ND+d]]++;}
- for(var j=0;j<a.length;j++){var x=a[j];x.n=x.sites.length;var st={},n4=0,n5=0;for(var z=0;z<x.sites.length;z++){var ss=D.sites[x.sites[z]];st[ss.sid||ss.id]=1;if(ss.tech==='5G')n5++;else n4++;}x.ns=keys(st).length;x.n4=n4;x.n5=n5;x.nd=x.n-x.c[ST_ND]||1;x.ok=x.c[0];x.h=health(x.sites,d);}
+ for(var j=0;j<a.length;j++){var x=a[j];x.n=x.sites.length;var st={},n4=0,n5=0;for(var z=0;z<x.sites.length;z++){var ss=D.sites[x.sites[z]];st[ss.sid||ss.id]=1;if(ss.tech==='5G')n5++;else n4++;}x.ns=keys(st).length;x.n4=n4;x.n5=n5;x.prio=D.sites[x.sites[0]].prio||'—';x.nd=x.n-x.c[ST_ND]||1;x.ok=x.c[0];x.h=health(x.sites,d);}
  return a;
 }
 var CITY={sort:'h',dir:1,page:0,rows:[]};
@@ -1148,11 +1171,11 @@ function drawCity(){
  rows.sort(function(a,b){var x=a[s],y=b[s];if(typeof x==='string')return dir*x.localeCompare(y);if(x!==x)x=-1e9*dir;if(y!==y)y=-1e9*dir;return dir*(x-y);});
  CITY.rows=rows;
  $('city-sub').textContent=fmt(rows.length)+' municípios · '+dLong(DI)+' · tendência = índice de saúde na janela';
- var cols=[['mun','Município'],['uf','UF'],['anf','ANF'],['classe','Classe'],['ns','Qtd. sites',1],['n4','Nós 4G',1],['n5','Nós 5G',1],['n','Total nós',1],['h','Saúde',1],['spark','Tendência'],['delta','Δ janela',1],['c4','Fora',1],['c2','Crít.',1],['c1','Aten.',1],['c3','S/ tráf.',1],['disp','Disp %',1],['acc','ACC %',1],['drop','DROP %',1],['tdl','TPUT DL',1],['vol','Vol GB',1]];
+ var cols=[['mun','Município'],['uf','UF'],['anf','ANF'],['classe','Classe'],['prio','Prior.'],['ns','Qtd. sites',1],['n4','Nós 4G',1],['n5','Nós 5G',1],['n','Total nós',1],['h','Saúde',1],['spark','Tendência'],['delta','Δ janela',1],['c4','Fora',1],['c2','Crít.',1],['c1','Aten.',1],['c3','S/ tráf.',1],['disp','Disp %',1],['acc','ACC %',1],['drop','DROP %',1],['tdl','TPUT DL',1],['vol','Vol GB',1]];
  var h='<thead><tr>';for(var j=0;j<cols.length;j++)h+='<th class="'+(cols[j][2]?'num ':'')+(CITY.sort===cols[j][0]?'sorted':'')+'" data-s="'+cols[j][0]+'">'+cols[j][1]+(CITY.sort===cols[j][0]?(CITY.dir>0?' ▲':' ▼'):'')+'</th>';h+='</tr></thead><tbody>';
  var P=50,p0=CITY.page*P,sl=rows.slice(p0,p0+P);
  for(i=0;i<sl.length;i++){var c=sl[i];
-  h+='<tr data-k="'+esc(c.key)+'"><td><b>'+esc(c.mun)+'</b></td><td>'+c.uf+'</td><td>'+esc(c.anf)+'</td><td style="color:var(--text3)">'+esc(c.classe)+'</td><td class="num"><b>'+fmt(c.ns)+'</b></td><td class="num">'+fmt(c.n4)+'</td><td class="num">'+fmt(c.n5)+'</td><td class="num">'+c.n+'</td>'+
+  h+='<tr data-k="'+esc(c.key)+'"><td><b>'+esc(c.mun)+'</b></td><td>'+c.uf+'</td><td>'+esc(c.anf)+'</td><td style="color:var(--text3)">'+esc(c.classe)+'</td><td>'+esc(c.prio==='Sem prioridade'?'—':c.prio)+'</td><td class="num"><b>'+fmt(c.ns)+'</b></td><td class="num">'+fmt(c.n4)+'</td><td class="num">'+fmt(c.n5)+'</td><td class="num">'+c.n+'</td>'+
    '<td class="num"><span class="hbar"><i style="width:'+c.h+'%;background:'+hcol(c.h)+'"></i></span>'+fmt(c.h,1)+'</td><td><canvas class="spark" width="90" height="22" data-i="'+(p0+i)+'"></canvas></td>'+
    '<td class="num '+(c.delta<-1?'bad':(c.delta>1?'good':''))+'">'+(c.delta===c.delta?(c.delta>0?'+':'')+fmt(c.delta,1):'–')+'</td>'+
    '<td class="num bad">'+(c.c[4]||'')+'</td><td class="num" style="color:var(--crit)">'+(c.c[2]||'')+'</td><td class="num warnc">'+(c.c[1]||'')+'</td><td class="num" style="color:var(--idle)">'+(c.c[3]||'')+'</td>'+
@@ -1586,6 +1609,112 @@ function mapSearch(q){
  if(b.length)MAP.map.fitBounds(b,{padding:[30,30],maxZoom:14});else toast('Nada encontrado no mapa');
 }
 
+/* ═════════════ SLA CIDADES (visão TIM · CIDADES_P1A4REGIONAL.zip) ═════════════
+   Arquivos pX_tYY.xlsx exportados do painel TIM (Vendor Optimization Governance › KPI Dashboard):
+   linha 1 = KPI, linha 2 = semana (AA/SS), linhas seguintes = "UF/Cidade" + média semanal. */
+var SLA={rows:null,weeks:[],kpis:[],page:0,sort:null,dir:1,prio:{},src:''};
+var SLA_RULE={ // calibrado pelo print do KPI Dashboard da TIM (verde/vermelho); editável na aba
+ 'ACC_ERAB_INI Target 1':{c:'>=',v:98.5,d:1},'ACC_ERRC Target 1':{c:'>=',v:98.5,d:1},'CQI_MEAN Target 1':{c:'>=',v:10,d:1},
+ 'DROP_ERAB Target 1':{c:'<=',v:1,d:1},'INTER_FREQ_HO_SUCC_OUT Target 1':{c:'>=',v:90,d:1},'INTRA_FREQ_HO_SUCC_OUT Target 1':{c:'>=',v:92,d:1}};
+(function(){try{var s=JSON.parse(localStorage.getItem('kpiSlaRule')||'{}');for(var k in s)if(SLA_RULE[k])SLA_RULE[k].v=s[k];}catch(e){}})();
+function slaOk(k,v){var r=SLA_RULE[k];if(!r||v!==v)return null;return r.c==='<='?v<=r.v:v>=r.v;}
+function loadXLSX(cb){if(window.XLSX){cb();return;}var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';s.onload=function(){cb();};s.onerror=function(){cb('Falha ao carregar o leitor de Excel (sem internet?)');};document.head.appendChild(s);}
+function slaParseZip(buf,name,done){
+ loadXLSX(function(err){
+  if(err){done(err);return;}
+  JSZip.loadAsync(buf).then(function(z){
+   var ents=[];z.forEach(function(p,e){if(!e.dir&&/\.xlsx?$/i.test(p))ents.push({p:p,e:e});});
+   if(!ents.length){done('ZIP sem planilhas .xlsx');return;}
+   var rows=[],weeks=null,kpis=null,i=0;
+   function next(){
+    if(i>=ents.length){SLA.rows=rows;SLA.weeks=weeks||[];SLA.kpis=kpis||[];SLA.src=name+' · '+ents.length+' planilhas';slaPrio();done(null);return;}
+    var en=ents[i++],fn=en.p.replace(/^.*\//,'');
+    var pm=fn.match(/p(\d)/i),rm=fn.match(/_(t[a-z]{2})/i),prio=pm?'P'+pm[1]:'—',reg=rm?rm[1].toUpperCase():'';
+    en.e.async('arraybuffer').then(function(ab){
+     var wb=XLSX.read(ab,{type:'array'}),ws=wb.Sheets[wb.SheetNames[0]],a=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null});
+     if(a.length<4){next();return;}
+     var hk=a[0],hw=a[1],cols=[],kset={},wset={};
+     for(var c=1;c<hk.length;c++){if(!hk[c])continue;var k=String(hk[c]).trim(),w=String(hw[c]||'').trim();cols.push({c:c,k:k,w:w});kset[k]=1;wset[w]=1;}
+     if(!kpis){kpis=[];weeks=[];for(var q=0;q<cols.length;q++){if(kpis.indexOf(cols[q].k)<0)kpis.push(cols[q].k);if(weeks.indexOf(cols[q].w)<0)weeks.push(cols[q].w);}}
+     for(var r=3;r<a.length;r++){var city=a[r][0];if(!city||String(city).indexOf('/')<0||String(city).indexOf('Filtros')===0)continue;
+      city=String(city).trim();var uf=city.split('/')[0].toUpperCase(),mun=city.substr(city.indexOf('/')+1);
+      var v={};for(var q2=0;q2<cols.length;q2++){var x=a[r][cols[q2].c];v[cols[q2].k+'|'+cols[q2].w]=(x==null||x==='')?NaN:num(x);}
+      rows.push({city:city,uf:uf,mun:mun,key:uf+'|'+nk(mun),prio:prio,reg:reg||UF_REG[uf]||'',v:v});}
+     next();
+    })['catch'](function(){next();});
+   }
+   next();
+  })['catch'](function(e){done('ZIP inválido: '+e);});
+ });
+}
+function slaPrio(){ // prioridade da cidade → sites (filtro Prioridade)
+ if(!SLA.rows||!D)return;var m={},i;for(i=0;i<SLA.rows.length;i++)m[SLA.rows[i].key]=SLA.rows[i].prio;SLA.prio=m;
+ for(i=0;i<D.NS;i++){var s=D.sites[i];s.prio=m[s.uf+'|'+nk(s.mun)]||'Sem prioridade';}
+ if($('dashboard').style.display==='block'){applyFilters();}
+}
+function autoSLA(){
+ if(!/^https?:/.test(location.protocol))return;
+ fetch('CIDADES_P1A4REGIONAL.zip',{cache:'no-cache'}).then(function(r){if(!r.ok)throw 0;return r.arrayBuffer();}).then(function(buf){
+  slaParseZip(buf,'CIDADES_P1A4REGIONAL.zip',function(err){if(err){console.warn(err);return;}var p=['ov','city','site','sla'];for(var i=0;i<p.length;i++)DIRTY[p[i]]=1;render(CUR);});
+ })['catch'](function(){});
+}
+function slaPass(r){ // filtros globais aplicáveis à cidade (Regional, UF, Município, Prioridade)
+ var f;
+ f=FILTER.regional;if(nsel(f)&&!f[r.reg])return false;
+ f=FILTER.uf;if(nsel(f)&&!f[r.uf])return false;
+ f=FILTER.prio;if(f&&nsel(f)&&!f[r.prio])return false;
+ f=FILTER.mun;if(nsel(f)){var ok=false;for(var k in f){var mm=k.match(/^(.*) \(([A-Z]{2})\)$/);if(mm&&mm[2]===r.uf&&nk(mm[1])===nk(r.mun)){ok=true;break;}}if(!ok)return false;}
+ return true;
+}
+function renderSLA(){
+ var host=$('sla-body');
+ if(!SLA.rows){host.innerHTML='<div class="empty-msg">📋 Coloque o <b>CIDADES_P1A4REGIONAL.zip</b> na mesma pasta do KPI.html (GitHub) ou clique em <b>⬆ Carregar ZIP</b>.<br>São as planilhas pX_tYY.xlsx exportadas do KPI Dashboard da TIM (4G Target 1 por cidade e semana).</div>';$('sla-sub').textContent='';return;}
+ SLA.page=0;drawSLA();
+}
+function drawSLA(){
+ var q=nk($('sla-q').value),only=$('sla-bad').checked,lw=SLA.weeks[SLA.weeks.length-1],rows=[],i,j,k;
+ for(i=0;i<SLA.rows.length;i++){var r=SLA.rows[i];if(!slaPass(r))continue;if(q&&nk(r.city).indexOf(q)<0)continue;
+  var nb=0;for(j=0;j<SLA.kpis.length;j++)if(slaOk(SLA.kpis[j],r.v[SLA.kpis[j]+'|'+lw])===false)nb++;r.nb=nb;
+  if(only&&!nb)continue;rows.push(r);}
+ var s=SLA.sort,dir=SLA.dir;
+ rows.sort(function(a,b){if(!s)return (a.prio<b.prio?-1:a.prio>b.prio?1:0)||(b.nb-a.nb)||a.city.localeCompare(b.city);
+  if(s==='city')return dir*a.city.localeCompare(b.city);if(s==='prio')return dir*(a.prio<b.prio?-1:a.prio>b.prio?1:0)||a.city.localeCompare(b.city);if(s==='nb')return dir*(a.nb-b.nb);
+  var x=a.v[s],y=b.v[s];if(x!==x)x=-1e9*dir;if(y!==y)y=-1e9*dir;return dir*(x-y);});
+ SLA.cur=rows;
+ // resumo por KPI na última semana
+ var sum='';for(j=0;j<SLA.kpis.length;j++){var kk=SLA.kpis[j],bad=0,tot=0;for(i=0;i<rows.length;i++){var o=slaOk(kk,rows[i].v[kk+'|'+lw]);if(o!==null){tot++;if(!o)bad++;}}
+  sum+='<div class="kpi" style="--kc:'+(bad?ST_COLOR[4]:ST_COLOR[0])+'" data-k="'+esc(kk)+'"><div class="kpi-label">'+esc(kk.replace(' Target 1',''))+'</div><div class="kpi-val">'+fmt(tot-bad)+'<span style="font-size:13px;color:var(--text3)"> / '+fmt(tot)+'</span></div><div class="kpi-sub">'+(bad?'<span class="d-bad">'+bad+' fora da meta</span>':'<span class="d-good">todas na meta</span>')+' · '+SLA_RULE[kk].c+' '+fmt(SLA_RULE[kk].v,1)+'</div></div>';}
+ $('sla-sum').innerHTML=sum;
+ $('sla-sum').onclick=function(e){var t=e.target.closest('.kpi');if(!t)return;SLA.sort=t.getAttribute('data-k')+'|'+lw;SLA.dir=SLA_RULE[t.getAttribute('data-k')].c==='<='?-1:1;SLA.page=0;drawSLA();};
+ $('sla-sub').textContent=fmt(rows.length)+' cidades · '+SLA.src+' · semana '+lw+' em destaque';
+ // tabela no estilo TIM
+ var P=100,p0=SLA.page*P,sl=rows.slice(p0,p0+P),W=SLA.weeks;
+ var h='<thead><tr><th rowspan="2" data-s="city" class="'+(s==='city'?'sorted':'')+'">SLA KPI/Target<br>City</th><th rowspan="2" data-s="prio">Prior.</th><th rowspan="2" class="num" data-s="nb" title="KPIs fora da meta na última semana">Fora</th>';
+ for(j=0;j<SLA.kpis.length;j++)h+='<th colspan="'+W.length+'" style="text-align:center;border-left:2px solid var(--border2)">'+esc(SLA.kpis[j])+'</th>';
+ h+='</tr><tr>';for(j=0;j<SLA.kpis.length;j++)for(k=0;k<W.length;k++){var key=SLA.kpis[j]+'|'+W[k];h+='<th class="num '+(s===key?'sorted':'')+'" data-s="'+esc(key)+'" style="'+(k===0?'border-left:2px solid var(--border2);':'')+'">'+esc(W[k])+(s===key?(dir>0?' ▲':' ▼'):'')+'</th>';}
+ h+='</tr></thead><tbody>';
+ for(i=0;i<sl.length;i++){var rr=sl[i];
+  h+='<tr data-k="'+esc(rr.key)+'"><td><b>'+esc(rr.city)+'</b></td><td>'+rr.prio+'</td><td class="num '+(rr.nb?'bad':'good')+'">'+(rr.nb||'✓')+'</td>';
+  for(j=0;j<SLA.kpis.length;j++)for(k=0;k<W.length;k++){var kk2=SLA.kpis[j],v=rr.v[kk2+'|'+W[k]],ok=slaOk(kk2,v),last=k===W.length-1;
+   var bg=ok===false?'rgba(239,68,68,'+(last?'.28':'.16')+')':(last&&ok?'rgba(16,185,129,.16)':'');
+   h+='<td class="num slac" style="'+(k===0?'border-left:2px solid var(--border2);':'')+(bg?'background:'+bg+';':'')+'"><i class="dot" style="background:'+(ok===null?'var(--text3)':(ok?'#10b981':'#ef4444'))+';margin-right:5px;'+(ok===false?'box-shadow:0 0 0 2px rgba(239,68,68,.35)':'')+'"></i>'+fmt(v,SLA_RULE[kk2]?SLA_RULE[kk2].d:1)+'</td>';}
+  h+='</tr>';}
+ h+='</tbody>';
+ var t=$('sla-tbl');t.innerHTML=h;
+ t.querySelector('thead').onclick=function(e){var th=e.target.closest('th[data-s]');if(!th)return;var ss=th.getAttribute('data-s');if(SLA.sort===ss)SLA.dir=-SLA.dir;else{SLA.sort=ss;var kn=ss.split('|')[0];SLA.dir=(ss==='nb')?-1:(SLA_RULE[kn]&&SLA_RULE[kn].c==='<='?-1:1);}SLA.page=0;drawSLA();};
+ t.querySelector('tbody').onclick=function(e){var tr=e.target.closest('tr[data-k]');if(!tr)return;var k2=tr.getAttribute('data-k');var all=[];for(var x=0;x<D.NS;x++){var s2=D.sites[x];if(s2.uf+'|'+nk(s2.mun)===k2)all.push(x);}if(!all.length){toast('Cidade sem sites na base de KPI');return;}openCity(D.sites[all[0]].uf+'|'+D.sites[all[0]].mun);};
+ pager('sla-pg',rows.length,P,SLA.page,function(p){SLA.page=p;drawSLA();});
+ // regras
+ var rh='';for(j=0;j<SLA.kpis.length;j++){var kn2=SLA.kpis[j],ru=SLA_RULE[kn2];if(!ru)continue;rh+='<span class="th-inline">'+esc(kn2.replace(' Target 1',''))+' '+ru.c+' <input type="number" step="any" data-k="'+esc(kn2)+'" value="'+ru.v+'"></span>';}
+ $('sla-rules').innerHTML=rh;
+}
+function slaExport(){
+ var r=SLA.cur||[],W=SLA.weeks,head=['Cidade','UF','Regional','Prioridade','KPIs fora (ultima semana)'],rows=[],j,k;
+ for(j=0;j<SLA.kpis.length;j++)for(k=0;k<W.length;k++)head.push(SLA.kpis[j]+' '+W[k]);
+ for(var i=0;i<r.length;i++){var o=[r[i].city,r[i].uf,r[i].reg,r[i].prio,r[i].nb];for(j=0;j<SLA.kpis.length;j++)for(k=0;k<W.length;k++)o.push(r[i].v[SLA.kpis[j]+'|'+W[k]]);rows.push(o);}
+ download('sla_cidades.csv',toCSV(head,rows));
+}
+
 /* ═════════════ METAS ═════════════ */
 function renderTH(){
  var h='';for(var i=0;i<TH_META.length;i++){var m=TH_META[i];
@@ -1619,8 +1748,9 @@ function startDashboard(){
  var ufs={};for(i=0;i<D.NS;i++)ufs[D.sites[i].uf]=1;
  $('hsub').textContent='Status de sites e cidades · RAN '+(D.techs||['4G']).join(' + ')+' · '+keys(ufs).length+' UFs';
  buildMS();applyFilters();
- var p=['ov','map','tr','city','site','off','tx','cap'];for(i=0;i<p.length;i++)DIRTY[p[i]]=1;
+ var p=['ov','map','tr','city','site','off','tx','cap','sla'];for(i=0;i<p.length;i++)DIRTY[p[i]]=1;
  go('ov');
+ if(SLA.rows)slaPrio();else autoSLA();
  if(!D.cgi)autoCGI();else cgiPill();
 }
 function cgiAfter(){ // depois de cruzar a CGI (pode ter retirado nós do 5G)
@@ -1713,7 +1843,13 @@ function bindUI(){
  $('o-exp').onclick=function(){exportSites((EXP.off||[]).map(function(x){return x.si;}),'ofensores_'+D.days[DI]+'.csv');};
  $('tx-exp').onclick=function(){exportSites((EXP.tx||[]).map(function(x){return x.si;}),'transporte_'+D.days[DI]+'.csv');};
  $('cap-exp').onclick=function(){exportSites((EXP.cap||[]).map(function(x){return x.si;}),'capacidade_'+D.days[DI]+'.csv');};
- $('th-apply').onclick=applyTH;$('th-reset').onclick=function(){for(var k in TH_DEF)TH[k]=TH_DEF[k];try{localStorage.removeItem('kpiTH');}catch(e){}renderTH();applyTH();};
+ $('th-apply').onclick=applyTH;
+ var slt;$('sla-q').oninput=function(){clearTimeout(slt);slt=setTimeout(function(){SLA.page=0;drawSLA();},180);};
+ $('sla-bad').onchange=function(){SLA.page=0;drawSLA();};
+ $('sla-exp').onclick=slaExport;
+ $('sla-load').onclick=function(){$('fi-sla').click();};
+ $('fi-sla').onchange=function(){var f=this.files[0];if(!f)return;var r=new FileReader();r.onload=function(){toast('Lendo '+f.name+'…');slaParseZip(r.result,f.name,function(err){if(err){toast('❌ '+err,5000);return;}toast('✅ '+fmt(SLA.rows.length)+' cidades carregadas');DIRTY.sla=1;render('sla');});};r.readAsArrayBuffer(f);this.value='';};
+ $('sla-apply').onclick=function(){var els=$('sla-rules').querySelectorAll('input'),sv={};for(var i=0;i<els.length;i++){var k=els[i].getAttribute('data-k'),v=parseFloat(els[i].value);if(isFinite(v)&&SLA_RULE[k]){SLA_RULE[k].v=v;sv[k]=v;}}try{localStorage.setItem('kpiSlaRule',JSON.stringify(sv));}catch(e){}drawSLA();toast('Metas aplicadas');};$('th-reset').onclick=function(){for(var k in TH_DEF)TH[k]=TH_DEF[k];try{localStorage.removeItem('kpiTH');}catch(e){}renderTH();applyTH();};
  $('m-color').onchange=function(){if(MAP.map)drawMarkers();};
  $('m-search').onkeydown=function(e){if(e.key==='Enter')mapSearch(this.value);};
  $('m-loadcgi').onclick=function(){$('fi-cgi2').click();};
