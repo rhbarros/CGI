@@ -1665,8 +1665,8 @@ function autoSLA(){
 /* ── Matriz por cidade × semana com os KPIs da própria base (KPI.zip + histórico) ── */
 var SLAV={tech:'4G',nw:4,f:{regional:{},uf:{},mun:{},prio:{},vendor:{}},page:0,sort:null,dir:1,cache:null};
 var SLA_KPI={
- '4G':[['disp','Disponibilidade',2,'ge','dispWarn'],['acc','ACC_ERAB',2,'ge','accWarn'],['drop','DROP_ERAB',2,'le','dropWarn'],['tdl','TPUT DL (Mbps)',1],['tul','TPUT UL (Mbps)',2],['prbdl','PRB DL',1,'le','prbWarn'],['ploss','Packet Loss',2,'le','plWarn'],['lat','Latência (ms)',0]],
- '5G':[['disp','Disponibilidade',2,'ge','dispWarn'],['acc','ACC_NRRC',2,'ge','accWarn'],['accf','ACC_FLOW',2,'ge','accWarn'],['tdl','TPUT DL (Mbps)',1],['tul','TPUT UL (Mbps)',2],['prbdl','PRB DL',1,'le','prbWarn'],['ploss','Packet Loss',2,'le','plWarn'],['lat','Latência (ms)',0]]
+ '4G':[['acc','ACC_ERAB',2,'ge','accWarn'],['drop','DROP_ERAB',2,'le','dropWarn'],['tdl','TPUT DL (Mbps)',1],['tul','TPUT UL (Mbps)',2],['prbdl','PRB DL',1,'le','prbWarn'],['ploss','Packet Loss',2,'le','plWarn'],['lat','Latência (ms)',0]],
+ '5G':[['acc','ACC_NRRC',2,'ge','accWarn'],['accf','ACC_FLOW',2,'ge','accWarn'],['tdl','TPUT DL (Mbps)',1],['tul','TPUT UL (Mbps)',2],['prbdl','PRB DL',1,'le','prbWarn'],['ploss','Packet Loss',2,'le','plWarn'],['lat','Latência (ms)',0]]
 };
 function isoWeek(ds){var d=new Date(ds+'T12:00:00Z'),day=(d.getUTCDay()+6)%7;d.setUTCDate(d.getUTCDate()-day+3);var y=d.getUTCFullYear(),j=new Date(Date.UTC(y,0,4)),w=1+Math.round(((d-j)/864e5-3+((j.getUTCDay()+6)%7))/7);return {y:y,w:w,lbl:String(y).substr(2)+'/'+(w<10?'0':'')+w};}
 function slaOk2(def,v){if(v!==v||!def[3])return null;var t=TH[def[4]];return def[3]==='le'?v<=t:v>=t;}
