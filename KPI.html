@@ -1097,7 +1097,8 @@ function listModal(title,list){
 function openSite(si){
  var s=D.sites[si],o=si*D.ND+DI,A=D.A,d,i;
  var h='<div class="mhead"><h2>📡 '+esc(s.id)+' '+badge(D.ST[o])+'</h2><p>'+esc(s.mun)+' / '+s.uf+' · ANF '+esc(s.anf)+' · '+esc(s.regional)+' · '+esc(s.vendor)+(s.sid?' · Station ID '+esc(s.sid):'')+(s.bands?' · Bandas '+esc(s.bands)+' MHz':'')+(s.cells?' · '+s.cells+' células':'')+
-  (s.lat===s.lat?' · <a style="color:var(--c1)" target="_blank" href="https://www.google.com/maps?q='+s.lat+','+s.lon+'">abrir no Google Maps ↗</a>':'')+'</p></div>';
+  (s.lat===s.lat?' · <a style="color:var(--c1)" target="_blank" href="https://www.google.com/maps?q='+s.lat+','+s.lon+'">abrir no Google Maps ↗</a>':'')+'</p>'+
+  (s.lat===s.lat?'<button class="rbtn on" style="margin-top:9px;font-size:11px;padding:6px 14px" onclick="mapFocus('+si+')">🗺️ Abrir na aba Mapa</button>':'<div class="note" style="margin-top:6px">Sem coordenada na CGI — não aparece no mapa.</div>')+'</div>';
  h+='<div style="margin-top:12px">'+reasonHTML(o)+'</div>';
  h+='<div class="daystrip">';for(d=0;d<D.ND;d++){var st=D.ST[si*D.ND+d];h+='<div style="background:'+ST_COLOR[st]+(st===ST_ND?'44':'')+';'+(d===DI?'outline:2px solid var(--text);':'')+'" title="'+dLong(d)+' · '+ST_NAME[st]+' · '+reasons(si*D.ND+d).map(function(r){return r.t;}).join(', ')+'"><span>'+(d%2===0||D.ND<20?dLabel(d).substr(0,2):'')+'</span></div>';}h+='</div>';
  h+='<div class="minfo" style="margin-top:22px">';
@@ -1277,7 +1278,7 @@ function renderMap(){
    MAP.map.on('zoomend',function(){if(MAP.azOn)azDraw();});
   }
   drawMarkers();
-  setTimeout(function(){MAP.map.invalidateSize();},60);
+  setTimeout(function(){MAP.map.invalidateSize();if(MAP.pending!=null)mapDoFocus();},120);
  });
 }
 function mapColor(si){
@@ -1311,7 +1312,7 @@ function drawMarkers(){
   mk1.si=si;mk1.st=st;mcg.addLayer(mk1);n++;b.push([s.lat,s.lon]);}
  MAP.mcg=mcg;MAP.map.addLayer(mcg);
  $('m-info').textContent=fmt(n)+' sites no mapa'+(noc?' · '+noc+' sem coordenada na CGI':'')+' · '+dLong(DI);
- if(b.length&&!MAP.fitted){MAP.map.fitBounds(b,{padding:[30,30]});MAP.fitted=true;}
+ if(b.length&&!MAP.fitted){if(MAP.pending==null)MAP.map.fitBounds(b,{padding:[30,30]});MAP.fitted=true;}
  MAP.bounds=b;
  if(MAP.azOn)azDraw();
  var h='';
@@ -1345,6 +1346,19 @@ function popupHTML(si){
  return '<div class="pp"><h4>'+esc(s.id)+'</h4>'+badge(D.ST[o])+' '+reasonHTML(o)+'<div style="margin-top:5px;color:var(--text2)">'+esc(s.mun)+'/'+s.uf+' · '+esc(s.vendor)+(s.sid?' · '+esc(s.sid):'')+(s.bands?'<br>Bandas '+esc(s.bands)+(s.az?' · '+s.az.length+' setores':''):'')+'</div><div style="margin-top:6px">'+strip(si,d0,DI)+'</div>'+
   '<table><tr><td>Disp</td><td>'+fmt(A.disp[o],2)+'%</td><td>&nbsp;ACC</td><td>'+fmt(A.acc[o],2)+'%</td></tr><tr><td>DROP</td><td>'+fmt(A.drop[o],2)+'%</td><td>&nbsp;TPUT</td><td>'+fmt(A.tdl[o],1)+' Mbps</td></tr><tr><td>PRB DL</td><td>'+fmt(A.prbdl[o],1)+'%</td><td>&nbsp;Usuários</td><td>'+fmt(A.usr[o],0)+'</td></tr><tr><td>PLoss</td><td>'+fmt(A.ploss[o],2)+'%</td><td>&nbsp;Vol</td><td>'+fmt(A.vol[o],0)+' GB</td></tr></table>'+
   '<a onclick="openSite('+si+')">Ver histórico completo →</a> &nbsp; <a target="_blank" href="https://www.google.com/maps?q='+s.lat+','+s.lon+'">Google Maps ↗</a></div>';
+}
+function mapFocus(si){
+ closeModal();MAP.pending=si;
+ if(CUR==='map'&&MAP.map&&!DIRTY.map){mapDoFocus();return;}
+ DIRTY.map=1;go('map');
+}
+function mapDoFocus(){
+ var si=MAP.pending;MAP.pending=null;if(si==null||!MAP.map)return;
+ var s=D.sites[si];if(s.lat!==s.lat)return;
+ MAP.map.setView([s.lat,s.lon],15);
+ L.popup({maxWidth:330}).setLatLng([s.lat,s.lon]).setContent(popupHTML(si)).openOn(MAP.map);
+ if(FS.indexOf(si)<0)toast('Site fora do filtro atual — ponto não exibido, mas o mapa foi centralizado nele',4000);
+ if(!MAP.azOn)azLoad();else azDraw();
 }
 function mapSearch(q){
  q=nk(q);if(!q||!MAP.map)return;
