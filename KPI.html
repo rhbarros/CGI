@@ -341,7 +341,7 @@ body.role-busca #pg-site{display:block!important;}
   <div class="tab" data-p="map">Mapa</div>
   <div class="tab" data-p="tr">Tendências</div>
   <div class="tab" data-p="city">Cidades</div>
-  <div class="tab" data-p="sla">SLA Cidades (TIM)</div>
+  <div class="tab" data-p="sla">SLA Cidades</div>
   <div class="tab" data-p="site">Sites</div>
   <div class="tab" data-p="off">Ofensores</div>
   <div class="tab" data-p="tx">Transporte</div>
@@ -410,20 +410,24 @@ body.role-busca #pg-site{display:block!important;}
   </div>
  </div>
 
- <!-- SLA Cidades (visão TIM) -->
+ <!-- SLA Cidades -->
  <div class="page" id="pg-sla">
+  <div class="tools" style="margin-bottom:12px">
+   <span class="flabel">Tecnologia</span><span id="sla-tech" style="display:flex;gap:4px"><button class="rbtn" data-t="4G">4G</button><button class="rbtn" data-t="5G">5G</button></span>
+   <span class="flabel" style="margin-left:8px">Semanas</span><select class="fsel" id="sla-nw"><option value="4" selected>últimas 4</option><option value="6">últimas 6</option><option value="8">últimas 8</option><option value="99">todas</option></select>
+   <span style="width:6px"></span><span id="sla-filters" style="display:flex;gap:8px;flex-wrap:wrap"></span>
+   <button class="rbtn" id="sla-clear">✕ Limpar</button>
+  </div>
   <div class="kpi-grid" id="sla-sum"></div>
   <div class="card">
-   <div class="card-title">KPI Dashboard TIM · 4G Target 1 por cidade e semana <small id="sla-sub"></small></div>
+   <div class="card-title">KPIs por cidade e semana <small id="sla-sub"></small></div>
    <div class="tools">
     <input class="sbox" id="sla-q" placeholder="Pesquisar cidade…">
     <label class="note" style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" id="sla-bad"> só cidades fora da meta</label>
     <button class="rbtn" id="sla-exp">⬇ Exportar CSV</button>
-    <button class="rbtn" id="sla-load">⬆ Carregar ZIP</button><input type="file" id="fi-sla" accept=".zip" style="display:none">
-    <span class="note">Filtros aplicados: Regional, UF, Município e Prioridade · clique na cidade para ver os sites</span>
+    <span class="note">Bolinha verde/vermelha = meta da aba Metas (TPUT e Latência sem meta) · clique na cidade para ver os sites</span>
    </div>
-   <div id="sla-body"><div class="tscroll" style="max-height:calc(100vh - 330px);overflow:auto"><table class="dtbl" id="sla-tbl"></table></div><div class="pager" id="sla-pg"></div></div>
-   <div class="tools" style="margin-top:10px"><span class="flabel">Metas (verde/vermelho)</span><span id="sla-rules" style="display:flex;gap:10px;flex-wrap:wrap"></span><button class="rbtn" id="sla-apply">Aplicar</button></div>
+   <div class="tscroll" style="max-height:calc(100vh - 330px);overflow:auto"><table class="dtbl" id="sla-tbl"></table></div><div class="pager" id="sla-pg"></div>
   </div>
  </div>
 
@@ -1658,61 +1662,93 @@ function autoSLA(){
   slaParseZip(buf,'CIDADES_P1A4REGIONAL.zip',function(err){if(err){console.warn(err);return;}var p=['ov','city','site','sla'];for(var i=0;i<p.length;i++)DIRTY[p[i]]=1;render(CUR);});
  })['catch'](function(){});
 }
-function slaPass(r){ // filtros globais aplicáveis à cidade (Regional, UF, Município, Prioridade)
- var f;
- f=FILTER.regional;if(nsel(f)&&!f[r.reg])return false;
- f=FILTER.uf;if(nsel(f)&&!f[r.uf])return false;
- f=FILTER.prio;if(f&&nsel(f)&&!f[r.prio])return false;
- f=FILTER.mun;if(nsel(f)){var ok=false;for(var k in f){var mm=k.match(/^(.*) \(([A-Z]{2})\)$/);if(mm&&mm[2]===r.uf&&nk(mm[1])===nk(r.mun)){ok=true;break;}}if(!ok)return false;}
- return true;
+/* ── Matriz por cidade × semana com os KPIs da própria base (KPI.zip + histórico) ── */
+var SLAV={tech:'4G',nw:4,f:{regional:{},uf:{},mun:{},prio:{},vendor:{}},page:0,sort:null,dir:1,cache:null};
+var SLA_KPI={
+ '4G':[['disp','Disponibilidade',2,'ge','dispWarn'],['acc','ACC_ERAB',2,'ge','accWarn'],['drop','DROP_ERAB',2,'le','dropWarn'],['tdl','TPUT DL (Mbps)',1],['tul','TPUT UL (Mbps)',2],['prbdl','PRB DL',1,'le','prbWarn'],['ploss','Packet Loss',2,'le','plWarn'],['lat','Latência (ms)',0]],
+ '5G':[['disp','Disponibilidade',2,'ge','dispWarn'],['acc','ACC_NRRC',2,'ge','accWarn'],['accf','ACC_FLOW',2,'ge','accWarn'],['tdl','TPUT DL (Mbps)',1],['tul','TPUT UL (Mbps)',2],['prbdl','PRB DL',1,'le','prbWarn'],['ploss','Packet Loss',2,'le','plWarn'],['lat','Latência (ms)',0]]
+};
+function isoWeek(ds){var d=new Date(ds+'T12:00:00Z'),day=(d.getUTCDay()+6)%7;d.setUTCDate(d.getUTCDate()-day+3);var y=d.getUTCFullYear(),j=new Date(Date.UTC(y,0,4)),w=1+Math.round(((d-j)/864e5-3+((j.getUTCDay()+6)%7))/7);return {y:y,w:w,lbl:String(y).substr(2)+'/'+(w<10?'0':'')+w};}
+function slaOk2(def,v){if(v!==v||!def[3])return null;var t=TH[def[4]];return def[3]==='le'?v<=t:v>=t;}
+function slaWeeks(){var wk=[],idx={},dw=[];for(var d=0;d<D.ND;d++){var w=isoWeek(D.days[d]).lbl;if(idx[w]==null){idx[w]=wk.length;wk.push(w);}dw.push(idx[w]);}return {wk:wk,dw:dw};}
+function slaCityVal(s,k){if(k==='prio')return s.prio||'Sem prioridade';if(k==='mun')return s.mun+' ('+s.uf+')';return s[k]||'ND';}
+function slaBase(except){ // sites da tecnologia + filtros globais + filtros da aba
+ var out=[],F=SLAV.f;
+ for(var i=0;i<FS.length;i++){var s=D.sites[FS[i]];if(s.tech!==SLAV.tech)continue;
+  var ok=true;for(var k in F){if(k===except)continue;if(nsel(F[k])&&!F[k][slaCityVal(s,k)]){ok=false;break;}}
+  if(ok)out.push(FS[i]);}
+ return out;
+}
+function slaFilters(){ // filtros de múltipla escolha da aba (Regional, UF, Cidade, Prioridade, Vendor)
+ var host=$('sla-filters'),L={regional:'Regional',uf:'UF',mun:'Cidade',prio:'Prioridade',vendor:'Vendor'},h='';
+ for(var k in L)h+='<div class="ms sla-ms" data-sk="'+k+'"><div class="ms-btn"></div><div class="ms-pop"><input placeholder="Buscar…"><div class="ms-acts"><span data-a="all">Selecionar visíveis</span><span data-a="none">Limpar</span></div><div class="ms-list"></div></div></div>';
+ host.innerHTML=h;
+ var els=host.querySelectorAll('.sla-ms');
+ for(var i=0;i<els.length;i++){(function(el){
+  var k=el.getAttribute('data-sk'),btn=el.querySelector('.ms-btn'),pop=el.querySelector('.ms-pop'),inp=pop.querySelector('input'),list=pop.querySelector('.ms-list'),opts=null;
+  function lbl(){var sel=keys(SLAV.f[k]);btn.className='ms-btn'+(sel.length?' act':'');btn.innerHTML=L[k]+': <b>'+(sel.length===0?'Todos':(sel.length===1?esc(sel[0]):sel.length+' sel.'))+'</b> ▾';}
+  function options(){var base=slaBase(k),cnt={},c2={};for(var j=0;j<base.length;j++){var s=D.sites[base[j]],v=slaCityVal(s,k),ck=s.uf+'|'+s.mun;if(!c2[v])c2[v]={};c2[v][ck]=1;}for(var v2 in c2)cnt[v2]=keys(c2[v2]).length;var a=keys(cnt).sort();for(var x in SLAV.f[k])if(!cnt.hasOwnProperty(x)){a.unshift(x);cnt[x]=0;}return {vals:a,cnt:cnt};}
+  function draw(){var q=nk(inp.value),hh='',n=0;for(var j=0;j<opts.vals.length;j++){var v=opts.vals[j];if(q&&nk(v).indexOf(q)<0)continue;if(++n>600)break;hh+='<label class="ms-item"><input type="checkbox" data-v="'+esc(v)+'"'+(SLAV.f[k][v]?' checked':'')+'>'+esc(v)+'<span class="cnt">'+fmt(opts.cnt[v])+' cid.</span></label>';}list.innerHTML=hh||'<div class="ms-item">nada encontrado</div>';}
+  btn.onclick=function(e){e.stopPropagation();var open=pop.classList.contains('open');closeAllMS();if(!open){opts=options();inp.value='';draw();pop.classList.add('open');inp.focus();}};
+  pop.onclick=function(e){e.stopPropagation();};inp.oninput=draw;
+  list.onchange=function(e){var v=e.target.getAttribute('data-v');if(v==null)return;if(e.target.checked)SLAV.f[k][v]=1;else delete SLAV.f[k][v];lbl();SLAV.page=0;drawSLA();};
+  pop.querySelector('.ms-acts').onclick=function(e){var a=e.target.getAttribute('data-a');if(!a)return;if(a==='none')SLAV.f[k]={};else{var q=nk(inp.value);for(var j=0;j<opts.vals.length;j++)if(!q||nk(opts.vals[j]).indexOf(q)>=0)SLAV.f[k][opts.vals[j]]=1;}draw();lbl();SLAV.page=0;drawSLA();};
+  el._lbl=lbl;lbl();
+ })(els[i]);}
 }
 function renderSLA(){
- var host=$('sla-body');
- if(!SLA.rows){host.innerHTML='<div class="empty-msg">📋 Coloque o <b>CIDADES_P1A4REGIONAL.zip</b> na mesma pasta do KPI.html (GitHub) ou clique em <b>⬆ Carregar ZIP</b>.<br>São as planilhas pX_tYY.xlsx exportadas do KPI Dashboard da TIM (4G Target 1 por cidade e semana).</div>';$('sla-sub').textContent='';return;}
- SLA.page=0;drawSLA();
+ if(!$('sla-filters').firstChild)slaFilters();
+ var t=document.querySelectorAll('#sla-tech [data-t]');for(var i=0;i<t.length;i++){var has=D.techs.indexOf(t[i].getAttribute('data-t'))>=0;t[i].style.display=has?'':'none';t[i].classList.toggle('on',t[i].getAttribute('data-t')===SLAV.tech);}
+ if(D.techs.indexOf(SLAV.tech)<0)SLAV.tech=D.techs[0];
+ SLAV.page=0;drawSLA();
 }
 function drawSLA(){
- var q=nk($('sla-q').value),only=$('sla-bad').checked,lw=SLA.weeks[SLA.weeks.length-1],rows=[],i,j,k;
- for(i=0;i<SLA.rows.length;i++){var r=SLA.rows[i];if(!slaPass(r))continue;if(q&&nk(r.city).indexOf(q)<0)continue;
-  var nb=0;for(j=0;j<SLA.kpis.length;j++)if(slaOk(SLA.kpis[j],r.v[SLA.kpis[j]+'|'+lw])===false)nb++;r.nb=nb;
-  if(only&&!nb)continue;rows.push(r);}
- var s=SLA.sort,dir=SLA.dir;
- rows.sort(function(a,b){if(!s)return (a.prio<b.prio?-1:a.prio>b.prio?1:0)||(b.nb-a.nb)||a.city.localeCompare(b.city);
-  if(s==='city')return dir*a.city.localeCompare(b.city);if(s==='prio')return dir*(a.prio<b.prio?-1:a.prio>b.prio?1:0)||a.city.localeCompare(b.city);if(s==='nb')return dir*(a.nb-b.nb);
-  var x=a.v[s],y=b.v[s];if(x!==x)x=-1e9*dir;if(y!==y)y=-1e9*dir;return dir*(x-y);});
- SLA.cur=rows;
- // resumo por KPI na última semana
- var sum='';for(j=0;j<SLA.kpis.length;j++){var kk=SLA.kpis[j],bad=0,tot=0;for(i=0;i<rows.length;i++){var o=slaOk(kk,rows[i].v[kk+'|'+lw]);if(o!==null){tot++;if(!o)bad++;}}
-  sum+='<div class="kpi" style="--kc:'+(bad?ST_COLOR[4]:ST_COLOR[0])+'" data-k="'+esc(kk)+'"><div class="kpi-label">'+esc(kk.replace(' Target 1',''))+'</div><div class="kpi-val">'+fmt(tot-bad)+'<span style="font-size:13px;color:var(--text3)"> / '+fmt(tot)+'</span></div><div class="kpi-sub">'+(bad?'<span class="d-bad">'+bad+' fora da meta</span>':'<span class="d-good">todas na meta</span>')+' · '+SLA_RULE[kk].c+' '+fmt(SLA_RULE[kk].v,1)+'</div></div>';}
+ var defs=SLA_KPI[SLAV.tech],WK=slaWeeks(),nw=SLAV.nw>=WK.wk.length?WK.wk.length:SLAV.nw,w0=WK.wk.length-nw,W=WK.wk.slice(w0),i,j,d;
+ var base=slaBase(null),cities={},list=[];
+ // acumula média por cidade × semana × KPI
+ for(i=0;i<base.length;i++){var si=base[i],s=D.sites[si],ck=s.uf+'|'+s.mun,c=cities[ck];
+  if(!c){c=cities[ck]={key:ck,city:s.uf+'/'+s.mun,uf:s.uf,reg:s.regional,prio:s.prio||'—',n:0,S:{},C:{},v:{}};list.push(c);}c.n++;
+  for(d=0;d<D.ND;d++){var wi=WK.dw[d]-w0;if(wi<0||!D.HAS[si*D.ND+d])continue;var o=si*D.ND+d;
+   for(j=0;j<defs.length;j++){var x=D.A[defs[j][0]][o];if(x!==x)continue;var kk=j*64+wi;c.S[kk]=(c.S[kk]||0)+x;c.C[kk]=(c.C[kk]||0)+1;}}}
+ var q=nk($('sla-q').value),only=$('sla-bad').checked,rows=[],lw=W.length-1;
+ for(i=0;i<list.length;i++){var cc=list[i];if(q&&nk(cc.city).indexOf(q)<0)continue;var nb=0;
+  for(j=0;j<defs.length;j++)for(var w=0;w<W.length;w++){var key=j*64+w;cc.v[defs[j][0]+'|'+w]=cc.C[key]?cc.S[key]/cc.C[key]:NaN;}
+  for(j=0;j<defs.length;j++)if(slaOk2(defs[j],cc.v[defs[j][0]+'|'+lw])===false)nb++;cc.nb=nb;
+  if(only&&!nb)continue;rows.push(cc);}
+ var s2=SLAV.sort,dir=SLAV.dir;
+ rows.sort(function(a,b){if(!s2)return (b.nb-a.nb)||(a.prio<b.prio?-1:a.prio>b.prio?1:0)||b.n-a.n;
+  if(s2==='city')return dir*a.city.localeCompare(b.city);if(s2==='prio')return dir*(a.prio<b.prio?-1:a.prio>b.prio?1:0);if(s2==='nb'||s2==='n')return dir*(a[s2]-b[s2]);
+  var x=a.v[s2],y=b.v[s2];if(x!==x)x=-1e12*dir;if(y!==y)y=-1e12*dir;return dir*(x-y);});
+ SLAV.cur=rows;SLAV.W=W;SLAV.defs=defs;
+ // cards: cidades na meta na última semana
+ var sum='';for(j=0;j<defs.length;j++){if(!defs[j][3])continue;var bad=0,tot=0;for(i=0;i<rows.length;i++){var ok=slaOk2(defs[j],rows[i].v[defs[j][0]+'|'+lw]);if(ok!==null){tot++;if(!ok)bad++;}}
+  sum+='<div class="kpi" style="--kc:'+(bad?ST_COLOR[4]:ST_COLOR[0])+'" data-k="'+defs[j][0]+'|'+lw+'" data-le="'+(defs[j][3]==='le'?1:0)+'"><div class="kpi-label">'+esc(defs[j][1])+' · '+esc(W[lw]||'')+'</div><div class="kpi-val">'+fmt(tot-bad)+'<span style="font-size:13px;color:var(--text3)"> / '+fmt(tot)+'</span></div><div class="kpi-sub">'+(bad?'<span class="d-bad">'+fmt(bad)+' cidades fora</span>':'<span class="d-good">todas na meta</span>')+' · '+(defs[j][3]==='le'?'≤ ':'≥ ')+fmt(TH[defs[j][4]],defs[j][0]==='disp'?2:1)+'</div></div>';}
  $('sla-sum').innerHTML=sum;
- $('sla-sum').onclick=function(e){var t=e.target.closest('.kpi');if(!t)return;SLA.sort=t.getAttribute('data-k')+'|'+lw;SLA.dir=SLA_RULE[t.getAttribute('data-k')].c==='<='?-1:1;SLA.page=0;drawSLA();};
- $('sla-sub').textContent=fmt(rows.length)+' cidades · '+SLA.src+' · semana '+lw+' em destaque';
- // tabela no estilo TIM
- var P=100,p0=SLA.page*P,sl=rows.slice(p0,p0+P),W=SLA.weeks;
- var h='<thead><tr><th rowspan="2" data-s="city" class="'+(s==='city'?'sorted':'')+'">SLA KPI/Target<br>City</th><th rowspan="2" data-s="prio">Prior.</th><th rowspan="2" class="num" data-s="nb" title="KPIs fora da meta na última semana">Fora</th>';
- for(j=0;j<SLA.kpis.length;j++)h+='<th colspan="'+W.length+'" style="text-align:center;border-left:2px solid var(--border2)">'+esc(SLA.kpis[j])+'</th>';
- h+='</tr><tr>';for(j=0;j<SLA.kpis.length;j++)for(k=0;k<W.length;k++){var key=SLA.kpis[j]+'|'+W[k];h+='<th class="num '+(s===key?'sorted':'')+'" data-s="'+esc(key)+'" style="'+(k===0?'border-left:2px solid var(--border2);':'')+'">'+esc(W[k])+(s===key?(dir>0?' ▲':' ▼'):'')+'</th>';}
+ $('sla-sum').onclick=function(e){var t=e.target.closest('.kpi');if(!t)return;SLAV.sort=t.getAttribute('data-k');SLAV.dir=t.getAttribute('data-le')==='1'?-1:1;SLAV.page=0;drawSLA();};
+ $('sla-sub').textContent=fmt(rows.length)+' cidades · '+SLAV.tech+' · semanas no formato AA/SS (ano/semana) · média dos sites na semana';
+ var P=100,p0=SLAV.page*P,sl=rows.slice(p0,p0+P);
+ var h='<thead><tr><th rowspan="2" data-s="city" class="'+(s2==='city'?'sorted':'')+'">Cidade</th><th rowspan="2" data-s="prio">Prior.</th><th rowspan="2" class="num" data-s="n">Sites</th><th rowspan="2" class="num" data-s="nb" title="KPIs fora da meta na última semana">Fora</th>';
+ for(j=0;j<defs.length;j++)h+='<th colspan="'+W.length+'" style="text-align:center;border-left:2px solid var(--border2)">'+esc(defs[j][1])+'</th>';
+ h+='</tr><tr>';for(j=0;j<defs.length;j++)for(var k2=0;k2<W.length;k2++){var key2=defs[j][0]+'|'+k2;h+='<th class="num '+(s2===key2?'sorted':'')+'" data-s="'+key2+'" data-le="'+(defs[j][3]==='le'?1:0)+'" style="'+(k2===0?'border-left:2px solid var(--border2);':'')+'">'+esc(W[k2])+(s2===key2?(dir>0?' ▲':' ▼'):'')+'</th>';}
  h+='</tr></thead><tbody>';
- for(i=0;i<sl.length;i++){var rr=sl[i];
-  h+='<tr data-k="'+esc(rr.key)+'"><td><b>'+esc(rr.city)+'</b></td><td>'+rr.prio+'</td><td class="num '+(rr.nb?'bad':'good')+'">'+(rr.nb||'✓')+'</td>';
-  for(j=0;j<SLA.kpis.length;j++)for(k=0;k<W.length;k++){var kk2=SLA.kpis[j],v=rr.v[kk2+'|'+W[k]],ok=slaOk(kk2,v),last=k===W.length-1;
-   var bg=ok===false?'rgba(239,68,68,'+(last?'.28':'.16')+')':(last&&ok?'rgba(16,185,129,.16)':'');
-   h+='<td class="num slac" style="'+(k===0?'border-left:2px solid var(--border2);':'')+(bg?'background:'+bg+';':'')+'"><i class="dot" style="background:'+(ok===null?'var(--text3)':(ok?'#10b981':'#ef4444'))+';margin-right:5px;'+(ok===false?'box-shadow:0 0 0 2px rgba(239,68,68,.35)':'')+'"></i>'+fmt(v,SLA_RULE[kk2]?SLA_RULE[kk2].d:1)+'</td>';}
+ for(i=0;i<sl.length;i++){var r=sl[i];
+  h+='<tr data-k="'+esc(r.key)+'"><td><b>'+esc(r.city)+'</b></td><td>'+esc(r.prio==='Sem prioridade'?'—':r.prio)+'</td><td class="num">'+r.n+'</td><td class="num '+(r.nb?'bad':'good')+'">'+(r.nb||'✓')+'</td>';
+  for(j=0;j<defs.length;j++)for(var k3=0;k3<W.length;k3++){var v=r.v[defs[j][0]+'|'+k3],ok2=slaOk2(defs[j],v),last=k3===W.length-1;
+   var bg=ok2===false?'rgba(239,68,68,'+(last?'.28':'.16')+')':(last&&ok2?'rgba(16,185,129,.16)':(last?'rgba(0,212,255,.06)':''));
+   h+='<td class="num slac" style="'+(k3===0?'border-left:2px solid var(--border2);':'')+(bg?'background:'+bg+';':'')+'">'+(ok2===null?'':'<i class="dot" style="background:'+(ok2?'#10b981':'#ef4444')+';margin-right:5px"></i>')+fmt(v,defs[j][2])+'</td>';}
   h+='</tr>';}
  h+='</tbody>';
  var t=$('sla-tbl');t.innerHTML=h;
- t.querySelector('thead').onclick=function(e){var th=e.target.closest('th[data-s]');if(!th)return;var ss=th.getAttribute('data-s');if(SLA.sort===ss)SLA.dir=-SLA.dir;else{SLA.sort=ss;var kn=ss.split('|')[0];SLA.dir=(ss==='nb')?-1:(SLA_RULE[kn]&&SLA_RULE[kn].c==='<='?-1:1);}SLA.page=0;drawSLA();};
- t.querySelector('tbody').onclick=function(e){var tr=e.target.closest('tr[data-k]');if(!tr)return;var k2=tr.getAttribute('data-k');var all=[];for(var x=0;x<D.NS;x++){var s2=D.sites[x];if(s2.uf+'|'+nk(s2.mun)===k2)all.push(x);}if(!all.length){toast('Cidade sem sites na base de KPI');return;}openCity(D.sites[all[0]].uf+'|'+D.sites[all[0]].mun);};
- pager('sla-pg',rows.length,P,SLA.page,function(p){SLA.page=p;drawSLA();});
- // regras
- var rh='';for(j=0;j<SLA.kpis.length;j++){var kn2=SLA.kpis[j],ru=SLA_RULE[kn2];if(!ru)continue;rh+='<span class="th-inline">'+esc(kn2.replace(' Target 1',''))+' '+ru.c+' <input type="number" step="any" data-k="'+esc(kn2)+'" value="'+ru.v+'"></span>';}
- $('sla-rules').innerHTML=rh;
+ t.querySelector('thead').onclick=function(e){var th=e.target.closest('th[data-s]');if(!th)return;var ss=th.getAttribute('data-s');if(SLAV.sort===ss)SLAV.dir=-SLAV.dir;else{SLAV.sort=ss;SLAV.dir=(ss==='nb'||ss==='n')?-1:(th.getAttribute('data-le')==='1'?-1:1);}SLAV.page=0;drawSLA();};
+ t.querySelector('tbody').onclick=function(e){var tr=e.target.closest('tr[data-k]');if(tr)openCity(tr.getAttribute('data-k'));};
+ pager('sla-pg',rows.length,P,SLAV.page,function(p){SLAV.page=p;drawSLA();});
+ var fe=$('sla-filters').querySelectorAll('.sla-ms');for(i=0;i<fe.length;i++)if(fe[i]._lbl)fe[i]._lbl();
 }
 function slaExport(){
- var r=SLA.cur||[],W=SLA.weeks,head=['Cidade','UF','Regional','Prioridade','KPIs fora (ultima semana)'],rows=[],j,k;
- for(j=0;j<SLA.kpis.length;j++)for(k=0;k<W.length;k++)head.push(SLA.kpis[j]+' '+W[k]);
- for(var i=0;i<r.length;i++){var o=[r[i].city,r[i].uf,r[i].reg,r[i].prio,r[i].nb];for(j=0;j<SLA.kpis.length;j++)for(k=0;k<W.length;k++)o.push(r[i].v[SLA.kpis[j]+'|'+W[k]]);rows.push(o);}
- download('sla_cidades.csv',toCSV(head,rows));
+ var r=SLAV.cur||[],W=SLAV.W,defs=SLAV.defs,head=['Cidade','UF','Regional','Prioridade','Sites','KPIs fora (ultima semana)'],rows=[],j,k;
+ for(j=0;j<defs.length;j++)for(k=0;k<W.length;k++)head.push(defs[j][1]+' '+W[k]);
+ for(var i=0;i<r.length;i++){var o=[r[i].city,r[i].uf,r[i].reg,r[i].prio,r[i].n,r[i].nb];for(j=0;j<defs.length;j++)for(k=0;k<W.length;k++)o.push(r[i].v[defs[j][0]+'|'+k]);rows.push(o);}
+ download('sla_cidades_'+SLAV.tech+'.csv',toCSV(head,rows));
 }
 
 /* ═════════════ METAS ═════════════ */
@@ -1844,12 +1880,12 @@ function bindUI(){
  $('tx-exp').onclick=function(){exportSites((EXP.tx||[]).map(function(x){return x.si;}),'transporte_'+D.days[DI]+'.csv');};
  $('cap-exp').onclick=function(){exportSites((EXP.cap||[]).map(function(x){return x.si;}),'capacidade_'+D.days[DI]+'.csv');};
  $('th-apply').onclick=applyTH;
- var slt;$('sla-q').oninput=function(){clearTimeout(slt);slt=setTimeout(function(){SLA.page=0;drawSLA();},180);};
- $('sla-bad').onchange=function(){SLA.page=0;drawSLA();};
+ var slt;$('sla-q').oninput=function(){clearTimeout(slt);slt=setTimeout(function(){SLAV.page=0;drawSLA();},180);};
+ $('sla-bad').onchange=function(){SLAV.page=0;drawSLA();};
  $('sla-exp').onclick=slaExport;
- $('sla-load').onclick=function(){$('fi-sla').click();};
- $('fi-sla').onchange=function(){var f=this.files[0];if(!f)return;var r=new FileReader();r.onload=function(){toast('Lendo '+f.name+'…');slaParseZip(r.result,f.name,function(err){if(err){toast('❌ '+err,5000);return;}toast('✅ '+fmt(SLA.rows.length)+' cidades carregadas');DIRTY.sla=1;render('sla');});};r.readAsArrayBuffer(f);this.value='';};
- $('sla-apply').onclick=function(){var els=$('sla-rules').querySelectorAll('input'),sv={};for(var i=0;i<els.length;i++){var k=els[i].getAttribute('data-k'),v=parseFloat(els[i].value);if(isFinite(v)&&SLA_RULE[k]){SLA_RULE[k].v=v;sv[k]=v;}}try{localStorage.setItem('kpiSlaRule',JSON.stringify(sv));}catch(e){}drawSLA();toast('Metas aplicadas');};$('th-reset').onclick=function(){for(var k in TH_DEF)TH[k]=TH_DEF[k];try{localStorage.removeItem('kpiTH');}catch(e){}renderTH();applyTH();};
+ $('sla-nw').onchange=function(){SLAV.nw=+this.value;SLAV.page=0;SLAV.sort=null;drawSLA();};
+ $('sla-tech').onclick=function(e){var b=e.target.closest('[data-t]');if(!b)return;SLAV.tech=b.getAttribute('data-t');SLAV.sort=null;renderSLA();};
+ $('sla-clear').onclick=function(){for(var k in SLAV.f)SLAV.f[k]={};SLAV.page=0;drawSLA();};$('th-reset').onclick=function(){for(var k in TH_DEF)TH[k]=TH_DEF[k];try{localStorage.removeItem('kpiTH');}catch(e){}renderTH();applyTH();};
  $('m-color').onchange=function(){if(MAP.map)drawMarkers();};
  $('m-search').onkeydown=function(e){if(e.key==='Enter')mapSearch(this.value);};
  $('m-loadcgi').onclick=function(){$('fi-cgi2').click();};
