@@ -5033,7 +5033,7 @@ $("ossNode").addEventListener("input", () => { clearTimeout(sugT); sugT = setTim
 $("ossNode").addEventListener("focus", () => { if (!CGI.map) cgiLoad("cache"); });
 // nó da CGI sem servidor conhecido: procura nos servidores conectados (amos/!amos, lt root, q — não altera nada)
 function autoFind(tb){
-  const n = tb.node; if (!n || isBsc(n) || tb.finding === n) return;
+  const n = tb.node; if (!n || isBsc(n) || tb.finding === n || modumpOf(n)) return;
   const f = CGI.map && cgiFind(n); if (!f) return;
   if (where()[f.node]) return;
   const on = servers.map((s, i) => ({ s, i })).filter(({ s }) => s.host && !is2g(s) && SS.some((x) => x.key === keyOf(s) && x.logged));
@@ -5058,7 +5058,10 @@ function autoFind(tb){
 }
 drawNodes();
 const node = () => $("ossNode").value.trim().toUpperCase();
-function needNode(){ const n = node(); if (!/^[\w.\-]{3,}$/.test(n)) { $("ossMsg").innerHTML = `<div class="msg warn">Informe o nó (ex.: 4G-UBUR18).</div>`; return null; } const l = load().nodes || []; if (!l.includes(n)) save({ nodes: [n, ...l].slice(0, 40) }); drawNodes(); return n; }
+// modump / dcgk salvo no servidor (amos offline): "amos /home/shared/.../BA1601_modump.zip" — o caminho do Linux mantém maiúsculas/minúsculas
+const modumpOf = (s) => { const m = String(s || "").trim().match(/^(?:!?amos\s+)?(\/\S+)$/i); return m ? m[1] : ""; };
+const modSrv = () => servers.findIndex((s) => s.host && !is2g(s) && /CVOA/i.test(String(s.name)));
+function needNode(){ const md = modumpOf($("ossNode").value); if (md) { $("ossNode").value = md; T().node = md; return md; } const n = node(); if (!/^[\w.\-]{3,}$/.test(n)) { $("ossMsg").innerHTML = `<div class="msg warn">Informe o nó (ex.: 4G-UBUR18).</div>`; return null; } const l = load().nodes || []; if (!l.includes(n)) save({ nodes: [n, ...l].slice(0, 40) }); drawNodes(); return n; }
 
 // ---------- abas do moshell: cada aba é um terminal próprio no servidor (como as abas do WinFiol) ----------
 // Uma aba ocupada não trava as outras: cada uma usa o seu terminal (faixa 10+id no helper).
@@ -5067,7 +5070,7 @@ function newTab(o){ const id = o && o.id != null ? o.id : TID; TID = Math.max(TI
   return { id, srv: o && o.srv != null ? o.srv : (+$("ossSrv").value || 0), node: (o && o.node) || "", via: (o && o.via) || "", job: null, busy: false, out: "", outName: "", after: null, logLen: 0, lbl: null, kg: null, con: "", tlog: [], curNode: "", prog: "Nada em execução.", bar: 0, ask: null, msg: "", kfiles: null }; }
 function T(){ return TABS[act]; }
 const laneOf = (tb) => 10 + tb.id;
-const tabName = (tb) => tb.node || `Aba ${TABS.indexOf(tb) + 1}`;
+const tabName = (tb) => (modumpOf(tb.node) ? tb.node.split("/").pop() : tb.node) || `Aba ${TABS.indexOf(tb) + 1}`;
 const isAct = (tb) => tb === T();
 function tabsSave(){ save({ tabs: TABS.map((t) => ({ id: t.id, srv: t.srv, node: t.node, via: t.via || "" })), tabAct: act }); }
 function tabsDraw(){
@@ -5104,6 +5107,7 @@ $("ossNode").addEventListener("change", () => { const tb = T(); tb.node = node()
 function isBsc(n){ n = String(n || "").toUpperCase(); return !!n && ((CGI.bsc && CGI.bsc.has(n)) || /^BSC/.test(n)); }
 function autoSrv(tb){
   const n = tb.node; if (!n) return;
+  if (modumpOf(n)) { const mi = modSrv(); if (mi >= 0 && mi !== tb.srv && !tb.busy) { tb.srv = mi; try { tabsSave(); tabsDraw(); } catch (e) {} if (isAct(tb)) { $("ossSrv").value = String(mi); save({ srv: mi }); status(); setMsg(tb, `<div class="msg">Arquivo modump/dcgk: esta aba agora usa o servidor <b>${escH(servers[mi].name)}</b>.</div>`); } } return; }
   const set = (i, why) => { if (i < 0 || i === tb.srv || tb.busy) return; tb.srv = i; try { tabsSave(); tabsDraw(); } catch (e) {} if (isAct(tb)) { $("ossSrv").value = String(i); save({ srv: i }); status(); setMsg(tb, `<div class="msg">${escH(n)} ${why}: esta aba agora usa o servidor <b>${escH(servers[i].name)}</b>.</div>`); } };
   const g = servers.findIndex((s) => is2g(s) && s.host);
   if (isBsc(n)) return set(g, "é BSC (2G)");
@@ -5138,11 +5142,11 @@ function start(body, label, after){
 }
 function start2(tb, s, body){
   if (body.node) { Object.assign(body, nodeCreds(body.node), nodeOpts());
-    if (!is2g(s)) { const reg = regOf(body.node), rp = regPwds();
+    if (!is2g(s) && !modumpOf(body.node)) { const reg = regOf(body.node), rp = regPwds();
       if (sitePw(body.node)) log(`[${tabName(tb)}] Usando a senha própria cadastrada para ${body.node}.`);
       else if (body.nodePwdPref) log(`[${tabName(tb)}] Regional ${reg} (CGI): a senha da ${reg} vai primeiro.` + (O.hver && O.hver < 2.4 ? " ATENÇÃO: o helper deste PC é antigo e ignora isso; atualize o helper." : ""));
       else if (Object.keys(rp).length) log(`[${tabName(tb)}] ${reg ? `Sem senha cadastrada para a regional ${reg}` : `Não achei ${body.node} na CGI`}: vai testar as senhas da lista. Se o nó tem senha própria, digite em "Senha deste nó" (ao lado do nome) que ela vai primeiro.`, "er"); } }
-  if (body.node && tb.via && !is2g(s)) { const n = String(body.node).toUpperCase(); let ip = NODE_IP[n];
+  if (body.node && tb.via && !is2g(s) && !modumpOf(body.node)) { const n = String(body.node).toUpperCase(); let ip = NODE_IP[n];
     if (!ip && CGI.map && cgiFind(n)) ip = NODE_IP[String(cgiFind(n).node).toUpperCase()];
     if (ip) { body.openCmd = `amos ${ip}`; body.switchCmd = `!amos ${ip}`; log(`[${tabName(tb)}] Acesso pelo IP: ${body.node} = ${ip}, a partir do ${s.name}.`); }
     else log(`[${tabName(tb)}] Não tenho o IP de gerência de ${body.node}: abrindo pelo nome no ${s.name}.`, "er"); }
@@ -5486,7 +5490,13 @@ $("ossCmd").addEventListener("keydown", (e) => {
   $("ossCmd").value = hPos < 0 ? "" : HIST[hPos];
 });
 histDraw(); tabShow();
-$("ossRun").onclick = () => { const n = needNode(); if (!n) return; const cmds = $("ossCmd").value.split(/;|\n/).map((c) => c.trim()).filter(Boolean); if (!cmds.length) return; histAdd($("ossCmd").value); $("ossCmd").value = ""; $("ossCmd").focus();
+$("ossRun").onclick = () => {
+  const cm = $("ossCmd").value.trim(), md = /^!?amos\s+\//i.test(cm) ? modumpOf(cm) : "";
+  if (md) { // "amos /caminho/arquivo_modump.zip" no campo de comandos: abre o AMOS offline nesse arquivo (no CVOA)
+    histAdd(cm); $("ossCmd").value = ""; $("ossNode").value = md; const tb = T(); tb.node = md; autoSrv(tb); tabsSave(); tabsDraw(); try { nodePwSync(); } catch (e) {}
+    log(`[${tabName(tb)}] Abrindo o modump/dcgk ${md} (AMOS offline). Depois é só digitar os comandos normalmente.`);
+    start({ node: md, cmds: lt([]) }, "modump"); return; }
+  const n = needNode(); if (!n) return; const cmds = $("ossCmd").value.split(/;|\n/).map((c) => c.trim()).filter(Boolean); if (!cmds.length) return; histAdd($("ossCmd").value); $("ossCmd").value = ""; $("ossCmd").focus();
   const g2 = is2g(selSrv()); const w = cmds.filter((c) => g2 ? mmlWrite(c) : WRITE.test(c)); if (w.length) { confirmBox(w, () => start({ node: n, cmds: g2 ? cmds : lt(cmds), confirmWrites: true }, "comandos")); return; }
   start({ node: n, cmds: g2 ? cmds : lt(cmds) }, "comandos"); };
 $("ossToIn").onclick = () => toIn(T().out);
