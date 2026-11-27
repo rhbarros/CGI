@@ -8,7 +8,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script>
-(function(){var t='dark';try{t=localStorage.getItem('kpiTheme')||localStorage.getItem('cgiTheme')||'dark';}catch(e){}if(t==='light')document.documentElement.setAttribute('data-theme','light');})();
+(function(){var t='dark';try{t=localStorage.getItem('cgiTheme')||'dark';}catch(e){}if(t==='light')document.documentElement.setAttribute('data-theme','light');})();
 </script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap');
@@ -196,6 +196,37 @@ html[data-theme="light"] .upload-btn{color:#fff;}
 #toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--bg2);border:1px solid var(--c1);color:var(--text);padding:9px 16px;border-radius:8px;font-size:11px;font-family:'DM Mono',monospace;z-index:2000;display:none;box-shadow:0 10px 30px rgba(0,0,0,.4);}
 #busy{position:fixed;top:0;left:0;right:0;height:2px;z-index:3000;display:none;background:linear-gradient(90deg,transparent,var(--c1),transparent);background-size:200% 100%;animation:busy 1s linear infinite;}
 @keyframes busy{from{background-position:200% 0}to{background-position:-200% 0}}
+
+/* ── Tema claro (mesmo esquema do CGI; preferência compartilhada em localStorage 'cgiTheme') ── */
+html[data-theme="light"] .dtbl tbody tr:hover td{background:rgba(15,23,42,.035);}
+html[data-theme="light"] #auth-overlay{background:var(--bg);}
+html[data-theme="light"] .auth-box{background:#fff;border-color:var(--border2);color:var(--text);box-shadow:0 12px 40px rgba(15,23,42,.12);}
+html[data-theme="light"] .auth-box input{background:var(--bg3);border-color:var(--border2);color:var(--text);}
+html[data-theme="light"] .auth-box label{color:var(--text2);}
+html[data-theme="light"] .auth-box button{background:var(--c1);color:#fff;}
+html[data-theme="light"] #auth-badge{background:rgba(255,255,255,.95);border-color:var(--border2);color:var(--text2);}
+html[data-theme="light"] select,html[data-theme="light"] input,html[data-theme="light"] textarea{color-scheme:light;}
+html[data-theme="light"] .ms-pop{box-shadow:0 14px 40px rgba(15,23,42,.16);}
+html[data-theme="light"] .mbox{box-shadow:0 20px 60px rgba(15,23,42,.18);}
+html[data-theme="light"] #modal{background:rgba(15,23,42,.35);}
+html[data-theme="light"] #toast{box-shadow:0 10px 30px rgba(15,23,42,.15);}
+html[data-theme="light"] .tile.sel{border-color:#151a26;}
+html[data-theme="light"] .pill-blue{background:rgba(8,145,178,.08);border-color:rgba(8,145,178,.25);}
+html[data-theme="light"] .pill-green{background:rgba(5,150,105,.08);border-color:rgba(5,150,105,.25);}
+html[data-theme="light"] .pill-amber{background:rgba(194,120,3,.08);border-color:rgba(194,120,3,.25);}
+html[data-theme="light"] .dtbl tbody tr:hover td{background:rgba(8,145,178,.05);}
+html[data-theme="light"] .maplegend{box-shadow:0 6px 20px rgba(15,23,42,.12);}
+html[data-theme="light"] .leaflet-popup-content-wrapper{box-shadow:0 8px 24px rgba(15,23,42,.18);}
+/* estilos escritos direto no HTML gerado (mapa/controles) */
+html[data-theme="light"] [style*="background:#1e1e28"],html[data-theme="light"] #map{background:var(--bg4)!important;}
+.kmbtn{width:34px;height:34px;font-size:16px;cursor:pointer;background:#1e1e28;color:#fff;border:2px solid #444!important;border-radius:4px!important;display:flex;align-items:center;justify-content:center;}
+.kmbtn.on{background:#a78bfa;border-color:#a78bfa!important;}
+html[data-theme="light"] .kmbtn{background:#fff;color:var(--text);border-color:var(--border2)!important;box-shadow:0 1px 4px rgba(15,23,42,.15);}
+html[data-theme="light"] .kmbtn.on{background:#a78bfa;color:#fff;border-color:#a78bfa!important;}
+html[data-theme="light"] .hl-tb{background:#0f1626;border-radius:8px;padding:4px 10px;box-sizing:content-box;}
+#theme-btn{position:fixed;left:12px;bottom:10px;z-index:100000;display:flex;align-items:center;gap:6px;background:var(--bg2);border:1px solid var(--border2);color:var(--text2);border-radius:20px;padding:6px 12px;font:11px 'DM Mono',monospace;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.18);}
+#theme-btn:hover{color:var(--text);border-color:var(--c1);}
+@media print{#theme-btn{display:none!important;}}
 @media (max-width:1250px){.kpi-grid{grid-template-columns:repeat(3,1fr);}.g-hero,.g-ov,.grid2,.grid3{grid-template-columns:1fr;}.minfo{grid-template-columns:repeat(3,1fr);}.th-grid{grid-template-columns:1fr 1fr;}}
 </style>
 <style id="auth-css">
@@ -235,6 +266,7 @@ body.role-busca #pg-site{display:block!important;}
     <div id="auth-msg"></div>
   </div>
 </div>
+<button id="theme-btn" type="button" title="Alternar tema claro / escuro"><span id="theme-ico">☀️</span><span id="theme-lbl">Tema claro</span></button>
 <div id="auth-badge"><span id="auth-who"></span><a id="auth-logout">Sair</a></div>
 <div id="busy"></div>
 
@@ -242,7 +274,7 @@ body.role-busca #pg-site{display:block!important;}
 <div id="upload-screen">
  <div class="upload-wrap">
   <div class="brand">
-   <img src="log_telebit.png" alt="" onerror="this.style.display='none'">
+   <img class="hl-tb" src="log_telebit.png" alt="" onerror="this.style.display='none'">
    <div><h1>KPI Dashboard · Status de Sites e Cidades</h1><p>TIM Brasil · RAN 4G · Disponibilidade, Acessibilidade, Retenção, Transporte e Capacidade</p></div>
   </div>
   <div class="drops">
@@ -272,14 +304,13 @@ body.role-busca #pg-site{display:block!important;}
 <div id="dashboard">
  <div class="header">
   <div class="hleft">
-   <img class="hlogo" src="log_telebit.png" alt="" onerror="this.outerHTML='<div class=&quot;logo&quot;>TB</div>'">
+   <img class="hlogo hl-tb" src="log_telebit.png" alt="" onerror="this.outerHTML='<div class=&quot;logo&quot;>TB</div>'">
    <div><div class="htitle">TIM Brasil — KPI Dashboard</div><div class="hsub" id="hsub">Status de sites e cidades · RAN 4G</div></div>
   </div>
   <div class="hright">
    <span class="pill pill-blue" id="p-range"></span>
    <span class="pill pill-green" id="p-sites"></span>
    <span class="pill pill-amber" id="p-cgi">Mapa: sem CGI</span>
-   <button class="rbtn" id="btn-theme">◐ Tema</button>
    <button class="rbtn" id="btn-reload">⟲ Nova base</button>
   </div>
  </div>
@@ -1254,8 +1285,7 @@ function loadLeaflet(cb){
  var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';s.onload=loadMC;s.onerror=function(){$('m-info').textContent='Falha ao carregar Leaflet (sem internet?)';};document.head.appendChild(s);
 }
 function mapBtn(icon,title,fn,id){
- var btn=L.DomUtil.create('button','leaflet-bar leaflet-control');if(id)btn.id=id;btn.title=title;btn.innerHTML=icon;
- btn.style.cssText='width:34px;height:34px;font-size:16px;cursor:pointer;background:#1e1e28;color:#fff;border:2px solid #444;border-radius:4px;display:flex;align-items:center;justify-content:center;';
+ var btn=L.DomUtil.create('button','leaflet-bar leaflet-control kmbtn');if(id)btn.id=id;btn.title=title;btn.innerHTML=icon;
  L.DomEvent.on(btn,'click',function(e){L.DomEvent.stopPropagation(e);fn();});L.DomEvent.disableClickPropagation(btn);return btn;
 }
 function renderMap(){
@@ -1271,7 +1301,7 @@ function renderMap(){
    var Ctl=L.Control.extend({options:{position:'topleft'},onAdd:function(){
     var w=L.DomUtil.create('div');w.style.cssText='display:flex;flex-direction:column;gap:3px;';
     w.appendChild(mapBtn('📡','Carregar azimutes da área visível (cor = status do site)',azLoad,'az-btn'));
-    var c=mapBtn('✕','Limpar azimutes',azClear,'az-clr');c.style.display='none';c.style.color='#9090a8';c.style.fontSize='13px';w.appendChild(c);
+    var c=mapBtn('✕','Limpar azimutes',azClear,'az-clr');c.style.display='none';c.style.fontSize='13px';w.appendChild(c);
     w.appendChild(mapBtn('⤢','Enquadrar sites do filtro',function(){if(MAP.bounds.length)MAP.map.fitBounds(MAP.bounds,{padding:[30,30]});}));
     return w;}});
    MAP.map.addControl(new Ctl());
@@ -1327,8 +1357,8 @@ function destPoint(lat,lon,brg,km){var R=6371,d=km/R,b=brg*Math.PI/180,p1=lat*Ma
 function sectorPts(lat,lon,az,beam,rng,n){var pts=[[lat,lon]],h=beam/2;for(var i=0;i<=n;i++)pts.push(destPoint(lat,lon,az-h+beam*i/n,rng));pts.push([lat,lon]);return pts;}
 function azRange(){var z=MAP.map.getZoom();return z>=14?0.35:z>=12?0.6:z>=10?1.0:z>=8?2.0:3.5;}
 function azOpacity(){var z=MAP.map.getZoom();return z>=14?0.55:z>=12?0.45:0.30;}
-function azLoad(){MAP.azOn=true;azDraw();$('az-btn').style.background='#a78bfa';$('az-btn').style.borderColor='#a78bfa';$('az-clr').style.display='flex';}
-function azClear(){MAP.azOn=false;if(MAP.az){MAP.map.removeLayer(MAP.az);MAP.az=null;}$('az-btn').style.background='#1e1e28';$('az-btn').style.borderColor='#444';$('az-clr').style.display='none';$('m-info').textContent=$('m-info').textContent.replace(/ · \d[\d.]* setores.*$/,'');}
+function azLoad(){MAP.azOn=true;azDraw();$('az-btn').classList.add('on');$('az-clr').style.display='flex';}
+function azClear(){MAP.azOn=false;if(MAP.az){MAP.map.removeLayer(MAP.az);MAP.az=null;}$('az-btn').classList.remove('on');$('az-clr').style.display='none';$('m-info').textContent=$('m-info').textContent.replace(/ · \d[\d.]* setores.*$/,'');}
 function azDraw(){
  if(MAP.az){MAP.map.removeLayer(MAP.az);MAP.az=null;}
  var bb=MAP.map.getBounds().pad(0.1),rng=azRange(),op=azOpacity(),svgR=L.svg({padding:.3}),layer=L.layerGroup(),n=0,LIM=4000,cut=false;
@@ -1452,7 +1482,7 @@ function bindUI(){
  $('f-day').onchange=function(){DI=+this.value;refresh();};
  $('f-win').onchange=function(){WIN=+this.value;refresh();};
  $('btn-clear').onclick=function(){for(var k in FILTER)FILTER[k]={};refresh();};
- $('btn-theme').onclick=function(){var l=document.documentElement.getAttribute('data-theme')==='light';if(l)document.documentElement.removeAttribute('data-theme');else document.documentElement.setAttribute('data-theme','light');try{localStorage.setItem('kpiTheme',l?'dark':'light');}catch(e){}chartBase();var p=['ov','tr','off','tx','cap'];for(var i=0;i<p.length;i++)DIRTY[p[i]]=1;render(CUR);};
+ $('theme-btn').onclick=toggleTheme;themeLabel();
  $('btn-reload').onclick=function(){location.reload();};
  $('mclose').onclick=closeModal;$('modal').onclick=function(e){if(e.target===this)closeModal();};
  document.addEventListener('keydown',function(e){if(e.key==='Escape'){closeModal();closeAllMS();}});
@@ -1470,6 +1500,18 @@ function bindUI(){
  $('m-search').onkeydown=function(e){if(e.key==='Enter')mapSearch(this.value);};
  $('m-loadcgi').onclick=function(){$('fi-cgi2').click();};
  $('fi-cgi2').onchange=function(){var f=this.files[0];if(!f)return;var info=$('m-info'),fake={style:{}};info.textContent='Lendo CGI…';loadCGIFile(f,info,fake,function(hit){if(hit){cgiPill();MAP.fitted=false;DIRTY.map=1;render('map');}});this.value='';};
+}
+function isLight(){return document.documentElement.getAttribute('data-theme')==='light';}
+function themeLabel(){$('theme-ico').textContent=isLight()?'🌙':'☀️';$('theme-lbl').textContent=isLight()?'Tema escuro':'Tema claro';}
+function toggleTheme(){
+ if(isLight())document.documentElement.removeAttribute('data-theme');else document.documentElement.setAttribute('data-theme','light');
+ try{localStorage.setItem('cgiTheme',isLight()?'light':'dark');}catch(e){}
+ themeLabel();
+ if(!D||typeof Chart==='undefined')return;
+ chartBase();
+ var p=['ov','tr','off','tx','cap','city'];for(var i=0;i<p.length;i++)DIRTY[p[i]]=1;
+ if(CUR!=='map'&&CUR!=='th'&&CUR!=='site')render(CUR);
+ try{for(var k in CH){if(k.indexOf('m-')===0&&CH[k]){var o=CH[k].options;if(o.scales){for(var a in o.scales){if(o.scales[a].grid&&o.scales[a].grid.display!==false)o.scales[a].grid.color=cssv('--border');if(o.scales[a].ticks)o.scales[a].ticks.color=cssv('--text2');}}CH[k].update('none');}}}catch(e){}
 }
 function boot(){
  bindUI();
@@ -1550,6 +1592,7 @@ function authLogin(){
  msg.textContent='Usuário ou senha inválidos.';btn.disabled=true;setTimeout(function(){btn.disabled=false;},wait);$('auth-pass').value='';
 }
 function authInit(){
+ $('theme-btn').onclick=toggleTheme;themeLabel();
  $('auth-btn').onclick=authLogin;
  var kd=function(e){if(e.key==='Enter')authLogin();};
  $('auth-user').onkeydown=kd;$('auth-pass').onkeydown=kd;
