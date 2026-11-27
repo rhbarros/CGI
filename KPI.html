@@ -153,7 +153,7 @@ html[data-theme="light"] .upload-btn{color:#fff;}
 .hm td.n:hover{color:var(--c1);}
 .hm th{font-weight:400;color:var(--text3);font-size:8.5px;writing-mode:vertical-rl;transform:rotate(180deg);height:38px;}
 /* ── map ── */
-#map{height:calc(100vh - 230px);min-height:480px;border-radius:10px;border:1px solid var(--border);}
+#map{height:calc(100vh - 230px);min-height:520px;border-radius:10px;border:1px solid var(--border);background:#1a1a2e;overflow:hidden;}
 .map-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;}
 .leaflet-popup-content-wrapper{background:var(--bg2)!important;color:var(--text)!important;border:1px solid var(--border2);border-radius:9px!important;}
 .leaflet-popup-tip{background:var(--bg2)!important;}
@@ -344,7 +344,6 @@ body.role-busca #pg-site{display:block!important;}
     <option value="status">Status</option><option value="disp">Disponibilidade</option><option value="acc">ACC ERAB</option><option value="drop">DROP ERAB</option><option value="prbdl">PRB DL</option><option value="ploss">Packet loss (TWAMP)</option><option value="tdl">Throughput DL</option>
    </select>
    <input class="sbox" id="m-search" placeholder="Buscar site / Station ID / município e Enter…" style="min-width:300px">
-   <button class="rbtn" id="m-fit">⤢ Enquadrar</button>
    <button class="rbtn" id="m-loadcgi">⬆ Carregar CGI</button>
    <input type="file" id="fi-cgi2" accept=".csv,.zip,.txt" style="display:none">
    <span class="flabel" id="m-info" style="margin-left:auto"></span>
@@ -685,7 +684,7 @@ function parseCGI(text,prog,done){
  if(!D){done(0,'Carregue a base de KPI primeiro');return;}
  var idx={};for(var i=0;i<D.NS;i++)idx[D.sites[i].id]=i;
  var first=text.substr(0,3000).split(/\r?\n/)[0];var sep=first.split(';').length>first.split(',').length?';':',';
- var col=null,hit=0,bandSet={},totalLen=text.length,n=0;
+ var col=null,hit=0,bandSet={},azSeen={},totalLen=text.length,n=0;
  Papa.parse(text,{delimiter:sep,skipEmptyLines:true,
   step:function(res){
    var r=res.data;
@@ -696,6 +695,7 @@ function parseCGI(text,prog,done){
    if(s.lat!==s.lat){var la=num(r[col.latitude]),lo=num(r[col.longitude]);if(la===la&&lo===lo&&la!==0){s.lat=la;s.lon=lo;hit++;}}
    if(!s.sid&&col.stationid!=null)s.sid=r[col.stationid];
    s.cells++;var f=col.freq!=null?r[col.freq]:'';if(f){if(!bandSet[si])bandSet[si]={};bandSet[si][f]=1;}
+   if(col.azimute!=null){var az=num(r[col.azimute]);if(az===az&&az>=0&&az<=360){var ak=Math.round(az);if(!azSeen[si])azSeen[si]={};if(!azSeen[si][ak]){azSeen[si][ak]=1;(s.az=s.az||[]).push([az,f]);}}}
    if(!s.mun&&col.cidade!=null)s.mun=r[col.cidade];
   },
   complete:function(){for(var k in bandSet){D.sites[k].bands=keys(bandSet[k]).sort(function(a,b){return a-b;}).join('/');}D.cgi=hit>0;done(hit,null);},
@@ -1237,23 +1237,44 @@ function renderCap(){
 }
 
 /* ═════════════ MAPA ═════════════ */
-var MAP={map:null,layer:null,tiles:null,hide:{},ready:false,fitted:false,rend:null};
+var MAP={map:null,mcg:null,hide:{},fitted:false,rend:null,az:null,azOn:false,bounds:[]};
+// mesmo mapa do CGI: Leaflet 1.9.4 + OpenStreetMap + MarkerCluster 1.5.3 + setores de azimute
 function loadLeaflet(cb){
- if(window.L){cb();return;}
- var l=document.createElement('link');l.rel='stylesheet';l.href='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css';document.head.appendChild(l);
- var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';s.onload=function(){cb();};s.onerror=function(){$('m-info').textContent='Falha ao carregar Leaflet (sem internet?)';};document.head.appendChild(s);
+ function addCSS(id,href){if(document.getElementById(id))return;var l=document.createElement('link');l.id=id;l.rel='stylesheet';l.href=href;document.head.appendChild(l);}
+ addCSS('leaflet-css','https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css');
+ addCSS('mc-css','https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css');
+ addCSS('mc-def-css','https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css');
+ function loadMC(){
+  if(typeof L.MarkerClusterGroup!=='undefined'){cb();return;}
+  var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js';
+  s.onload=function(){cb();};s.onerror=function(){$('m-info').textContent='Falha ao carregar MarkerCluster (sem internet?)';};document.head.appendChild(s);
+ }
+ if(window.L){loadMC();return;}
+ var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';s.onload=loadMC;s.onerror=function(){$('m-info').textContent='Falha ao carregar Leaflet (sem internet?)';};document.head.appendChild(s);
 }
-function tileUrl(){return document.documentElement.getAttribute('data-theme')==='light'?'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png':'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';}
+function mapBtn(icon,title,fn,id){
+ var btn=L.DomUtil.create('button','leaflet-bar leaflet-control');if(id)btn.id=id;btn.title=title;btn.innerHTML=icon;
+ btn.style.cssText='width:34px;height:34px;font-size:16px;cursor:pointer;background:#1e1e28;color:#fff;border:2px solid #444;border-radius:4px;display:flex;align-items:center;justify-content:center;';
+ L.DomEvent.on(btn,'click',function(e){L.DomEvent.stopPropagation(e);fn();});L.DomEvent.disableClickPropagation(btn);return btn;
+}
 function renderMap(){
  if(!D.cgi){
   $('map').innerHTML='<div class="empty-msg">🗺️ O mapa precisa das coordenadas do inventário CGI.<br>Coloque o <b>CGI.zip</b> na mesma pasta do KPI.html (GitHub) ou clique em <b>⬆ Carregar CGI</b>.</div>';
   $('m-legend').style.display='none';$('m-info').textContent='';return;}
  $('m-legend').style.display='block';
  loadLeaflet(function(){
-  if(!MAP.map){$('map').innerHTML='';MAP.rend=L.canvas({padding:.5});MAP.map=L.map('map',{preferCanvas:true,zoomControl:true}).setView([-12,-45],5);
-   MAP.tiles=L.tileLayer(tileUrl(),{attribution:'© OpenStreetMap · © CARTO',subdomains:'abcd',maxZoom:19}).addTo(MAP.map);
-   MAP.layer=L.featureGroup().addTo(MAP.map);
-   MAP.layer.on('click',function(e){var si=e.layer.si;e.layer.bindPopup(popupHTML(si),{maxWidth:330}).openPopup();});
+  if(!MAP.map){
+   $('map').innerHTML='';MAP.rend=L.canvas({padding:.5});
+   MAP.map=L.map('map',{zoomControl:true,attributionControl:true,preferCanvas:true,renderer:MAP.rend}).setView([-12,-45],5);
+   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',subdomains:'abc',maxZoom:20,updateWhenIdle:false,updateWhenZooming:false,keepBuffer:4}).addTo(MAP.map);
+   var Ctl=L.Control.extend({options:{position:'topleft'},onAdd:function(){
+    var w=L.DomUtil.create('div');w.style.cssText='display:flex;flex-direction:column;gap:3px;';
+    w.appendChild(mapBtn('📡','Carregar azimutes da área visível (cor = status do site)',azLoad,'az-btn'));
+    var c=mapBtn('✕','Limpar azimutes',azClear,'az-clr');c.style.display='none';c.style.color='#9090a8';c.style.fontSize='13px';w.appendChild(c);
+    w.appendChild(mapBtn('⤢','Enquadrar sites do filtro',function(){if(MAP.bounds.length)MAP.map.fitBounds(MAP.bounds,{padding:[30,30]});}));
+    return w;}});
+   MAP.map.addControl(new Ctl());
+   MAP.map.on('zoomend',function(){if(MAP.azOn)azDraw();});
   }
   drawMarkers();
   setTimeout(function(){MAP.map.invalidateSize();},60);
@@ -1271,34 +1292,63 @@ function mapColor(si){
  if(mode==='tdl')return gradCol(v,3,30);
  return '#888';
 }
+function isBad(st){return st===ST_DOWN||st===ST_CRIT||st===ST_IDLE;}
 function drawMarkers(){
- MAP.layer.clearLayers();
+ if(MAP.mcg){MAP.map.removeLayer(MAP.mcg);MAP.mcg=null;}
+ var mcg=L.markerClusterGroup({maxClusterRadius:50,disableClusteringAtZoom:13,chunkedLoading:true,chunkInterval:50,chunkDelay:50,spiderfyOnMaxZoom:true,showCoverageOnHover:false,
+  iconCreateFunction:function(cluster){
+   var ch=cluster.getAllChildMarkers(),n=ch.length,bad=0;for(var i=0;i<ch.length;i++)if(isBad(ch[i].st))bad++;
+   var sz=n>500?44:n>100?36:28;
+   var badge=bad?'<span style="position:absolute;top:-6px;right:-8px;background:#ef4444;color:#fff;border-radius:9px;padding:0 5px;font-size:9px;line-height:16px;font-weight:700;border:1.5px solid #0a0a0f;">'+bad+'</span>':'';
+   return L.divIcon({html:'<div style="position:relative;width:'+sz+'px;height:'+sz+'px;border-radius:50%;background:rgba(0,212,255,.18);border:2px solid #00d4ff;display:flex;align-items:center;justify-content:center;font-size:'+(sz>36?12:10)+'px;font-weight:700;color:#00d4ff;font-family:DM Mono,monospace;">'+n+badge+'</div>',className:'',iconSize:[sz,sz]});
+  }});
+ mcg.on('click',function(e){var si=e.layer.si;if(si==null)return;L.popup({maxWidth:330}).setLatLng(e.layer.getLatLng()).setContent(popupHTML(si)).openOn(MAP.map);});
  var mode=$('m-color').value,n=0,noc=0,b=[];
  for(var i=0;i<FS.length;i++){var si=FS[i],s=D.sites[si];if(s.lat!==s.lat){noc++;continue;}
   var st=D.ST[si*D.ND+DI];if(mode==='status'&&MAP.hide[st])continue;
-  var bad=(st===ST_DOWN||st===ST_CRIT||st===ST_IDLE);
-  var mk1=L.circleMarker([s.lat,s.lon],{renderer:MAP.rend,radius:bad?6:4.2,fillColor:mapColor(si),color:bad?'#fff':'#000',weight:bad?1:.4,fillOpacity:.88});
-  mk1.si=si;MAP.layer.addLayer(mk1);n++;b.push([s.lat,s.lon]);}
+  var bad=isBad(st);
+  var mk1=L.circleMarker([s.lat,s.lon],{renderer:MAP.rend,radius:bad?11:9,fillColor:mapColor(si),fillOpacity:.88,color:bad?'#ffffff':'#0a0a0f',weight:1.5});
+  mk1.si=si;mk1.st=st;mcg.addLayer(mk1);n++;b.push([s.lat,s.lon]);}
+ MAP.mcg=mcg;MAP.map.addLayer(mcg);
  $('m-info').textContent=fmt(n)+' sites no mapa'+(noc?' · '+noc+' sem coordenada na CGI':'')+' · '+dLong(DI);
- if(b.length&&!MAP.fitted){MAP.map.fitBounds(b,{padding:[20,20]});MAP.fitted=true;}
+ if(b.length&&!MAP.fitted){MAP.map.fitBounds(b,{padding:[30,30]});MAP.fitted=true;}
  MAP.bounds=b;
- // legenda
+ if(MAP.azOn)azDraw();
  var h='';
- if(mode==='status'){var c=stCount(FS,DI);for(var s2=0;s2<6;s2++)h+='<div data-s="'+s2+'" class="'+(MAP.hide[s2]?'off':'')+'"><i class="dot" style="background:'+ST_COLOR[s2]+'"></i>'+ST_NAME[s2]+' · '+fmt(c[s2])+'</div>';h+='<div style="color:var(--text3);font-size:9px;cursor:default">clique para ocultar</div>';}
+ if(mode==='status'){var c=stCount(FS,DI);for(var s2=0;s2<6;s2++)h+='<div data-s="'+s2+'" class="'+(MAP.hide[s2]?'off':'')+'"><i class="dot" style="background:'+ST_COLOR[s2]+'"></i>'+ST_NAME[s2]+' · '+fmt(c[s2])+'</div>';h+='<div style="color:var(--text3);font-size:9px;cursor:default">clique para ocultar · <span style="color:#ef4444">●</span> nos clusters = sites em falha grave</div>';}
  else{var lg={disp:['95%','100%',false],acc:['96%','99,9%',false],drop:['0,2%','3%',true],prbdl:['30%','90%',true],ploss:['0%','10%',true],tdl:['3','30 Mbps',false]}[mode];
   h='<b style="color:var(--text)">'+$('m-color').selectedOptions[0].text+'</b><div class="grad" style="background:linear-gradient(90deg,'+(lg[2]?'hsl(125,75%,48%),hsl(60,75%,48%),hsl(0,75%,48%)':'hsl(0,75%,48%),hsl(60,75%,48%),hsl(125,75%,48%)')+')"></div><div style="justify-content:space-between;cursor:default"><span>'+lg[0]+'</span><span>'+lg[1]+'</span></div>';}
  $('m-legend').innerHTML=h;
  $('m-legend').onclick=function(e){var t=e.target.closest('[data-s]');if(!t)return;var s=+t.getAttribute('data-s');if(MAP.hide[s])delete MAP.hide[s];else MAP.hide[s]=1;drawMarkers();};
 }
+/* ── setores de azimute (mesma geometria do CGI: feixe 65°, alcance por zoom) ── */
+function destPoint(lat,lon,brg,km){var R=6371,d=km/R,b=brg*Math.PI/180,p1=lat*Math.PI/180,l1=lon*Math.PI/180;var p2=Math.asin(Math.sin(p1)*Math.cos(d)+Math.cos(p1)*Math.sin(d)*Math.cos(b));var l2=l1+Math.atan2(Math.sin(b)*Math.sin(d)*Math.cos(p1),Math.cos(d)-Math.sin(p1)*Math.sin(p2));return [p2*180/Math.PI,l2*180/Math.PI];}
+function sectorPts(lat,lon,az,beam,rng,n){var pts=[[lat,lon]],h=beam/2;for(var i=0;i<=n;i++)pts.push(destPoint(lat,lon,az-h+beam*i/n,rng));pts.push([lat,lon]);return pts;}
+function azRange(){var z=MAP.map.getZoom();return z>=14?0.35:z>=12?0.6:z>=10?1.0:z>=8?2.0:3.5;}
+function azOpacity(){var z=MAP.map.getZoom();return z>=14?0.55:z>=12?0.45:0.30;}
+function azLoad(){MAP.azOn=true;azDraw();$('az-btn').style.background='#a78bfa';$('az-btn').style.borderColor='#a78bfa';$('az-clr').style.display='flex';}
+function azClear(){MAP.azOn=false;if(MAP.az){MAP.map.removeLayer(MAP.az);MAP.az=null;}$('az-btn').style.background='#1e1e28';$('az-btn').style.borderColor='#444';$('az-clr').style.display='none';$('m-info').textContent=$('m-info').textContent.replace(/ · \d[\d.]* setores.*$/,'');}
+function azDraw(){
+ if(MAP.az){MAP.map.removeLayer(MAP.az);MAP.az=null;}
+ var bb=MAP.map.getBounds().pad(0.1),rng=azRange(),op=azOpacity(),svgR=L.svg({padding:.3}),layer=L.layerGroup(),n=0,LIM=4000,cut=false;
+ for(var i=0;i<FS.length;i++){var si=FS[i],s=D.sites[si];if(s.lat!==s.lat||!s.az||!bb.contains([s.lat,s.lon]))continue;
+  var st=D.ST[si*D.ND+DI];if($('m-color').value==='status'&&MAP.hide[st])continue;
+  var col=mapColor(si);
+  for(var k=0;k<s.az.length;k++){if(n>=LIM){cut=true;break;}
+   layer.addLayer(L.polygon(sectorPts(s.lat,s.lon,s.az[k][0],65,rng,20),{fillColor:col,fillOpacity:op,color:col,weight:.8,opacity:.7,renderer:svgR,interactive:false}));n++;}
+  if(cut)break;}
+ MAP.az=layer;layer.addTo(MAP.map);
+ var info=$('m-info');info.textContent=info.textContent.replace(/ · \d[\d.]* setores.*$/,'')+' · '+fmt(n)+' setores'+(cut?' (limite '+fmt(LIM)+' — aproxime o zoom)':'');
+}
 function popupHTML(si){
  var s=D.sites[si],o=si*D.ND+DI,A=D.A,d0=winStart();
- return '<div class="pp"><h4>'+esc(s.id)+'</h4>'+badge(D.ST[o])+' '+reasonHTML(o)+'<div style="margin-top:5px;color:var(--text2)">'+esc(s.mun)+'/'+s.uf+' · '+esc(s.vendor)+(s.sid?' · '+esc(s.sid):'')+(s.bands?'<br>Bandas '+esc(s.bands):'')+'</div><div style="margin-top:6px">'+strip(si,d0,DI)+'</div>'+
+ return '<div class="pp"><h4>'+esc(s.id)+'</h4>'+badge(D.ST[o])+' '+reasonHTML(o)+'<div style="margin-top:5px;color:var(--text2)">'+esc(s.mun)+'/'+s.uf+' · '+esc(s.vendor)+(s.sid?' · '+esc(s.sid):'')+(s.bands?'<br>Bandas '+esc(s.bands)+(s.az?' · '+s.az.length+' setores':''):'')+'</div><div style="margin-top:6px">'+strip(si,d0,DI)+'</div>'+
   '<table><tr><td>Disp</td><td>'+fmt(A.disp[o],2)+'%</td><td>&nbsp;ACC</td><td>'+fmt(A.acc[o],2)+'%</td></tr><tr><td>DROP</td><td>'+fmt(A.drop[o],2)+'%</td><td>&nbsp;TPUT</td><td>'+fmt(A.tdl[o],1)+' Mbps</td></tr><tr><td>PRB DL</td><td>'+fmt(A.prbdl[o],1)+'%</td><td>&nbsp;Usuários</td><td>'+fmt(A.usr[o],0)+'</td></tr><tr><td>PLoss</td><td>'+fmt(A.ploss[o],2)+'%</td><td>&nbsp;Vol</td><td>'+fmt(A.vol[o],0)+' GB</td></tr></table>'+
-  '<a onclick="openSite('+si+')">Ver histórico completo →</a></div>';
+  '<a onclick="openSite('+si+')">Ver histórico completo →</a> &nbsp; <a target="_blank" href="https://www.google.com/maps?q='+s.lat+','+s.lon+'">Google Maps ↗</a></div>';
 }
 function mapSearch(q){
  q=nk(q);if(!q||!MAP.map)return;
- for(var i=0;i<FS.length;i++){var s=D.sites[FS[i]];if(s.lat!==s.lat)continue;if(nk(s.id).indexOf(q)>=0||nk(s.sid).indexOf(q)>=0){MAP.map.setView([s.lat,s.lon],14);var si=FS[i];MAP.layer.eachLayer(function(l){if(l.si===si)l.bindPopup(popupHTML(si),{maxWidth:330}).openPopup();});return;}}
+ for(var i=0;i<FS.length;i++){var s=D.sites[FS[i]];if(s.lat!==s.lat)continue;if(nk(s.id).indexOf(q)>=0||nk(s.sid).indexOf(q)>=0){var si=FS[i];MAP.map.setView([s.lat,s.lon],15);L.popup({maxWidth:330}).setLatLng([s.lat,s.lon]).setContent(popupHTML(si)).openOn(MAP.map);return;}}
  var b=[];for(i=0;i<FS.length;i++){var s2=D.sites[FS[i]];if(s2.lat===s2.lat&&nk(s2.mun).indexOf(q)>=0)b.push([s2.lat,s2.lon]);}
  if(b.length)MAP.map.fitBounds(b,{padding:[30,30],maxZoom:14});else toast('Nada encontrado no mapa');
 }
@@ -1388,7 +1438,7 @@ function bindUI(){
  $('f-day').onchange=function(){DI=+this.value;refresh();};
  $('f-win').onchange=function(){WIN=+this.value;refresh();};
  $('btn-clear').onclick=function(){for(var k in FILTER)FILTER[k]={};refresh();};
- $('btn-theme').onclick=function(){var l=document.documentElement.getAttribute('data-theme')==='light';if(l)document.documentElement.removeAttribute('data-theme');else document.documentElement.setAttribute('data-theme','light');try{localStorage.setItem('kpiTheme',l?'dark':'light');}catch(e){}chartBase();if(MAP.tiles)MAP.tiles.setUrl(tileUrl());var p=['ov','tr','off','tx','cap'];for(var i=0;i<p.length;i++)DIRTY[p[i]]=1;render(CUR);};
+ $('btn-theme').onclick=function(){var l=document.documentElement.getAttribute('data-theme')==='light';if(l)document.documentElement.removeAttribute('data-theme');else document.documentElement.setAttribute('data-theme','light');try{localStorage.setItem('kpiTheme',l?'dark':'light');}catch(e){}chartBase();var p=['ov','tr','off','tx','cap'];for(var i=0;i<p.length;i++)DIRTY[p[i]]=1;render(CUR);};
  $('btn-reload').onclick=function(){location.reload();};
  $('mclose').onclick=closeModal;$('modal').onclick=function(e){if(e.target===this)closeModal();};
  document.addEventListener('keydown',function(e){if(e.key==='Escape'){closeModal();closeAllMS();}});
@@ -1402,8 +1452,7 @@ function bindUI(){
  $('tx-exp').onclick=function(){exportSites((EXP.tx||[]).map(function(x){return x.si;}),'transporte_'+D.days[DI]+'.csv');};
  $('cap-exp').onclick=function(){exportSites((EXP.cap||[]).map(function(x){return x.si;}),'capacidade_'+D.days[DI]+'.csv');};
  $('th-apply').onclick=applyTH;$('th-reset').onclick=function(){for(var k in TH_DEF)TH[k]=TH_DEF[k];try{localStorage.removeItem('kpiTH');}catch(e){}renderTH();applyTH();};
- $('m-color').onchange=function(){if(MAP.layer)drawMarkers();};
- $('m-fit').onclick=function(){if(MAP.map&&MAP.bounds&&MAP.bounds.length)MAP.map.fitBounds(MAP.bounds,{padding:[20,20]});};
+ $('m-color').onchange=function(){if(MAP.map)drawMarkers();};
  $('m-search').onkeydown=function(e){if(e.key==='Enter')mapSearch(this.value);};
  $('m-loadcgi').onclick=function(){$('fi-cgi2').click();};
  $('fi-cgi2').onchange=function(){var f=this.files[0];if(!f)return;var info=$('m-info'),fake={style:{}};info.textContent='Lendo CGI…';loadCGIFile(f,info,fake,function(hit){if(hit){cgiPill();MAP.fitted=false;DIRTY.map=1;render('map');}});this.value='';};
