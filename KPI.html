@@ -229,6 +229,19 @@ html[data-theme="light"] #sel-panel{box-shadow:0 8px 24px rgba(15,23,42,.15)!imp
 .th-inline{font-size:10px;font-family:'DM Mono',monospace;color:var(--text2);display:inline-flex;align-items:center;gap:4px;}
 .th-inline input{width:62px;background:var(--bg2);border:1px solid var(--border2);border-radius:5px;color:var(--text);font-family:'DM Mono',monospace;font-size:10.5px;padding:3px 5px;}
 #sla-tbl thead tr:first-child th{top:0;}#sla-tbl thead tr+tr th{top:27px;}
+.sla-tg{cursor:pointer;font-weight:700;padding:1px 6px;border-radius:5px;background:rgba(239,68,68,.12);}
+.sla-tg:hover{background:rgba(239,68,68,.25);}
+td.sla-bad{cursor:pointer;}td.sla-bad:hover{outline:1px solid #ef4444;outline-offset:-1px;}
+.sla-offrow td{background:var(--bg2)!important;white-space:normal!important;padding:8px 12px!important;cursor:default;}
+.sla-off{display:flex;flex-direction:column;gap:6px;}
+.sla-offk{font-size:10.5px;line-height:1.9;}
+.sla-offt{color:#ef4444;font-weight:700;cursor:pointer;text-decoration:underline dotted;}
+.sla-chip{display:inline-block;margin:0 4px 0 0;padding:1px 7px;border-radius:12px;border:1px solid var(--border2);background:var(--bg3);color:var(--text2);cursor:pointer;font-size:10px;}
+.sla-chip b{color:var(--text);font-weight:600;}
+.sla-chip.b{border-color:rgba(239,68,68,.45);background:rgba(239,68,68,.10);}
+.sla-chip.b b{color:#ef4444;}
+.sla-chip:hover{border-color:var(--c1);}
+.sla-chip.more{color:var(--c1);}
 #theme-btn{position:fixed;left:12px;bottom:10px;z-index:100000;display:flex;align-items:center;gap:6px;background:var(--bg2);border:1px solid var(--border2);color:var(--text2);border-radius:20px;padding:6px 12px;font:11px 'DM Mono',monospace;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.18);}
 #theme-btn:hover{color:var(--text);border-color:var(--c1);}
 @media print{#theme-btn{display:none!important;}}
@@ -425,7 +438,8 @@ body.role-busca #pg-site{display:block!important;}
     <input class="sbox" id="sla-q" placeholder="Pesquisar cidade…">
     <label class="note" style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" id="sla-bad"> só cidades fora da meta</label>
     <button class="rbtn" id="sla-exp">⬇ Exportar CSV</button>
-    <span class="note">Bolinha verde/vermelha = meta da aba Metas (TPUT e Latência sem meta) · clique na cidade para ver os sites</span>
+    <button class="rbtn" id="sla-expall">▾ Expandir ofensores (página)</button>
+    <span class="note">▸ na coluna Fora ou clique na célula vermelha = ofensores · bolinha verde/vermelha = meta da aba Metas (TPUT e Latência sem meta) · clique na cidade para ver os sites</span>
    </div>
    <div class="tscroll" style="max-height:calc(100vh - 330px);overflow:auto"><table class="dtbl" id="sla-tbl"></table></div><div class="pager" id="sla-pg"></div>
   </div>
@@ -1707,7 +1721,7 @@ function drawSLA(){
  var base=slaBase(null),cities={},list=[];
  // acumula média por cidade × semana × KPI
  for(i=0;i<base.length;i++){var si=base[i],s=D.sites[si],ck=s.uf+'|'+s.mun,c=cities[ck];
-  if(!c){c=cities[ck]={key:ck,city:s.uf+'/'+s.mun,uf:s.uf,reg:s.regional,prio:s.prio||'—',n:0,S:{},C:{},v:{}};list.push(c);}c.n++;
+  if(!c){c=cities[ck]={key:ck,city:s.uf+'/'+s.mun,uf:s.uf,reg:s.regional,prio:s.prio||'—',n:0,S:{},C:{},v:{},sites:[]};list.push(c);}c.n++;c.sites.push(si);
   for(d=0;d<D.ND;d++){var wi=WK.dw[d]-w0;if(wi<0||!D.HAS[si*D.ND+d])continue;var o=si*D.ND+d;
    for(j=0;j<defs.length;j++){var x=D.A[defs[j][0]][o];if(x!==x)continue;var kk=j*64+wi;c.S[kk]=(c.S[kk]||0)+x;c.C[kk]=(c.C[kk]||0)+1;}}}
  var q=nk($('sla-q').value),only=$('sla-bad').checked,rows=[],lw=W.length-1;
@@ -1719,7 +1733,7 @@ function drawSLA(){
  rows.sort(function(a,b){if(!s2)return (b.nb-a.nb)||(a.prio<b.prio?-1:a.prio>b.prio?1:0)||b.n-a.n;
   if(s2==='city')return dir*a.city.localeCompare(b.city);if(s2==='prio')return dir*(a.prio<b.prio?-1:a.prio>b.prio?1:0);if(s2==='nb'||s2==='n')return dir*(a[s2]-b[s2]);
   var x=a.v[s2],y=b.v[s2];if(x!==x)x=-1e12*dir;if(y!==y)y=-1e12*dir;return dir*(x-y);});
- SLAV.cur=rows;SLAV.W=W;SLAV.defs=defs;
+ SLAV.cur=rows;SLAV.W=W;SLAV.defs=defs;SLAV.WK=WK;SLAV.w0=w0;if(!SLAV.open)SLAV.open={};
  // cards: cidades na meta na última semana
  var sum='';for(j=0;j<defs.length;j++){if(!defs[j][3])continue;var bad=0,tot=0;for(i=0;i<rows.length;i++){var ok=slaOk2(defs[j],rows[i].v[defs[j][0]+'|'+lw]);if(ok!==null){tot++;if(!ok)bad++;}}
   sum+='<div class="kpi" style="--kc:'+(bad?ST_COLOR[4]:ST_COLOR[0])+'" data-k="'+defs[j][0]+'|'+lw+'" data-le="'+(defs[j][3]==='le'?1:0)+'"><div class="kpi-label">'+esc(defs[j][1])+' · '+esc(W[lw]||'')+'</div><div class="kpi-val">'+fmt(tot-bad)+'<span style="font-size:13px;color:var(--text3)"> / '+fmt(tot)+'</span></div><div class="kpi-sub">'+(bad?'<span class="d-bad">'+fmt(bad)+' cidades fora</span>':'<span class="d-good">todas na meta</span>')+' · '+(defs[j][3]==='le'?'≤ ':'≥ ')+fmt(TH[defs[j][4]],defs[j][0]==='disp'?2:1)+'</div></div>';}
@@ -1732,17 +1746,62 @@ function drawSLA(){
  h+='</tr><tr>';for(j=0;j<defs.length;j++)for(var k2=0;k2<W.length;k2++){var key2=defs[j][0]+'|'+k2;h+='<th class="num '+(s2===key2?'sorted':'')+'" data-s="'+key2+'" data-le="'+(defs[j][3]==='le'?1:0)+'" style="'+(k2===0?'border-left:2px solid var(--border2);':'')+'">'+esc(W[k2])+(s2===key2?(dir>0?' ▲':' ▼'):'')+'</th>';}
  h+='</tr></thead><tbody>';
  for(i=0;i<sl.length;i++){var r=sl[i];
-  h+='<tr data-k="'+esc(r.key)+'"><td><b>'+esc(r.city)+'</b></td><td>'+esc(r.prio==='Sem prioridade'?'—':r.prio)+'</td><td class="num">'+r.n+'</td><td class="num '+(r.nb?'bad':'good')+'">'+(r.nb||'✓')+'</td>';
+  h+='<tr data-k="'+esc(r.key)+'"><td><b>'+esc(r.city)+'</b></td><td>'+esc(r.prio==='Sem prioridade'?'—':r.prio)+'</td><td class="num">'+r.n+'</td><td class="num '+(r.nb?'bad':'good')+'">'+(r.nb?'<span class="sla-tg" data-tg="1" title="Ver ofensores">'+(SLAV.open[r.key]?'▾ ':'▸ ')+r.nb+'</span>':'✓')+'</td>';
   for(j=0;j<defs.length;j++)for(var k3=0;k3<W.length;k3++){var v=r.v[defs[j][0]+'|'+k3],ok2=slaOk2(defs[j],v),last=k3===W.length-1;
    var bg=ok2===false?'rgba(239,68,68,'+(last?'.28':'.16')+')':(last&&ok2?'rgba(16,185,129,.16)':(last?'rgba(0,212,255,.06)':''));
-   h+='<td class="num slac" style="'+(k3===0?'border-left:2px solid var(--border2);':'')+(bg?'background:'+bg+';':'')+'">'+(ok2===null?'':'<i class="dot" style="background:'+(ok2?'#10b981':'#ef4444')+';margin-right:5px"></i>')+fmt(v,defs[j][2])+'</td>';}
-  h+='</tr>';}
+   h+='<td class="num slac'+(ok2===false?' sla-bad':'')+'"'+(ok2===false?' data-m="'+j+'" data-w="'+k3+'" title="Clique para ver os ofensores"':'')+' style="'+(k3===0?'border-left:2px solid var(--border2);':'')+(bg?'background:'+bg+';':'')+'">'+(ok2===null?'':'<i class="dot" style="background:'+(ok2?'#10b981':'#ef4444')+';margin-right:5px"></i>')+fmt(v,defs[j][2])+'</td>';}
+  h+='</tr>';
+  if(r.nb&&SLAV.open[r.key])h+='<tr class="sla-offrow" data-sub="1"><td colspan="'+(4+defs.length*W.length)+'">'+slaOffHTML(r,lw)+'</td></tr>';}
  h+='</tbody>';
  var t=$('sla-tbl');t.innerHTML=h;
  t.querySelector('thead').onclick=function(e){var th=e.target.closest('th[data-s]');if(!th)return;var ss=th.getAttribute('data-s');if(SLAV.sort===ss)SLAV.dir=-SLAV.dir;else{SLAV.sort=ss;SLAV.dir=(ss==='nb'||ss==='n')?-1:(th.getAttribute('data-le')==='1'?-1:1);}SLAV.page=0;drawSLA();};
- t.querySelector('tbody').onclick=function(e){var tr=e.target.closest('tr[data-k]');if(tr)openCity(tr.getAttribute('data-k'));};
+ t.querySelector('tbody').onclick=function(e){
+  var si=e.target.closest('[data-si]');if(si){openSite(+si.getAttribute('data-si'));return;}
+  var om=e.target.closest('[data-om]');if(om){var rr=slaRow(om.getAttribute('data-ck'));if(rr)slaOffModal(rr,+om.getAttribute('data-om'),+om.getAttribute('data-ow'));return;}
+  if(e.target.closest('[data-sub]'))return;
+  var tr=e.target.closest('tr[data-k]');if(!tr)return;var key=tr.getAttribute('data-k');
+  if(e.target.closest('[data-tg]')){if(SLAV.open[key])delete SLAV.open[key];else SLAV.open[key]=1;drawSLA();return;}
+  var cell=e.target.closest('td[data-m]');if(cell){slaOffModal(slaRow(key),+cell.getAttribute('data-m'),+cell.getAttribute('data-w'));return;}
+  openCity(key);};
+ $('sla-expall').textContent=nsel(SLAV.open)?'▴ Recolher ofensores':'▾ Expandir ofensores (página)';
+ $('sla-expall').onclick=function(){if(nsel(SLAV.open))SLAV.open={};else for(var z=0;z<sl.length;z++)if(sl[z].nb)SLAV.open[sl[z].key]=1;drawSLA();};
  pager('sla-pg',rows.length,P,SLAV.page,function(p){SLAV.page=p;drawSLA();});
  var fe=$('sla-filters').querySelectorAll('.sla-ms');for(i=0;i<fe.length;i++)if(fe[i]._lbl)fe[i]._lbl();
+}
+function slaRow(key){var r=SLAV.cur||[];for(var i=0;i<r.length;i++)if(r[i].key===key)return r[i];return null;}
+function slaSiteWeek(si,m,w){ // média do site no KPI m na semana w (relativa à janela da aba)
+ var s=0,n=0,dw=SLAV.WK.dw,ww=SLAV.w0+w,a=D.A[m];for(var d=0;d<D.ND;d++){if(dw[d]!==ww)continue;var o=si*D.ND+d;if(!D.HAS[o])continue;var v=a[o];if(v===v){s+=v;n++;}}return n?s/n:NaN;}
+function slaOffenders(r,j,w){ // sites da cidade ordenados do pior para o melhor no KPI/semana
+ var def=SLAV.defs[j],le=def[3]==='le',out=[];
+ for(var i=0;i<r.sites.length;i++){var v=slaSiteWeek(r.sites[i],def[0],w);if(v!==v)continue;out.push({si:r.sites[i],v:v,bad:slaOk2(def,v)===false});}
+ out.sort(function(a,b){return le?b.v-a.v:a.v-b.v;});
+ return out;
+}
+function slaOffHTML(r,lw){
+ var h='<div class="sla-off">',defs=SLAV.defs;
+ for(var j=0;j<defs.length;j++){var def=defs[j],cv=r.v[def[0]+'|'+lw];if(slaOk2(def,cv)!==false)continue;
+  var off=slaOffenders(r,j,lw),bad=off.filter(function(x){return x.bad;}),pool=bad.length?bad:off,show=pool.slice(0,8);
+  h+='<div class="sla-offk"><span class="sla-offt" data-om="'+j+'" data-ow="'+lw+'" data-ck="'+esc(r.key)+'" title="Lista completa">'+esc(def[1])+' '+esc(SLAV.W[lw])+'</span> <span style="color:var(--text3)">cidade '+fmt(cv,def[2])+' '+(def[3]==='le'?'&gt;':'&lt;')+' '+fmt(TH[def[4]],def[2])+' · '+bad.length+' de '+off.length+' sites fora</span> ';
+  for(var i=0;i<show.length;i++){var x=show[i],s=D.sites[x.si];h+='<span class="sla-chip'+(x.bad?' b':'')+'" data-si="'+x.si+'" title="'+esc(s.vendor)+' · status '+ST_NAME[D.ST[x.si*D.ND+DI]]+'">'+esc(s.id)+' <b>'+fmt(x.v,def[2])+'</b></span>';}
+  if(pool.length>show.length)h+='<span class="sla-chip more" data-om="'+j+'" data-ow="'+lw+'" data-ck="'+esc(r.key)+'">+'+(pool.length-show.length)+' …</span>';
+  h+='</div>';}
+ return h+'</div>';
+}
+function slaOffModal(r,j,w){
+ if(!r)return;var def=SLAV.defs[j],off=slaOffenders(r,j,w),cv=r.v[def[0]+'|'+w],nb=0,i,k;for(i=0;i<off.length;i++)if(off[i].bad)nb++;
+ var h='<div class="mhead"><h2>🎯 Ofensores · '+esc(def[1])+' · '+esc(r.city)+'</h2><p>'+SLAV.tech+' · semana '+esc(SLAV.W[w])+' · cidade '+fmt(cv,def[2])+' (meta '+(def[3]==='le'?'≤ ':'≥ ')+fmt(TH[def[4]],def[2])+') · '+nb+' de '+off.length+' sites fora da meta</p></div>';
+ h+='<div class="tscroll" style="margin-top:12px"><table class="dtbl"><thead><tr><th>#</th><th>Site</th><th>Vendor</th><th class="num">'+esc(def[1])+' '+esc(SLAV.W[w])+'</th>';
+ for(k=0;k<SLAV.W.length;k++)if(k!==w)h+='<th class="num">'+esc(SLAV.W[k])+'</th>';
+ h+='<th>Status hoje</th><th>Janela</th></tr></thead><tbody id="m-off">';
+ var d0=winStart();
+ for(i=0;i<off.length;i++){var x=off[i],s=D.sites[x.si];
+  h+='<tr data-si="'+x.si+'"><td>'+(i+1)+'</td><td><b>'+esc(s.id)+'</b></td><td>'+esc(s.vendor)+'</td><td class="num '+(x.bad?'bad':'good')+'"><b>'+fmt(x.v,def[2])+'</b></td>';
+  for(k=0;k<SLAV.W.length;k++)if(k!==w){var v2=slaSiteWeek(x.si,def[0],k),o2=slaOk2(def,v2);h+='<td class="num '+(o2===false?'bad':'')+'">'+fmt(v2,def[2])+'</td>';}
+  h+='<td>'+badge(D.ST[x.si*D.ND+DI])+'</td><td>'+strip(x.si,d0,DI)+'</td></tr>';}
+ h+='</tbody></table></div><div class="tools" style="margin-top:10px"><button class="rbtn" id="m-exp">⬇ Exportar CSV</button></div>';
+ openModal(h);
+ $('m-off').onclick=function(e){var tr=e.target.closest('tr[data-si]');if(tr)openSite(+tr.getAttribute('data-si'));};
+ $('m-exp').onclick=function(){exportSites(off.map(function(x){return x.si;}),'ofensores_'+def[0]+'_'+r.city.replace(/\W+/g,'_')+'.csv');};
 }
 function slaExport(){
  var r=SLAV.cur||[],W=SLAV.W,defs=SLAV.defs,head=['Cidade','UF','Regional','Prioridade','Sites','KPIs fora (ultima semana)'],rows=[],j,k;
