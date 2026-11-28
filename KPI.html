@@ -485,8 +485,10 @@ body.role-busca #pg-site{display:block!important;}
    <div class="card"><div class="card-title">Distribuição de latência <small>dia selecionado · sites com TWAMP</small></div><div class="ch lg"><canvas id="c-txlat"></canvas></div></div>
   </div>
   <div class="card">
-   <div class="card-title">Sites com pior transporte <small>média da janela</small> <button class="rbtn" id="tx-exp">⬇ CSV</button></div>
-   <div class="tscroll"><table class="dtbl" id="tx-tbl"></table></div>
+   <div class="card-title">Sites com pior transporte <small id="tx-sub"></small></div>
+   <div class="tools"><input class="sbox" id="tx-q" placeholder="Buscar site, Station ID ou município…"><span id="tx-filters" style="display:flex;gap:8px;flex-wrap:wrap"></span><button class="rbtn" id="tx-clear">✕ Limpar</button><button class="rbtn" id="tx-exp">⬇ CSV</button></div>
+   <div class="note" style="margin-bottom:8px">Situação: <b style="color:#ef4444">Perda no dia</b> = PLoss do dia acima da meta de packet loss (aba Metas) · <b style="color:#10b981">Recuperado</b> = média da janela alta, mas o dia está normal · <b style="color:#a855f7">Sonda fora no dia</b> = DISP_TWAMP 0 (sem medição válida)</div>
+   <div class="tscroll"><table class="dtbl" id="tx-tbl"></table></div><div class="pager" id="tx-pg"></div>
   </div>
  </div>
 
@@ -1403,13 +1405,47 @@ function renderTX(){
  var bins=[0,5,10,20,40,80,150,300,600,1000,1e9],bl=['<5','5–10','10–20','20–40','40–80','80–150','150–300','300–600','600–1000','>1000'],cnt=[0,0,0,0,0,0,0,0,0,0];
  for(i=0;i<latS.length;i++){for(var b=0;b<bins.length-1;b++)if(latS[i]>=bins[b]&&latS[i]<bins[b+1]){cnt[b]++;break;}}
  mk('c-txlat',{type:'bar',data:{labels:bl,datasets:[{label:'sites',data:cnt,backgroundColor:bl.map(function(x,j){return j<4?'#10b981':(j<6?'#f59e0b':'#ef4444');}),borderRadius:4}]},options:{maintainAspectRatio:false,scales:{x:{title:{display:true,text:'ms'},grid:{display:false}},y:{grid:gridOpt()}},plugins:{legend:{display:false}}}});
- // tabela
- var rows=[];for(i=0;i<FS.length;i++){var s2=FS[i],pa=siteAvg('ploss',s2,d0,DI);if(pa===pa)rows.push({si:s2,pa:pa,pm:siteMax('plmax',s2,d0,DI),dt:siteAvg('dtw',s2,d0,DI),la:siteAvg('lat',s2,d0,DI),ji:siteAvg('jit',s2,d0,DI),dr:siteAvg('drop',s2,d0,DI)});}
- rows.sort(function(a,b){return b.pa-a.pa;});rows=rows.slice(0,60);EXP.tx=rows;
- var t='<thead><tr><th>Site</th><th>Município</th><th>Vendor</th><th>Status</th><th class="num">PLoss médio %</th><th class="num">PLoss pico %</th><th class="num">Disp TWAMP %</th><th class="num">Latência ms</th><th class="num">Jitter ms</th><th class="num">DROP médio %</th><th>Janela</th></tr></thead><tbody>';
- for(i=0;i<rows.length;i++){var x2=rows[i],s3=D.sites[x2.si];t+='<tr data-si="'+x2.si+'"><td><b>'+esc(s3.id)+'</b></td><td>'+esc(s3.mun)+'/'+s3.uf+'</td><td>'+esc(s3.vendor)+'</td><td>'+badge(D.ST[x2.si*D.ND+DI])+'</td><td class="num bad">'+fmt(x2.pa,2)+'</td><td class="num">'+fmt(x2.pm,1)+'</td><td class="num">'+fmt(x2.dt,1)+'</td><td class="num">'+fmt(x2.la,0)+'</td><td class="num">'+fmt(x2.ji,2)+'</td><td class="num '+(x2.dr>TH.dropWarn?'bad':'')+'">'+fmt(x2.dr,2)+'</td><td>'+strip(x2.si,d0,DI)+'</td></tr>';}
- $('tx-tbl').innerHTML=t+'</tbody>';$('tx-tbl').onclick=function(e){var tr=e.target.closest('tr[data-si]');if(tr)openSite(+tr.getAttribute('data-si'));};
+ // tabela (com filtros próprios)
+ var all=[];for(i=0;i<FS.length;i++){var s2=FS[i],pa=siteAvg('ploss',s2,d0,DI);if(pa!==pa)continue;var o3=s2*D.ND+DI,pd=A.ploss[o3],dd=A.dtw[o3];
+  var sit=(pd===pd&&pd>TH.plWarn)?'Perda no dia':((pd!==pd)?((dd===0)?'Sonda fora no dia':'Sem medição no dia'):(pa>TH.plWarn?'Recuperado':'Sem perda'));
+  all.push({si:s2,pa:pa,pd:pd,sit:sit,pm:siteMax('plmax',s2,d0,DI),dt:siteAvg('dtw',s2,d0,DI),la:siteAvg('lat',s2,d0,DI),ji:siteAvg('jit',s2,d0,DI),dr:siteAvg('drop',s2,d0,DI)});}
+ TX.all=all;TX.page=0;
+ if(!TX.built){TX.built=true;localMS($('tx-filters'),{st:'Status',sit:'Situação do transporte',vendor:'Vendor'},TX.f,function(k){var c={},r=txRows(k);for(var j=0;j<r.length;j++){var v=txVal(r[j],k);c[v]=(c[v]||0)+1;}return c;},function(){TX.page=0;drawTX();});}
+ drawTX();
 }
+var TX={f:{st:{},sit:{},vendor:{}},sort:'pa',page:0,built:false,all:[]};
+var TX_SIT_COL={'Perda no dia':'#ef4444','Recuperado':'#10b981','Sonda fora no dia':'#a855f7','Sem medição no dia':'#5a5a70','Sem perda':'#10b981'};
+function txVal(r,k){if(k==='st')return ST_NAME[D.ST[r.si*D.ND+DI]];if(k==='sit')return r.sit;return D.sites[r.si][k]||'ND';}
+function txRows(except){var q=nk($('tx-q').value),out=[];for(var i=0;i<TX.all.length;i++){var r=TX.all[i],s=D.sites[r.si];if(q&&nk(s.id+' '+s.sid+' '+s.mun).indexOf(q)<0)continue;var ok=true;for(var k in TX.f){if(k===except||!nsel(TX.f[k]))continue;if(!TX.f[k][txVal(r,k)]){ok=false;break;}}if(ok)out.push(r);}return out;}
+function drawTX(){
+ var rows=txRows(null),k=TX.sort;
+ rows.sort(function(a,b){var x=a[k],y=b[k];if(x!==x)x=-1;if(y!==y)y=-1;return y-x;});
+ EXP.tx=rows;var d0=winStart(),P=100,p0=TX.page*P,sl=rows.slice(p0,p0+P);
+ var t='<thead><tr><th>Site</th><th>Município</th><th>Vendor</th><th>Status</th><th>Situação do transporte</th><th class="num'+(k==='pd'?' sorted':'')+'" data-s="pd">PLoss dia %'+(k==='pd'?' ▼':'')+'</th><th class="num'+(k==='pa'?' sorted':'')+'" data-s="pa">PLoss médio %'+(k==='pa'?' ▼':'')+'</th><th class="num" data-s="pm">PLoss pico %</th><th class="num" data-s="dt">Disp TWAMP %</th><th class="num" data-s="la">Latência ms</th><th class="num" data-s="ji">Jitter ms</th><th class="num" data-s="dr">DROP médio %</th><th>Janela</th></tr></thead><tbody>';
+ for(var i=0;i<sl.length;i++){var x2=sl[i],s3=D.sites[x2.si],sc=TX_SIT_COL[x2.sit];
+  t+='<tr data-si="'+x2.si+'"><td><b>'+esc(s3.id)+'</b></td><td>'+esc(s3.mun)+'/'+s3.uf+'</td><td>'+esc(s3.vendor)+'</td><td>'+badge(D.ST[x2.si*D.ND+DI])+'</td><td><span class="badge" style="background:'+sc+'22;color:'+sc+'">'+esc(x2.sit)+'</span></td><td class="num '+(x2.pd>TH.plWarn?'bad':'')+'">'+fmt(x2.pd,2)+'</td><td class="num '+(x2.pa>TH.plWarn?'bad':'')+'">'+fmt(x2.pa,2)+'</td><td class="num">'+fmt(x2.pm,1)+'</td><td class="num">'+fmt(x2.dt,1)+'</td><td class="num">'+fmt(x2.la,0)+'</td><td class="num">'+fmt(x2.ji,2)+'</td><td class="num '+(x2.dr>TH.dropWarn?'bad':'')+'">'+fmt(x2.dr,2)+'</td><td>'+strip(x2.si,d0,DI)+'</td></tr>';}
+ var tb=$('tx-tbl');tb.innerHTML=t+'</tbody>';
+ tb.onclick=function(e){var th=e.target.closest('th[data-s]');if(th){TX.sort=th.getAttribute('data-s');TX.page=0;drawTX();return;}var tr=e.target.closest('tr[data-si]');if(tr)openSite(+tr.getAttribute('data-si'));};
+ $('tx-sub').textContent=fmt(rows.length)+' sites · ordenado por '+(k==='pd'?'PLoss do dia':(k==='pa'?'PLoss médio da janela':'coluna selecionada'))+' · clique no cabeçalho para ordenar';
+ pager('tx-pg',rows.length,P,TX.page,function(p){TX.page=p;drawTX();});
+ var fe=$('tx-filters').querySelectorAll('.ms');for(i=0;i<fe.length;i++)if(fe[i]._lbl)fe[i]._lbl();
+}
+/* filtro de múltipla escolha genérico (estilo Excel) para filtros locais de uma aba */
+function localMS(host,labels,state,countFn,onChange){
+ var h='';for(var k in labels)h+='<div class="ms" data-lk="'+k+'"><div class="ms-btn"></div><div class="ms-pop"><input placeholder="Buscar…"><div class="ms-acts"><span data-a="all">Selecionar visíveis</span><span data-a="none">Limpar</span></div><div class="ms-list"></div></div></div>';
+ host.innerHTML=h;var els=host.querySelectorAll('.ms');
+ for(var i=0;i<els.length;i++){(function(el){
+  var k=el.getAttribute('data-lk'),btn=el.querySelector('.ms-btn'),pop=el.querySelector('.ms-pop'),inp=pop.querySelector('input'),list=pop.querySelector('.ms-list'),opts=null;
+  function lbl(){var sel=keys(state[k]);btn.className='ms-btn'+(sel.length?' act':'');btn.innerHTML=labels[k]+': <b>'+(sel.length===0?'Todos':(sel.length===1?esc(sel[0]):sel.length+' sel.'))+'</b> ▾';}
+  function draw(){var q=nk(inp.value),hh='',n=0;for(var j=0;j<opts.vals.length;j++){var v=opts.vals[j];if(q&&nk(v).indexOf(q)<0)continue;if(++n>600)break;var dc=k==='st'?'<i class="dot" style="background:'+ST_COLOR[ST_NAME.indexOf(v)]+'"></i>':(k==='sit'&&TX_SIT_COL[v]?'<i class="dot" style="background:'+TX_SIT_COL[v]+'"></i>':'');hh+='<label class="ms-item"><input type="checkbox" data-v="'+esc(v)+'"'+(state[k][v]?' checked':'')+'>'+dc+esc(v)+'<span class="cnt">'+fmt(opts.cnt[v])+'</span></label>';}list.innerHTML=hh||'<div class="ms-item">nada encontrado</div>';}
+  btn.onclick=function(e){e.stopPropagation();var open=pop.classList.contains('open');closeAllMS();if(!open){var c=countFn(k),a=keys(c).sort();for(var x in state[k])if(!c.hasOwnProperty(x)){a.unshift(x);c[x]=0;}opts={vals:a,cnt:c};inp.value='';draw();pop.classList.add('open');inp.focus();}};
+  pop.onclick=function(e){e.stopPropagation();};inp.oninput=draw;
+  list.onchange=function(e){var v=e.target.getAttribute('data-v');if(v==null)return;if(e.target.checked)state[k][v]=1;else delete state[k][v];lbl();onChange(k);};
+  pop.querySelector('.ms-acts').onclick=function(e){var a=e.target.getAttribute('data-a');if(!a)return;if(a==='none')state[k]={};else{var q=nk(inp.value);for(var j=0;j<opts.vals.length;j++)if(!q||nk(opts.vals[j]).indexOf(q)>=0)state[k][opts.vals[j]]=1;}draw();lbl();onChange(k);};
+  el._lbl=lbl;lbl();
+ })(els[i]);}
+}
+
 
 /* ═════════════ CAPACIDADE ═════════════ */
 function renderCap(){
@@ -1937,6 +1973,8 @@ function bindUI(){
  $('o-n').onchange=$('o-m').onchange=function(){DIRTY.off=1;render('off');};
  $('o-exp').onclick=function(){exportSites((EXP.off||[]).map(function(x){return x.si;}),'ofensores_'+D.days[DI]+'.csv');};
  $('tx-exp').onclick=function(){exportSites((EXP.tx||[]).map(function(x){return x.si;}),'transporte_'+D.days[DI]+'.csv');};
+ var txt;$('tx-q').oninput=function(){clearTimeout(txt);txt=setTimeout(function(){TX.page=0;drawTX();},180);};
+ $('tx-clear').onclick=function(){for(var k in TX.f)TX.f[k]={};$('tx-q').value='';TX.page=0;drawTX();};
  $('cap-exp').onclick=function(){exportSites((EXP.cap||[]).map(function(x){return x.si;}),'capacidade_'+D.days[DI]+'.csv');};
  $('th-apply').onclick=applyTH;
  var slt;$('sla-q').oninput=function(){clearTimeout(slt);slt=setTimeout(function(){SLAV.page=0;drawSLA();},180);};
